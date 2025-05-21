@@ -1,6 +1,6 @@
 
 import type { Product, Sale, PaymentMethod, ProductCategory } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, type LucideIcon } from 'lucide-react';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, type LucideIcon } from 'lucide-react';
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer,
@@ -12,6 +12,7 @@ export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   CircleDollarSign,
   CreditCard,
   QrCode,
+  Package, // Adicionado o ícone Package ao mapa
 };
 
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
@@ -20,7 +21,7 @@ export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
   { id: 'cat_cafes', name: 'Cafés', iconName: 'Coffee' },
   { id: 'cat_lanches', name: 'Lanches', iconName: 'UtensilsCrossed' },
   { id: 'cat_sobremesas', name: 'Sobremesas', iconName: 'CakeSlice' },
-  { id: 'cat_outros', name: 'Outros', iconName: 'Package' } // Adicionando Package como um ícone possível
+  { id: 'cat_outros', name: 'Outros', iconName: 'Package' }
 ];
 
 const PRODUCT_CATEGORIES_STORAGE_KEY = 'barmate_productCategories';
@@ -111,3 +112,4 @@ export const INITIAL_SALES: Sale[] = [
 export const formatCurrency = (value: number) => {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
+
