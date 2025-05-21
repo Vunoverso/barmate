@@ -1,3 +1,4 @@
+
 import type { LucideIcon } from 'lucide-react';
 
 export interface Product {
@@ -24,4 +25,11 @@ export interface Sale {
   changeGiven?: number; // For cash transactions
   timestamp: Date;
   status: 'completed' | 'pending' | 'cancelled';
+}
+
+export interface ActiveOrder {
+  id: string;
+  name: string;
+  items: OrderItem[];
+  createdAt: Date;
 }

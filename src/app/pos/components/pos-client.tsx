@@ -1,7 +1,8 @@
+
 "use client";
 
-import type { Product, OrderItem, PaymentMethod, Sale } from '@/types';
-import { INITIAL_PRODUCTS, PAYMENT_METHODS, formatCurrency } from '@/lib/constants';
+import type { Product, OrderItem, Sale, ActiveOrder } from '@/types';
+import { INITIAL_PRODUCTS, formatCurrency } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,10 +10,21 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import PaymentDialog from './payment-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Group products by category
 const groupProductsByCategory = (products: Product[]) => {
@@ -29,11 +41,23 @@ const groupProductsByCategory = (products: Product[]) => {
 
 export default function POSClient() {
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [nextOrderNumber, setNextOrderNumber] = useState<number>(1);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
   const { toast } = useToast();
+
+  const currentOrder = useMemo(() => {
+    return openOrders.find(o => o.id === currentOrderId);
+  }, [openOrders, currentOrderId]);
+
+  const currentOrderItems = useMemo(() => {
+    return currentOrder?.items || [];
+  }, [currentOrder]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -49,61 +73,204 @@ export default function POSClient() {
     }
   }, [categories, activeCategory]);
 
+  const handleCreateNewOrder = () => {
+    const newOrderId = `order-${Date.now()}-${nextOrderNumber}`;
+    const newOrder: ActiveOrder = {
+      id: newOrderId,
+      name: `Comanda ${nextOrderNumber}`,
+      items: [],
+      createdAt: new Date(),
+    };
+    setOpenOrders(prev => [...prev, newOrder]);
+    setCurrentOrderId(newOrderId);
+    setNextOrderNumber(prev => prev + 1);
+    toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
+  };
+
+  const handleSelectOrder = (orderId: string) => {
+    setCurrentOrderId(orderId);
+  };
+
+  const confirmDeleteOrder = (order: ActiveOrder) => {
+    setOrderToDelete(order);
+  };
+
+  const handleDeleteOrder = () => {
+    if (!orderToDelete) return;
+
+    const orderIdToDelete = orderToDelete.id;
+    const orderName = orderToDelete.name;
+
+    setOpenOrders(prevOrders => {
+      const updatedOrders = prevOrders.filter(order => order.id !== orderIdToDelete);
+      if (currentOrderId === orderIdToDelete) {
+        if (updatedOrders.length > 0) {
+          setCurrentOrderId(updatedOrders[0].id);
+        } else {
+          setCurrentOrderId(null);
+        }
+      }
+      return updatedOrders;
+    });
+    
+    setOrderToDelete(null);
+    toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
+  };
+
 
   const addToOrder = (product: Product) => {
-    setOrderItems(prevItems => {
-      const existingItem = prevItems.find(item => item.id === product.id);
-      if (existingItem) {
-        return prevItems.map(item =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      return [...prevItems, { ...product, quantity: 1 }];
-    });
+    if (!currentOrderId) {
+      toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
+      return;
+    }
+    setOpenOrders(prevOrders =>
+      prevOrders.map(order => {
+        if (order.id === currentOrderId) {
+          const existingItem = order.items.find(item => item.id === product.id);
+          if (existingItem) {
+            return {
+              ...order,
+              items: order.items.map(item =>
+                item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+              ),
+            };
+          }
+          return { ...order, items: [...order.items, { ...product, quantity: 1 }] };
+        }
+        return order;
+      })
+    );
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
-    setOrderItems(prevItems => {
-      if (quantity <= 0) {
-        return prevItems.filter(item => item.id !== productId);
-      }
-      return prevItems.map(item =>
-        item.id === productId ? { ...item, quantity } : item
-      );
-    });
+    if (!currentOrderId) return;
+    setOpenOrders(prevOrders =>
+      prevOrders.map(order => {
+        if (order.id === currentOrderId) {
+          if (quantity <= 0) {
+            return { ...order, items: order.items.filter(item => item.id !== productId) };
+          }
+          return {
+            ...order,
+            items: order.items.map(item =>
+              item.id === productId ? { ...item, quantity } : item
+            ),
+          };
+        }
+        return order;
+      })
+    );
   };
 
   const removeFromOrder = (productId: string) => {
-    setOrderItems(prevItems => prevItems.filter(item => item.id !== productId));
+    if (!currentOrderId) return;
+    setOpenOrders(prevOrders =>
+      prevOrders.map(order =>
+        order.id === currentOrderId
+          ? { ...order, items: order.items.filter(item => item.id !== productId) }
+          : order
+      )
+    );
   };
 
   const orderTotal = useMemo(() => {
-    return orderItems.reduce((total, item) => total + item.price * item.quantity, 0);
-  }, [orderItems]);
+    return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
+  }, [currentOrderItems]);
 
   const handlePayment = (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount'>) => {
-    // In a real app, this would save to a database
-    console.log('Processing payment:', saleDetails);
+    if (!currentOrder) {
+      toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
+      return;
+    }
+    
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
-      items: orderItems,
+      items: currentOrderItems,
       totalAmount: orderTotal,
       timestamp: new Date(),
       ...saleDetails,
     };
     console.log('New Sale:', newSale);
     // Add to sales log (if implemented)
-    setOrderItems([]); // Clear current order
+    
+    setOpenOrders(prevOrders => {
+      const updatedOpenOrders = prevOrders.filter(order => order.id !== currentOrderId);
+      if (updatedOpenOrders.length > 0) {
+        const currentIndex = prevOrders.findIndex(o => o.id === currentOrderId);
+        let nextSelectedOrderId: string | null = null;
+        if (prevOrders.length === 1) { // Only one order, and it's being closed
+           nextSelectedOrderId = null;
+        } else if (currentIndex >= 0 && updatedOpenOrders.length > 0) {
+           if (currentIndex < updatedOpenOrders.length) {
+             nextSelectedOrderId = updatedOpenOrders[currentIndex].id; // Try selecting order at same index
+           } else {
+             nextSelectedOrderId = updatedOpenOrders[updatedOpenOrders.length - 1].id; // Select last order
+           }
+        } else if (updatedOpenOrders.length > 0) {
+           nextSelectedOrderId = updatedOpenOrders[0].id; // Default to first if no specific logic met
+        }
+        setCurrentOrderId(nextSelectedOrderId);
+      } else {
+        setCurrentOrderId(null);
+      }
+      return updatedOpenOrders;
+    });
+
     setIsPaymentDialogOpen(false);
     toast({
       title: "Venda Concluída!",
-      description: `Venda de ${formatCurrency(newSale.totalAmount)} registrada com sucesso.`,
+      description: `Venda de ${formatCurrency(newSale.totalAmount)} (${currentOrder.name}) registrada com sucesso.`,
       action: <CheckCircle className="text-green-500" />,
     });
   };
 
   return (
-    <div className="grid md:grid-cols-3 gap-6 h-full">
+    <div className="grid md:grid-cols-4 gap-4 h-[calc(100vh-100px)]"> {/* Adjusted grid for 4 columns and height */}
+      {/* Open Orders List Area */}
+      <div className="md:col-span-1 flex flex-col h-full">
+        <Card className="flex-grow flex flex-col">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              Comandas Abertas
+              <Button size="sm" onClick={handleCreateNewOrder}>
+                <PlusSquare className="mr-2 h-4 w-4" /> Nova
+              </Button>
+            </CardTitle>
+            <CardDescription>
+              {openOrders.length} comanda(s) em aberto.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-grow overflow-hidden p-0">
+            <ScrollArea className="h-full p-2">
+              {openOrders.length === 0 ? (
+                <p className="text-muted-foreground text-center py-10">Nenhuma comanda aberta.</p>
+              ) : (
+                <div className="space-y-2">
+                  {openOrders.map(order => (
+                    <Button
+                      key={order.id}
+                      variant={currentOrderId === order.id ? "secondary" : "outline"}
+                      className="w-full justify-between h-auto py-2 px-3"
+                      onClick={() => handleSelectOrder(order.id)}
+                    >
+                      <div className="flex flex-col items-start">
+                        <span className="font-semibold">{order.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
+                        </span>
+                      </div>
+                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order);}}>
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Product Selection Area */}
       <div className="md:col-span-2 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
@@ -116,33 +283,45 @@ export default function POSClient() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm"
+                disabled={!currentOrderId}
               />
               <div className="ml-auto flex items-center gap-2">
-                <Button variant={viewMode === 'grid' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('grid')}>
+                <Button variant={viewMode === 'grid' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('grid')} disabled={!currentOrderId}>
                   <LayoutGrid className="h-5 w-5" />
                 </Button>
-                <Button variant={viewMode === 'list' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('list')}>
+                <Button variant={viewMode === 'list' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('list')} disabled={!currentOrderId}>
                   <List className="h-5 w-5" />
                 </Button>
               </div>
             </div>
+             {!currentOrderId && <CardDescription className="text-destructive pt-2">Selecione ou crie uma comanda para adicionar produtos.</CardDescription>}
           </CardHeader>
           <Tabs value={activeCategory} onValueChange={setActiveCategory} className="flex-grow flex flex-col overflow-hidden">
             <TabsList className="mx-4">
-              <TabsTrigger value="Todos">Todos</TabsTrigger>
+              <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
               {categories.map(category => (
-                <TabsTrigger key={category} value={category}>{category}</TabsTrigger>
+                <TabsTrigger key={category} value={category} disabled={!currentOrderId}>{category}</TabsTrigger>
               ))}
             </TabsList>
             <ScrollArea className="flex-grow p-4">
-              <TabsContent value="Todos" className="mt-0">
-                <ProductDisplay products={filteredProducts} addToOrder={addToOrder} viewMode={viewMode} />
-              </TabsContent>
-              {categories.map(category => (
-                <TabsContent key={category} value={category} className="mt-0">
-                  <ProductDisplay products={productsByCategory[category]} addToOrder={addToOrder} viewMode={viewMode} />
-                </TabsContent>
-              ))}
+              {currentOrderId ? (
+                <>
+                  <TabsContent value="Todos" className="mt-0">
+                    <ProductDisplay products={filteredProducts} addToOrder={addToOrder} viewMode={viewMode} />
+                  </TabsContent>
+                  {categories.map(category => (
+                    <TabsContent key={category} value={category} className="mt-0">
+                      <ProductDisplay products={productsByCategory[category]} addToOrder={addToOrder} viewMode={viewMode} />
+                    </TabsContent>
+                  ))}
+                </>
+              ) : (
+                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <FileText className="h-16 w-16 mb-4" />
+                    <p>Selecione ou crie uma comanda</p>
+                    <p>para visualizar os produtos.</p>
+                </div>
+              )}
             </ScrollArea>
           </Tabs>
         </Card>
@@ -154,38 +333,46 @@ export default function POSClient() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShoppingCart className="h-6 w-6 text-primary" />
-              Comanda Atual
+              {currentOrder ? currentOrder.name : "Comanda"}
             </CardTitle>
             <CardDescription>
-              {orderItems.length} {orderItems.length === 1 ? 'item' : 'itens'} na comanda.
+              {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-grow overflow-hidden p-0">
             <ScrollArea className="h-full p-4">
-              {orderItems.length === 0 ? (
-                <p className="text-muted-foreground text-center py-10">Nenhum item na comanda.</p>
+              {!currentOrderId ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <ShoppingCart className="h-16 w-16 mb-4 opacity-50" />
+                    <p>Nenhuma comanda selecionada.</p>
+                 </div>
+              ) : currentOrderItems.length === 0 ? (
+                <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
               ) : (
                 <ul className="space-y-3">
-                  {orderItems.map(item => (
+                  {currentOrderItems.map(item => (
                     <li key={item.id} className="flex items-center gap-3 p-2 rounded-md border">
                       <div className="flex-shrink-0">
-                        {item.icon && <item.icon className="h-8 w-8 text-muted-foreground" />}
-                        {!item.icon && <div className="h-8 w-8 bg-muted rounded-md" />}
+                        {item.icon ? (
+                            <item.icon className="h-8 w-8 text-muted-foreground" />
+                        ) : (
+                             <Image src={`https://placehold.co/64x64.png?text=${item.name.substring(0,2)}`} alt={item.name} width={32} height={32} data-ai-hint="product item" className="rounded-sm" />
+                        )}
                       </div>
                       <div className="flex-grow">
                         <p className="font-medium">{item.name}</p>
                         <p className="text-sm text-muted-foreground">{formatCurrency(item.price)}</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                          <MinusCircle className="h-5 w-5" />
+                          <MinusCircle className="h-4 w-4" />
                         </Button>
-                        <span>{item.quantity}</span>
+                        <span className="w-6 text-center">{item.quantity}</span>
                         <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                          <PlusCircle className="h-5 w-5" />
+                          <PlusCircle className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="text-destructive" onClick={() => removeFromOrder(item.id)}>
-                          <Trash2 className="h-5 w-5" />
+                        <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80" onClick={() => removeFromOrder(item.id)}>
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                       <p className="font-semibold w-20 text-right">{formatCurrency(item.price * item.quantity)}</p>
@@ -204,7 +391,7 @@ export default function POSClient() {
             <Button
               size="lg"
               className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-              disabled={orderItems.length === 0}
+              disabled={currentOrderItems.length === 0 || !currentOrderId}
               onClick={() => setIsPaymentDialogOpen(true)}
             >
               Finalizar Pagamento
@@ -219,6 +406,28 @@ export default function POSClient() {
         totalAmount={orderTotal}
         onSubmit={handlePayment}
       />
+
+      {orderToDelete && (
+        <AlertDialog open={!!orderToDelete} onOpenChange={() => setOrderToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja remover a comanda "{orderToDelete.name}"? Todos os itens serão perdidos. Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setOrderToDelete(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteOrder}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Remover Comanda
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
@@ -236,19 +445,19 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
   
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"> {/* Adjusted grid for product selection column */}
         {products.map(product => (
-          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow" onClick={() => addToOrder(product)}>
-            <div className="aspect-square bg-muted flex items-center justify-center p-4">
+          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
+            <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
               {product.icon ? (
-                <product.icon className="h-16 w-16 text-muted-foreground" />
+                <product.icon className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground group-hover:text-primary transition-colors" />
               ) : (
                 <Image src={`https://placehold.co/100x100.png?text=${product.name.substring(0,2)}`} alt={product.name} width={80} height={80} data-ai-hint="product item" />
               )}
             </div>
-            <CardContent className="p-3">
-              <h3 className="font-medium truncate text-sm">{product.name}</h3>
-              <p className="text-primary font-semibold text-md">{formatCurrency(product.price)}</p>
+            <CardContent className="p-2 sm:p-3">
+              <h3 className="font-medium truncate text-xs sm:text-sm">{product.name}</h3>
+              <p className="text-primary font-semibold text-sm sm:text-md">{formatCurrency(product.price)}</p>
             </CardContent>
           </Card>
         ))}
@@ -259,19 +468,19 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
   return (
     <div className="space-y-2">
       {products.map(product => (
-        <Card key={product.id} className="flex items-center p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => addToOrder(product)}>
-          <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center mr-3">
+        <Card key={product.id} className="flex items-center p-3 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted rounded-md flex items-center justify-center mr-3 group-hover:bg-muted/80 transition-colors">
              {product.icon ? (
-                <product.icon className="h-6 w-6 text-muted-foreground" />
+                <product.icon className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground group-hover:text-primary transition-colors" />
               ) : (
                 <Image src={`https://placehold.co/48x48.png?text=${product.name.substring(0,2)}`} alt={product.name} width={32} height={32} data-ai-hint="product item" />
               )}
           </div>
           <div className="flex-grow">
-            <h3 className="font-medium">{product.name}</h3>
+            <h3 className="font-medium text-sm sm:text-base">{product.name}</h3>
             <p className="text-xs text-muted-foreground">{product.category}</p>
           </div>
-          <p className="text-primary font-semibold text-lg">{formatCurrency(product.price)}</p>
+          <p className="text-primary font-semibold text-md sm:text-lg">{formatCurrency(product.price)}</p>
         </Card>
       ))}
     </div>
