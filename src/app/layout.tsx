@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
@@ -14,8 +15,10 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+// Note: Metadata is generated at build time, so it cannot dynamically use localStorage.
+// The bar name displayed in the UI will be dynamic via AppLayout.
 export const metadata: Metadata = {
-  title: 'BarMate - Gerenciador de Bar',
+  title: 'BarMate - Gerenciador de Bar', // This remains static or could be a generic app name
   description: 'Sistema de comandas, caixa, produtos e relatórios para bares.',
 };
 
