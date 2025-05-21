@@ -4,13 +4,14 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store } from 'lucide-react'; // Added Store
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
+import { ThemeToggleButton } from '@/components/theme-toggle-button';
 
 interface NavItem {
   href: string;
@@ -21,7 +22,7 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { href: '/', label: 'Início', icon: Home },
-  { href: '/counter-sale', label: 'Venda Balcão', icon: Store }, // New Venda Balcão
+  { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
   { href: '/orders', label: 'Comandas', icon: HandCoins },
   { href: '/products', label: 'Produtos', icon: Package },
   { href: '/reports', label: 'Relatórios', icon: LineChart },
@@ -88,6 +89,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   );
 
   if (!isMounted) {
+    // Basic skeleton or loading state to prevent hydration issues with theme/localStorage dependent items
     return (
       <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
         <div className="hidden border-r bg-muted/40 md:block">
@@ -101,7 +103,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
            </div>
         </div>
         <div className="flex flex-col">
-          <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+          <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6 justify-end">
+             {/* Placeholder for theme toggle and avatar to match structure */}
+             <div className="h-10 w-10 bg-muted rounded-full"></div>
+             <div className="h-10 w-10 bg-muted rounded-full"></div>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto">
             {children}
@@ -130,7 +135,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="shrink-0 md:hidden">
+              <Button variant="outline" size="icon" className="shrink-0 md:hidden h-9 w-9">
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Alternar menu de navegação</span>
               </Button>
@@ -147,7 +152,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     href={item.href}
                     className={`mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 ${pathname === item.href ? 'bg-muted text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     onClick={() => {
-                      const trigger = document.querySelector('[aria-controls="radix-:R1mcq:"][aria-expanded="true"]');
+                      // Attempt to close sheet on navigation
+                      const trigger = document.querySelector('button[aria-expanded="true"][class*="md:hidden"]');
                       if (trigger instanceof HTMLElement) {
                         trigger.click();
                       }
@@ -162,29 +168,33 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1">
+            {/* Spacer to push items to the right */}
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="icon" className="rounded-full">
-                <Avatar>
-                  <AvatarImage src="https://placehold.co/40x40.png" alt="User Avatar" data-ai-hint="user avatar" />
-                  <AvatarFallback>BM</AvatarFallback>
-                </Avatar>
-                <span className="sr-only">Alternar menu do usuário</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>Perfil</DropdownMenuItem>
-              <DropdownMenuItem>Suporte</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <ThemeToggleButton />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="icon" className="rounded-full h-9 w-9 md:h-10 md:w-10">
+                  <Avatar className="h-full w-full">
+                    <AvatarImage src="https://placehold.co/40x40.png" alt="User Avatar" data-ai-hint="user avatar" />
+                    <AvatarFallback>BM</AvatarFallback>
+                  </Avatar>
+                  <span className="sr-only">Alternar menu do usuário</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>Perfil</DropdownMenuItem>
+                <DropdownMenuItem>Suporte</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto">
           {children}
