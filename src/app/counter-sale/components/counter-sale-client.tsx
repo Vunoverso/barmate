@@ -10,10 +10,12 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, FileText } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart } from 'lucide-react';
 import Image from 'next/image';
-import PaymentDialog from '@/app/orders/components/payment-dialog'; // Reusing payment dialog
+import PaymentDialog from '@/app/orders/components/payment-dialog'; 
 import { useToast } from '@/hooks/use-toast';
+
+const LOCAL_STORAGE_COUNTER_SALE_KEY = 'barmate_counterSaleOrderItems';
 
 // Group products by category
 const groupProductsByCategory = (products: Product[]) => {
@@ -34,6 +36,27 @@ export default function CounterSaleClient() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const { toast } = useToast();
+  const [isMounted, setIsMounted] = useState(false);
+
+
+  useEffect(() => {
+    setIsMounted(true);
+    const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+    if (storedOrderItems) {
+      try {
+        setCurrentOrderItems(JSON.parse(storedOrderItems));
+      } catch (error) {
+        console.error("Failed to parse counter sale items from localStorage", error);
+        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem(LOCAL_STORAGE_COUNTER_SALE_KEY, JSON.stringify(currentOrderItems));
+    }
+  }, [currentOrderItems, isMounted]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -44,7 +67,6 @@ export default function CounterSaleClient() {
   const [activeCategory, setActiveCategory] = useState<string>(categories[0] || 'Todos');
 
   useEffect(() => {
-    // Ensure activeCategory is valid when products load or filter changes
     if (categories.length > 0 && (!categories.includes(activeCategory) || activeCategory === 'Todos' && categories[0])) {
       setActiveCategory(categories[0] || 'Todos');
     } else if (categories.length === 0) {
@@ -86,16 +108,19 @@ export default function CounterSaleClient() {
 
   const handlePayment = (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount'>) => {
     const newSale: Sale = {
-      id: `csale-${Date.now()}`, // csale for counter sale
+      id: `csale-${Date.now()}`, 
       items: currentOrderItems,
       totalAmount: orderTotal,
       timestamp: new Date(),
       ...saleDetails,
     };
     console.log('New Counter Sale:', newSale);
-    // Potentially save this sale to a sales log
+    // Potentially save this sale to a sales log (e.g., append to INITIAL_SALES or another state/localStorage)
     
-    setCurrentOrderItems([]); // Clear items for next sale
+    setCurrentOrderItems([]); 
+    if (isMounted) {
+      localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+    }
     setIsPaymentDialogOpen(false);
     toast({
       title: "Venda Balcão Concluída!",
@@ -103,6 +128,14 @@ export default function CounterSaleClient() {
       action: <CheckCircle className="text-green-500" />,
     });
   };
+
+  if (!isMounted) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p>Carregando venda balcão...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid md:grid-cols-3 gap-4 h-[calc(100vh-100px)]">
@@ -243,7 +276,7 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
   
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"> {/* Adjusted grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"> 
         {products.map(product => (
           <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
             <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
@@ -284,3 +317,4 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
     </div>
   );
 }
+

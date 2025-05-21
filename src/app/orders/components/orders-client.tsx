@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import PaymentDialog from './payment-dialog';
-import CreateOrderDialog from './create-order-dialog'; // Added import
+import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -26,6 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
 // Group products by category
 const groupProductsByCategory = (products: Product[]) => {
@@ -48,9 +50,37 @@ export default function OrdersClient() {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false); // Added state
+  const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
   const { toast } = useToast();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const storedOrders = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
+    if (storedOrders) {
+      try {
+        const parsedOrders: ActiveOrder[] = JSON.parse(storedOrders).map((order: ActiveOrder) => ({
+          ...order,
+          createdAt: new Date(order.createdAt) // Ensure dates are parsed correctly
+        }));
+        setOpenOrders(parsedOrders);
+        if (parsedOrders.length > 0 && !currentOrderId) {
+          setCurrentOrderId(parsedOrders[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to parse open orders from localStorage", error);
+        localStorage.removeItem(LOCAL_STORAGE_ORDERS_KEY); // Clear corrupted data
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(openOrders));
+    }
+  }, [openOrders, isMounted]);
+
 
   const currentOrder = useMemo(() => {
     return openOrders.find(o => o.id === currentOrderId);
@@ -82,7 +112,7 @@ export default function OrdersClient() {
     const newOrderId = `order-${Date.now()}`;
     const newOrder: ActiveOrder = {
       id: newOrderId,
-      name: orderName, // Use the name from the dialog
+      name: orderName,
       items: [],
       createdAt: new Date(),
     };
@@ -201,24 +231,23 @@ export default function OrdersClient() {
     
     setOpenOrders(prevOrders => {
       const updatedOpenOrders = prevOrders.filter(order => order.id !== currentOrderId);
-      if (updatedOpenOrders.length > 0) {
-        const currentIndex = prevOrders.findIndex(o => o.id === currentOrderId);
-        let nextSelectedOrderId: string | null = null;
-        if (prevOrders.length === 1) { 
-           nextSelectedOrderId = null;
-        } else if (currentIndex >= 0 && updatedOpenOrders.length > 0) {
-           if (currentIndex < updatedOpenOrders.length) {
-             nextSelectedOrderId = updatedOpenOrders[currentIndex].id; 
-           } else {
-             nextSelectedOrderId = updatedOpenOrders[updatedOpenOrders.length - 1].id; 
-           }
-        } else if (updatedOpenOrders.length > 0) {
-           nextSelectedOrderId = updatedOpenOrders[0].id; 
-        }
-        setCurrentOrderId(nextSelectedOrderId);
-      } else {
-        setCurrentOrderId(null);
+      const currentIndex = prevOrders.findIndex(o => o.id === currentOrderId);
+      let nextSelectedOrderId: string | null = null;
+      
+      if (updatedOpenOrders.length === 0) {
+        nextSelectedOrderId = null;
+      } else if (prevOrders.length === 1) { // Only one order was present, and it's being closed
+         nextSelectedOrderId = null;
+      } else if (currentIndex >= 0 && updatedOpenOrders.length > 0) {
+         if (currentIndex < updatedOpenOrders.length) {
+           nextSelectedOrderId = updatedOpenOrders[currentIndex].id; 
+         } else {
+           nextSelectedOrderId = updatedOpenOrders[updatedOpenOrders.length - 1].id; 
+         }
+      } else if (updatedOpenOrders.length > 0) {
+         nextSelectedOrderId = updatedOpenOrders[0].id; 
       }
+      setCurrentOrderId(nextSelectedOrderId);
       return updatedOpenOrders;
     });
 
@@ -229,6 +258,14 @@ export default function OrdersClient() {
       action: <CheckCircle className="text-green-500" />,
     });
   };
+  
+  if (!isMounted) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p>Carregando comandas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid md:grid-cols-4 gap-4 h-[calc(100vh-100px)]">
@@ -238,7 +275,7 @@ export default function OrdersClient() {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               Comandas Abertas
-              <Button size="sm" onClick={handleOpenCreateOrderDialog}> {/* Changed to open dialog */}
+              <Button size="sm" onClick={handleOpenCreateOrderDialog}>
                 <PlusSquare className="mr-2 h-4 w-4" /> Nova
               </Button>
             </CardTitle>
@@ -300,7 +337,8 @@ export default function OrdersClient() {
                 </Button>
               </div>
             </div>
-             {!currentOrderId && <CardDescription className="text-destructive pt-2">Selecione ou crie uma comanda para adicionar produtos.</CardDescription>}
+             {!currentOrderId && openOrders.length > 0 && <CardDescription className="text-destructive pt-2">Selecione uma comanda para adicionar produtos.</CardDescription>}
+             {!currentOrderId && openOrders.length === 0 && <CardDescription className="text-destructive pt-2">Crie uma nova comanda para começar.</CardDescription>}
           </CardHeader>
           <Tabs value={activeCategory} onValueChange={setActiveCategory} className="flex-grow flex flex-col overflow-hidden">
             <TabsList className="mx-4">
@@ -498,3 +536,4 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
     </div>
   );
 }
+
