@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { ProductCategory } from '@/types';
-import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
+import type { ProductCategory, Product } from '@/types';
+import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, INITIAL_PRODUCTS } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +27,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -86,8 +96,10 @@ export default function SettingsClient() {
   const [barName, setBarName] = useState('');
   const [initialBarName, setInitialBarName] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS); // Para verificar o uso da categoria
   const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<ProductCategory | null>(null);
   
   const { toast } = useToast();
 
@@ -96,6 +108,8 @@ export default function SettingsClient() {
     setBarName(storedName);
     setInitialBarName(storedName);
     setProductCategories(getProductCategories());
+    // Em um app real, os produtos também seriam carregados de uma fonte persistente
+    // setProducts(loadProductsFromStorageOrAPI()); 
 
     const handleCategoriesChange = () => {
       setProductCategories(getProductCategories());
@@ -142,6 +156,33 @@ export default function SettingsClient() {
     toast({ title: "Categoria Atualizada", description: `Categoria "${updatedCategory.name}" salva com sucesso.`});
   };
 
+  const confirmDeleteCategory = (category: ProductCategory) => {
+    setCategoryToDelete(category);
+  };
+
+  const handleDeleteCategory = () => {
+    if (!categoryToDelete) return;
+
+    const isCategoryInUse = products.some(product => product.categoryId === categoryToDelete.id);
+
+    if (isCategoryInUse) {
+      toast({
+        title: "Não é possível remover",
+        description: `A categoria "${categoryToDelete.name}" está em uso por um ou mais produtos.`,
+        variant: "destructive",
+      });
+      setCategoryToDelete(null);
+      return;
+    }
+
+    const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
+    setProductCategories(updatedCategories);
+    saveProductCategories(updatedCategories);
+    toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso.`, variant: "destructive" });
+    setCategoryToDelete(null);
+  };
+
+
   return (
     <div className="space-y-8">
       <Card>
@@ -169,7 +210,7 @@ export default function SettingsClient() {
       <Card>
         <CardHeader>
           <CardTitle>Gerenciar Categorias de Produtos</CardTitle>
-          <CardDescription>Renomeie as categorias de produtos. Os ícones são fixos por categoria original.</CardDescription>
+          <CardDescription>Renomeie ou remova as categorias de produtos. Os ícones são fixos por categoria original.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -189,9 +230,12 @@ export default function SettingsClient() {
                     <TableCell><IconComponent className="h-5 w-5 text-muted-foreground" /></TableCell>
                     <TableCell className="font-medium">{category.name}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{category.id}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right space-x-2">
                       <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>
                         <Edit3 className="mr-2 h-4 w-4" /> Renomear
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Remover
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -209,6 +253,28 @@ export default function SettingsClient() {
           category={editingCategory}
           onSave={handleSaveCategory}
         />
+      )}
+
+      {categoryToDelete && (
+        <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Remoção de Categoria</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja remover a categoria "{categoryToDelete.name}"? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setCategoryToDelete(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteCategory}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Remover Categoria
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

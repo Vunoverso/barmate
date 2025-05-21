@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Sale } from '@/types';
@@ -16,33 +17,47 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DatePickerWithRange } from '@/components/ui/date-picker-range'; // Assume this component exists or will be created
+import { DatePickerWithRange } from '@/components/ui/date-picker-range'; 
 import type { DateRange } from "react-day-picker";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Download, Filter, CalendarDays, ListFilter } from 'lucide-react';
+import { Download, Filter, CalendarDays, ListFilter, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function ReportsClient() {
   const [sales, setSales] = useState<Sale[]>(INITIAL_SALES);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: addDays(new Date(), -30), // Default to last 30 days
+    from: addDays(new Date(), -30), 
     to: new Date(),
   });
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
+  const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
+  const { toast } = useToast();
 
   const filteredSales = useMemo(() => {
     return sales
       .filter(sale => {
         const saleDate = new Date(sale.timestamp);
         if (dateRange?.from && saleDate < dateRange.from) return false;
-        if (dateRange?.to && saleDate > addDays(dateRange.to, 1)) return false; // Include the end date
+        if (dateRange?.to && saleDate > addDays(dateRange.to, 1)) return false; 
         return true;
       })
       .filter(sale => {
@@ -67,6 +82,21 @@ export default function ReportsClient() {
     });
     return result;
   }, [filteredSales]);
+
+  const confirmDeleteSale = (sale: Sale) => {
+    setSaleToDelete(sale);
+  };
+
+  const handleDeleteSale = () => {
+    if (!saleToDelete) return;
+    setSales(prevSales => prevSales.filter(s => s.id !== saleToDelete.id));
+    toast({
+      title: "Venda Removida",
+      description: `A venda ID ${saleToDelete.id.substring(0,8)}... foi removida do relatório.`,
+      variant: "destructive"
+    });
+    setSaleToDelete(null);
+  };
 
 
   return (
@@ -171,6 +201,7 @@ export default function ReportsClient() {
                 <TableHead>Itens</TableHead>
                 <TableHead>Método Pag.</TableHead>
                 <TableHead className="text-right">Valor Total</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -185,10 +216,26 @@ export default function ReportsClient() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{formatCurrency(sale.totalAmount)}</TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Toggle menu</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                        <DropdownMenuItem className="text-destructive" onClick={() => confirmDeleteSale(sale)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Remover
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
+                  <TableCell colSpan={6} className="h-24 text-center">
                     Nenhuma venda encontrada para o período e filtros selecionados.
                   </TableCell>
                 </TableRow>
@@ -202,6 +249,28 @@ export default function ReportsClient() {
           </div>
         </CardFooter>
       </Card>
+
+      {saleToDelete && (
+        <AlertDialog open={!!saleToDelete} onOpenChange={() => setSaleToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja remover a venda ID "{saleToDelete.id.substring(0,8)}..." do relatório? Esta ação não pode ser desfeita (para esta sessão).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setSaleToDelete(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteSale}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Remover Venda
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
