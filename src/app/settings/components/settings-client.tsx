@@ -96,10 +96,7 @@ export default function SettingsClient() {
   const [barName, setBarName] = useState('');
   const [initialBarName, setInitialBarName] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS); // Para verificar o uso da categoria
-  const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
-  const [categoryToDelete, setCategoryToDelete] = useState<ProductCategory | null>(null);
+  // const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS); // products state is not used for modification here.
   
   const { toast } = useToast();
 
@@ -142,6 +139,10 @@ export default function SettingsClient() {
 
   const isBarNameChanged = barName !== initialBarName;
 
+  const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<ProductCategory | null>(null);
+
   const handleOpenEditCategoryDialog = (category: ProductCategory) => {
     setEditingCategory(category);
     setIsEditCategoryDialogOpen(true);
@@ -163,22 +164,22 @@ export default function SettingsClient() {
   const handleDeleteCategory = () => {
     if (!categoryToDelete) return;
 
-    const isCategoryInUse = products.some(product => product.categoryId === categoryToDelete.id);
-
-    if (isCategoryInUse) {
-      toast({
-        title: "Não é possível remover",
-        description: `A categoria "${categoryToDelete.name}" está em uso por um ou mais produtos.`,
-        variant: "destructive",
-      });
-      setCategoryToDelete(null);
-      return;
-    }
+    // Removido o bloqueio de exclusão se a categoria estiver em uso.
+    // const isCategoryInUse = INITIAL_PRODUCTS.some(product => product.categoryId === categoryToDelete.id);
+    // if (isCategoryInUse) {
+    //   toast({
+    //     title: "Não é possível remover",
+    //     description: `A categoria "${categoryToDelete.name}" está em uso por um ou mais produtos.`,
+    //     variant: "destructive",
+    //   });
+    //   setCategoryToDelete(null);
+    //   return;
+    // }
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
     setProductCategories(updatedCategories);
     saveProductCategories(updatedCategories);
-    toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso.`, variant: "destructive" });
+    toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
   };
 
@@ -234,7 +235,7 @@ export default function SettingsClient() {
                       <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>
                         <Edit3 className="mr-2 h-4 w-4" /> Renomear
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1}>
+                      <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1 && INITIAL_PRODUCT_CATEGORIES.some(cat => cat.id === category.id) /* Previne deletar a última categoria inicial se for a única */ }>
                         <Trash2 className="mr-2 h-4 w-4" /> Remover
                       </Button>
                     </TableCell>
@@ -261,7 +262,9 @@ export default function SettingsClient() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar Remoção de Categoria</AlertDialogTitle>
               <AlertDialogDescription>
-                Tem certeza que deseja remover a categoria "{categoryToDelete.name}"? Esta ação não pode ser desfeita.
+                Tem certeza que deseja remover a categoria "{categoryToDelete.name}"? 
+                Produtos que utilizam esta categoria podem precisar ser reatribuídos manualmente a uma nova categoria.
+                Esta ação não pode ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -279,3 +282,4 @@ export default function SettingsClient() {
     </div>
   );
 }
+
