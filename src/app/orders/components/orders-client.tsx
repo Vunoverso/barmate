@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import PaymentDialog from './payment-dialog';
+import CreateOrderDialog from './create-order-dialog'; // Added import
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -43,11 +44,11 @@ export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  const [nextOrderNumber, setNextOrderNumber] = useState<number>(1);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false); // Added state
   const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
   const { toast } = useToast();
 
@@ -73,17 +74,20 @@ export default function OrdersClient() {
     }
   }, [categories, activeCategory]);
 
-  const handleCreateNewOrder = () => {
-    const newOrderId = `order-${Date.now()}-${nextOrderNumber}`;
+  const handleOpenCreateOrderDialog = () => {
+    setIsCreateOrderDialogOpen(true);
+  };
+
+  const handleCreateNewOrder = (orderName: string) => {
+    const newOrderId = `order-${Date.now()}`;
     const newOrder: ActiveOrder = {
       id: newOrderId,
-      name: `Comanda ${nextOrderNumber}`,
+      name: orderName, // Use the name from the dialog
       items: [],
       createdAt: new Date(),
     };
     setOpenOrders(prev => [...prev, newOrder]);
     setCurrentOrderId(newOrderId);
-    setNextOrderNumber(prev => prev + 1);
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
   };
 
@@ -189,6 +193,8 @@ export default function OrdersClient() {
       totalAmount: orderTotal,
       timestamp: new Date(),
       ...saleDetails,
+      // You might want to add currentOrder.name or id to the sale record
+      // e.g., orderName: currentOrder.name 
     };
     console.log('New Sale:', newSale);
     // Add to sales log (if implemented)
@@ -198,16 +204,16 @@ export default function OrdersClient() {
       if (updatedOpenOrders.length > 0) {
         const currentIndex = prevOrders.findIndex(o => o.id === currentOrderId);
         let nextSelectedOrderId: string | null = null;
-        if (prevOrders.length === 1) { // Only one order, and it's being closed
+        if (prevOrders.length === 1) { 
            nextSelectedOrderId = null;
         } else if (currentIndex >= 0 && updatedOpenOrders.length > 0) {
            if (currentIndex < updatedOpenOrders.length) {
-             nextSelectedOrderId = updatedOpenOrders[currentIndex].id; // Try selecting order at same index
+             nextSelectedOrderId = updatedOpenOrders[currentIndex].id; 
            } else {
-             nextSelectedOrderId = updatedOpenOrders[updatedOpenOrders.length - 1].id; // Select last order
+             nextSelectedOrderId = updatedOpenOrders[updatedOpenOrders.length - 1].id; 
            }
         } else if (updatedOpenOrders.length > 0) {
-           nextSelectedOrderId = updatedOpenOrders[0].id; // Default to first if no specific logic met
+           nextSelectedOrderId = updatedOpenOrders[0].id; 
         }
         setCurrentOrderId(nextSelectedOrderId);
       } else {
@@ -225,14 +231,14 @@ export default function OrdersClient() {
   };
 
   return (
-    <div className="grid md:grid-cols-4 gap-4 h-[calc(100vh-100px)]"> {/* Adjusted grid for 4 columns and height */}
+    <div className="grid md:grid-cols-4 gap-4 h-[calc(100vh-100px)]">
       {/* Open Orders List Area */}
       <div className="md:col-span-1 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               Comandas Abertas
-              <Button size="sm" onClick={handleCreateNewOrder}>
+              <Button size="sm" onClick={handleOpenCreateOrderDialog}> {/* Changed to open dialog */}
                 <PlusSquare className="mr-2 h-4 w-4" /> Nova
               </Button>
             </CardTitle>
@@ -253,13 +259,13 @@ export default function OrdersClient() {
                       className="w-full justify-between h-auto py-2 px-3"
                       onClick={() => handleSelectOrder(order.id)}
                     >
-                      <div className="flex flex-col items-start">
-                        <span className="font-semibold">{order.name}</span>
+                      <div className="flex flex-col items-start text-left">
+                        <span className="font-semibold truncate block max-w-full">{order.name}</span>
                         <span className="text-xs text-muted-foreground">
                           {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
                         </span>
                       </div>
-                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order);}}>
+                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order);}}>
                         <XCircle className="h-4 w-4" />
                       </Button>
                     </Button>
@@ -400,6 +406,12 @@ export default function OrdersClient() {
         </Card>
       </div>
 
+      <CreateOrderDialog
+        isOpen={isCreateOrderDialogOpen}
+        onOpenChange={setIsCreateOrderDialogOpen}
+        onSubmit={handleCreateNewOrder}
+      />
+
       <PaymentDialog
         isOpen={isPaymentDialogOpen}
         onOpenChange={setIsPaymentDialogOpen}
@@ -445,7 +457,7 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
   
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"> {/* Adjusted grid for product selection column */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {products.map(product => (
           <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
             <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">

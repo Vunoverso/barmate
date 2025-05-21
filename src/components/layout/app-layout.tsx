@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, ShoppingCart } from 'lucide-react';
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store } from 'lucide-react'; // Added Store
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -21,6 +21,7 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { href: '/', label: 'Início', icon: Home },
+  { href: '/counter-sale', label: 'Venda Balcão', icon: Store }, // New Venda Balcão
   { href: '/orders', label: 'Comandas', icon: HandCoins },
   { href: '/products', label: 'Produtos', icon: Package },
   { href: '/reports', label: 'Relatórios', icon: LineChart },
@@ -49,7 +50,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     };
 
     window.addEventListener('barNameChanged', handleBarNameChange);
-    // Listen for storage events to sync across tabs (optional, but good practice)
     window.addEventListener('storage', (event) => {
       if (event.key === 'barName' && event.newValue) {
         setBarName(event.newValue);
@@ -88,10 +88,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   );
 
   if (!isMounted) {
-    // Avoid hydration mismatch by not rendering dynamic content on first server render
     return (
       <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
-        {/* Placeholder for sidebar to maintain layout */}
         <div className="hidden border-r bg-muted/40 md:block">
            <div className="flex h-full max-h-screen flex-col gap-2">
              <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
@@ -104,7 +102,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="flex flex-col">
           <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
-             {/* Placeholder for header */}
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto">
             {children}
@@ -127,7 +124,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex-1">
             <SidebarNav items={allNavItems} className="px-2 text-sm font-medium lg:px-4" />
           </div>
-          {/* Removed static settings button from here */}
         </div>
       </div>
       <div className="flex flex-col">
@@ -151,7 +147,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     href={item.href}
                     className={`mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 ${pathname === item.href ? 'bg-muted text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     onClick={() => {
-                      // Close sheet on navigation for mobile
                       const trigger = document.querySelector('[aria-controls="radix-:R1mcq:"][aria-expanded="true"]');
                       if (trigger instanceof HTMLElement) {
                         trigger.click();
@@ -164,11 +159,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   </Link>
                 ))}
               </nav>
-              {/* Removed static settings button from mobile sheet as well */}
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1">
-            {/* Can add search bar here if needed */}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
