@@ -1,12 +1,13 @@
+
 "use client";
 
-import type { Product } from '@/types';
-import { INITIAL_PRODUCTS, PRODUCT_CATEGORIES, formatCurrency } from '@/lib/constants';
-import { useState } from 'react';
+import type { Product, ProductCategory } from '@/types';
+import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, saveProductCategories as saveCategoriesToStorage } from '@/lib/constants'; // Assuming save is not needed here directly unless modifying products affects categories
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { PlusCircle, Edit3, Trash2, Search, Filter } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Search, Filter, Package } from 'lucide-react'; // Added Package for default icon
 import AddProductDialog from './add-product-dialog';
 import {
   Table,
@@ -40,17 +41,33 @@ import {
 
 
 export default function ProductManagement() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS); // Consider loading from localStorage if products become editable beyond constants
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>(''); // Stores categoryId
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const { toast } = useToast();
 
+  useEffect(() => {
+    setProductCategories(getProductCategories());
+    // Listen for category changes from settings
+    const handleCategoriesChange = () => {
+      setProductCategories(getProductCategories());
+    };
+    window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+    return () => {
+      window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
+    };
+  }, []);
+
   const handleAddProduct = (product: Product) => {
-    setProducts(prev => [...prev, { ...product, id: `prod-${Date.now()}` }]);
+    // In a real app, products would be saved to a backend or localStorage
+    // For now, just adding to local state.
+    const newProduct = { ...product, id: `prod-${Date.now()}` };
+    setProducts(prev => [...prev, newProduct]);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
@@ -72,15 +89,21 @@ export default function ProductManagement() {
   const handleDeleteProduct = (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     setProducts(prev => prev.filter(p => p.id !== productId));
-    setProductToDelete(null); // Close confirmation dialog
+    setProductToDelete(null); 
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
     }
   };
 
-  const filteredProducts = products
+  const filteredProducts = useMemo(() => {
+    return products
     .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    .filter(p => categoryFilter ? p.category === categoryFilter : true);
+    .filter(p => categoryFilter ? p.categoryId === categoryFilter : true);
+  }, [products, searchTerm, categoryFilter]);
+
+  const getCategoryNameById = (categoryId: string) => {
+    return productCategories.find(cat => cat.id === categoryId)?.name || categoryId;
+  };
 
   return (
     <>
@@ -100,7 +123,7 @@ export default function ProductManagement() {
             <Button variant="outline" className="gap-1">
               <Filter className="h-3.5 w-3.5" />
               <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                {categoryFilter ? categoryFilter : "Categoria"}
+                {categoryFilter ? getCategoryNameById(categoryFilter) : "Categoria"}
               </span>
             </Button>
           </DropdownMenuTrigger>
@@ -108,8 +131,8 @@ export default function ProductManagement() {
             <DropdownMenuLabel>Filtrar por Categoria</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setCategoryFilter('')}>Todas</DropdownMenuItem>
-            {PRODUCT_CATEGORIES.map(cat => (
-              <DropdownMenuItem key={cat.name} onClick={() => setCategoryFilter(cat.name)}>
+            {productCategories.map(cat => (
+              <DropdownMenuItem key={cat.id} onClick={() => setCategoryFilter(cat.id)}>
                 {cat.name}
               </DropdownMenuItem>
             ))}
@@ -144,38 +167,42 @@ export default function ProductManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.length > 0 ? filteredProducts.map(product => (
-                <TableRow key={product.id}>
-                  <TableCell className="hidden sm:table-cell">
-                    {product.icon ? <product.icon className="h-8 w-8 text-muted-foreground" /> : <div className="h-8 w-8 bg-muted rounded-md" />}
-                  </TableCell>
-                  <TableCell className="font-medium">{product.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{product.category}</Badge>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">{product.stock ?? 'N/A'}</TableCell>
-                  <TableCell>{formatCurrency(product.price)}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => openEditDialog(product)}>
-                          <Edit3 className="mr-2 h-4 w-4" /> Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive" onClick={() => setProductToDelete(product)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Remover
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )) : (
+              {filteredProducts.length > 0 ? filteredProducts.map(product => {
+                const category = productCategories.find(c => c.id === product.categoryId);
+                const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+                return (
+                  <TableRow key={product.id}>
+                    <TableCell className="hidden sm:table-cell">
+                      <IconComponent className="h-8 w-8 text-muted-foreground" />
+                    </TableCell>
+                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{category ? category.name : 'Desconhecida'}</Badge>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">{product.stock ?? 'N/A'}</TableCell>
+                    <TableCell>{formatCurrency(product.price)}</TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button aria-haspopup="true" size="icon" variant="ghost">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Toggle menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => openEditDialog(product)}>
+                            <Edit3 className="mr-2 h-4 w-4" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => setProductToDelete(product)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Remover
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              }) : (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center">
                     Nenhum produto encontrado.

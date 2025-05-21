@@ -1,11 +1,12 @@
+
 "use client";
 
-import type { Product } from '@/types';
-import { PRODUCT_CATEGORIES } from '@/lib/constants';
+import type { Product, ProductCategory } from '@/types';
+import { getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   Dialog,
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+// import { Label } from '@/components/ui/label'; // No longer directly used, FormLabel is used
 import {
   Select,
   SelectContent,
@@ -38,7 +39,7 @@ import {
 const productSchema = z.object({
   name: z.string().min(3, { message: "Nome do produto deve ter pelo menos 3 caracteres." }),
   price: z.coerce.number().positive({ message: "Preço deve ser um número positivo." }),
-  category: z.string().min(1, { message: "Selecione uma categoria." }),
+  categoryId: z.string().min(1, { message: "Selecione uma categoria." }),
   stock: z.coerce.number().int().nonnegative({ message: "Estoque deve ser um número não negativo." }).optional(),
 });
 
@@ -52,42 +53,59 @@ interface AddProductDialogProps {
 }
 
 export default function AddProductDialog({ isOpen, onOpenChange, product, onSave }: AddProductDialogProps) {
+  const [availableCategories, setAvailableCategories] = useState<ProductCategory[]>([]);
+
+  useEffect(() => {
+    if (isOpen) { // Fetch categories when dialog is opened or its dependencies change
+      setAvailableCategories(getProductCategories());
+    }
+  }, [isOpen]);
+
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: '',
       price: 0,
-      category: '',
+      categoryId: '',
       stock: 0,
     },
   });
 
   useEffect(() => {
-    if (product) {
-      form.reset({
-        name: product.name,
-        price: product.price,
-        category: product.category,
-        stock: product.stock ?? 0,
-      });
-    } else {
-      form.reset({
-        name: '',
-        price: 0,
-        category: PRODUCT_CATEGORIES[0]?.name || '', // Default to first category
-        stock: 0,
-      });
+    // Ensure categories are loaded before resetting form
+    if (availableCategories.length > 0) {
+      if (product) {
+        form.reset({
+          name: product.name,
+          price: product.price,
+          categoryId: product.categoryId,
+          stock: product.stock ?? 0,
+        });
+      } else {
+        form.reset({
+          name: '',
+          price: 0,
+          categoryId: availableCategories[0]?.id || '', 
+          stock: 0,
+        });
+      }
+    } else if (!product) { // If no product and categories not yet loaded, set default empty/initial values
+       form.reset({
+          name: '',
+          price: 0,
+          categoryId: '', 
+          stock: 0,
+        });
     }
-  }, [product, form, isOpen]);
+  }, [product, form, isOpen, availableCategories]);
+
 
   const onSubmit = (data: ProductFormData) => {
-    const categoryDetails = PRODUCT_CATEGORIES.find(cat => cat.name === data.category);
     onSave({
-      id: product?.id || '', // ID will be set by parent if new
+      id: product?.id || '', 
       name: data.name,
       price: data.price,
-      category: data.category,
-      icon: categoryDetails?.icon,
+      categoryId: data.categoryId,
       stock: data.stock,
     });
     onOpenChange(false);
@@ -132,23 +150,28 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
             />
             <FormField
               control={form.control}
-              name="category"
+              name="categoryId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Categoria</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma categoria" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {PRODUCT_CATEGORIES.map(cat => (
-                        <SelectItem key={cat.name} value={cat.name}>
-                          {cat.icon && <cat.icon className="inline-block mr-2 h-4 w-4" />}
-                          {cat.name}
-                        </SelectItem>
-                      ))}
+                      {availableCategories.map(cat => {
+                        const IconComponent = LUCIDE_ICON_MAP[cat.iconName] || null;
+                        return (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            <div className="flex items-center gap-2">
+                              {IconComponent && <IconComponent className="h-4 w-4 text-muted-foreground" />}
+                              {cat.name}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <FormMessage />

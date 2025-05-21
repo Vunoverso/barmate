@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder } from '@/types';
-import { INITIAL_PRODUCTS, formatCurrency } from '@/lib/constants';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory } from '@/types';
+import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package } from 'lucide-react';
 import Image from 'next/image';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
@@ -29,14 +29,14 @@ import {
 
 const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
-// Group products by category
-const groupProductsByCategory = (products: Product[]) => {
+const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   return products.reduce((acc, product) => {
-    const category = product.category || 'Outros';
-    if (!acc[category]) {
-      acc[category] = [];
+    const category = categories.find(c => c.id === product.categoryId);
+    const categoryName = category ? category.name : 'Outros';
+    if (!acc[categoryName]) {
+      acc[categoryName] = [];
     }
-    acc[category].push(product);
+    acc[categoryName].push(product);
     return acc;
   }, {} as Record<string, Product[]>);
 };
@@ -44,6 +44,7 @@ const groupProductsByCategory = (products: Product[]) => {
 
 export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
@@ -57,12 +58,22 @@ export default function OrdersClient() {
 
   useEffect(() => {
     setIsMounted(true);
+    setProductCategories(getProductCategories());
     const storedOrders = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
     if (storedOrders) {
       try {
         const parsedOrders: ActiveOrder[] = JSON.parse(storedOrders).map((order: ActiveOrder) => ({
           ...order,
-          createdAt: new Date(order.createdAt) // Ensure dates are parsed correctly
+          createdAt: new Date(order.createdAt),
+          items: order.items.map(item => { // Hydrate items with category details
+            const productDetails = INITIAL_PRODUCTS.find(p => p.id === item.id);
+            const category = productCategories.find(c => c.id === productDetails?.categoryId);
+            return {
+              ...item,
+              categoryName: category?.name,
+              categoryIconName: category?.iconName
+            };
+          })
         }));
         setOpenOrders(parsedOrders);
         if (parsedOrders.length > 0 && !currentOrderId) {
@@ -70,11 +81,21 @@ export default function OrdersClient() {
         }
       } catch (error) {
         console.error("Failed to parse open orders from localStorage", error);
-        localStorage.removeItem(LOCAL_STORAGE_ORDERS_KEY); // Clear corrupted data
+        localStorage.removeItem(LOCAL_STORAGE_ORDERS_KEY); 
       }
     }
+     // Listen for category changes from settings
+    const handleCategoriesChange = () => {
+      setProductCategories(getProductCategories());
+      // Potentially re-hydrate open orders if category names/icons changed significantly
+    };
+    window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+    return () => {
+      window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
+    };
   }, []);
 
+  // Update localStorage when openOrders change
   useEffect(() => {
     if (isMounted) {
       localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(openOrders));
@@ -94,15 +115,17 @@ export default function OrdersClient() {
     return products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [products, searchTerm]);
   
-  const productsByCategory = useMemo(() => groupProductsByCategory(filteredProducts), [filteredProducts]);
-  const categories = useMemo(() => Object.keys(productsByCategory), [productsByCategory]);
-  const [activeCategory, setActiveCategory] = useState<string>(categories[0] || 'Todos');
+  const productsByCategoryDisplay = useMemo(() => groupProductsByCategoryId(filteredProducts, productCategories), [filteredProducts, productCategories]);
+  const displayCategories = useMemo(() => Object.keys(productsByCategoryDisplay).sort(), [productsByCategoryDisplay]);
+  const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>(displayCategories[0] || 'Todos');
 
   useEffect(() => {
-    if (categories.length > 0 && !categories.includes(activeCategory)) {
-      setActiveCategory(categories[0] || 'Todos');
+     if (displayCategories.length > 0 && (!activeDisplayCategory || activeDisplayCategory === 'Todos' || !displayCategories.includes(activeDisplayCategory))) {
+      setActiveDisplayCategory(displayCategories[0]);
+    } else if (displayCategories.length === 0 && activeDisplayCategory !== 'Todos') {
+      setActiveDisplayCategory('Todos');
     }
-  }, [categories, activeCategory]);
+  }, [displayCategories, activeDisplayCategory]);
 
   const handleOpenCreateOrderDialog = () => {
     setIsCreateOrderDialogOpen(true);
@@ -131,26 +154,18 @@ export default function OrdersClient() {
 
   const handleDeleteOrder = () => {
     if (!orderToDelete) return;
-
     const orderIdToDelete = orderToDelete.id;
     const orderName = orderToDelete.name;
-
     setOpenOrders(prevOrders => {
       const updatedOrders = prevOrders.filter(order => order.id !== orderIdToDelete);
       if (currentOrderId === orderIdToDelete) {
-        if (updatedOrders.length > 0) {
-          setCurrentOrderId(updatedOrders[0].id);
-        } else {
-          setCurrentOrderId(null);
-        }
+        setCurrentOrderId(updatedOrders.length > 0 ? updatedOrders[0].id : null);
       }
       return updatedOrders;
     });
-    
     setOrderToDelete(null);
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
   };
-
 
   const addToOrder = (product: Product) => {
     if (!currentOrderId) {
@@ -169,7 +184,13 @@ export default function OrdersClient() {
               ),
             };
           }
-          return { ...order, items: [...order.items, { ...product, quantity: 1 }] };
+          const category = productCategories.find(c => c.id === product.categoryId);
+          return { ...order, items: [...order.items, { 
+            ...product, 
+            quantity: 1,
+            categoryName: category?.name,
+            categoryIconName: category?.iconName
+          }] };
         }
         return order;
       })
@@ -216,27 +237,21 @@ export default function OrdersClient() {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
     }
-    
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       items: currentOrderItems,
       totalAmount: orderTotal,
       timestamp: new Date(),
       ...saleDetails,
-      // You might want to add currentOrder.name or id to the sale record
-      // e.g., orderName: currentOrder.name 
     };
     console.log('New Sale:', newSale);
-    // Add to sales log (if implemented)
-    
     setOpenOrders(prevOrders => {
       const updatedOpenOrders = prevOrders.filter(order => order.id !== currentOrderId);
       const currentIndex = prevOrders.findIndex(o => o.id === currentOrderId);
       let nextSelectedOrderId: string | null = null;
-      
       if (updatedOpenOrders.length === 0) {
         nextSelectedOrderId = null;
-      } else if (prevOrders.length === 1) { // Only one order was present, and it's being closed
+      } else if (prevOrders.length === 1) {
          nextSelectedOrderId = null;
       } else if (currentIndex >= 0 && updatedOpenOrders.length > 0) {
          if (currentIndex < updatedOpenOrders.length) {
@@ -250,7 +265,6 @@ export default function OrdersClient() {
       setCurrentOrderId(nextSelectedOrderId);
       return updatedOpenOrders;
     });
-
     setIsPaymentDialogOpen(false);
     toast({
       title: "Venda Concluída!",
@@ -269,7 +283,6 @@ export default function OrdersClient() {
 
   return (
     <div className="grid md:grid-cols-4 gap-4 h-[calc(100vh-100px)]">
-      {/* Open Orders List Area */}
       <div className="md:col-span-1 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
@@ -314,7 +327,6 @@ export default function OrdersClient() {
         </Card>
       </div>
 
-      {/* Product Selection Area */}
       <div className="md:col-span-2 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
@@ -340,22 +352,22 @@ export default function OrdersClient() {
              {!currentOrderId && openOrders.length > 0 && <CardDescription className="text-destructive pt-2">Selecione uma comanda para adicionar produtos.</CardDescription>}
              {!currentOrderId && openOrders.length === 0 && <CardDescription className="text-destructive pt-2">Crie uma nova comanda para começar.</CardDescription>}
           </CardHeader>
-          <Tabs value={activeCategory} onValueChange={setActiveCategory} className="flex-grow flex flex-col overflow-hidden">
+          <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
             <TabsList className="mx-4">
               <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
-              {categories.map(category => (
-                <TabsTrigger key={category} value={category} disabled={!currentOrderId}>{category}</TabsTrigger>
+              {displayCategories.map(categoryName => (
+                <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId}>{categoryName}</TabsTrigger>
               ))}
             </TabsList>
             <ScrollArea className="flex-grow p-4">
               {currentOrderId ? (
                 <>
                   <TabsContent value="Todos" className="mt-0">
-                    <ProductDisplay products={filteredProducts} addToOrder={addToOrder} viewMode={viewMode} />
+                    <ProductDisplay products={filteredProducts} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                   </TabsContent>
-                  {categories.map(category => (
-                    <TabsContent key={category} value={category} className="mt-0">
-                      <ProductDisplay products={productsByCategory[category]} addToOrder={addToOrder} viewMode={viewMode} />
+                  {displayCategories.map(categoryName => (
+                    <TabsContent key={categoryName} value={categoryName} className="mt-0">
+                      <ProductDisplay products={productsByCategoryDisplay[categoryName]} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                     </TabsContent>
                   ))}
                 </>
@@ -371,7 +383,6 @@ export default function OrdersClient() {
         </Card>
       </div>
 
-      {/* Order Summary Area */}
       <div className="md:col-span-1 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
@@ -394,34 +405,33 @@ export default function OrdersClient() {
                 <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
               ) : (
                 <ul className="space-y-3">
-                  {currentOrderItems.map(item => (
-                    <li key={item.id} className="flex items-center gap-3 p-2 rounded-md border">
-                      <div className="flex-shrink-0">
-                        {item.icon ? (
-                            <item.icon className="h-8 w-8 text-muted-foreground" />
-                        ) : (
-                             <Image src={`https://placehold.co/64x64.png?text=${item.name.substring(0,2)}`} alt={item.name} width={32} height={32} data-ai-hint="product item" className="rounded-sm" />
-                        )}
-                      </div>
-                      <div className="flex-grow">
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-sm text-muted-foreground">{formatCurrency(item.price)}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                          <MinusCircle className="h-4 w-4" />
-                        </Button>
-                        <span className="w-6 text-center">{item.quantity}</span>
-                        <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                          <PlusCircle className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80" onClick={() => removeFromOrder(item.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <p className="font-semibold w-20 text-right">{formatCurrency(item.price * item.quantity)}</p>
-                    </li>
-                  ))}
+                  {currentOrderItems.map(item => {
+                    const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
+                    return (
+                      <li key={item.id} className="flex items-center gap-3 p-2 rounded-md border">
+                        <div className="flex-shrink-0">
+                          <IconComponent className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <div className="flex-grow">
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-sm text-muted-foreground">{formatCurrency(item.price)}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                            <MinusCircle className="h-4 w-4" />
+                          </Button>
+                          <span className="w-6 text-center">{item.quantity}</span>
+                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                            <PlusCircle className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80" onClick={() => removeFromOrder(item.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="font-semibold w-20 text-right">{formatCurrency(item.price * item.quantity)}</p>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </ScrollArea>
@@ -484,11 +494,12 @@ export default function OrdersClient() {
 
 interface ProductDisplayProps {
   products: Product[];
+  productCategories: ProductCategory[];
   addToOrder: (product: Product) => void;
   viewMode: 'grid' | 'list';
 }
 
-function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps) {
+function ProductDisplay({ products, productCategories, addToOrder, viewMode }: ProductDisplayProps) {
   if (products.length === 0) {
     return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
   }
@@ -496,44 +507,44 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
   if (viewMode === 'grid') {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {products.map(product => (
-          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
-            <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
-              {product.icon ? (
-                <product.icon className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground group-hover:text-primary transition-colors" />
-              ) : (
-                <Image src={`https://placehold.co/100x100.png?text=${product.name.substring(0,2)}`} alt={product.name} width={80} height={80} data-ai-hint="product item" />
-              )}
-            </div>
-            <CardContent className="p-2 sm:p-3">
-              <h3 className="font-medium truncate text-xs sm:text-sm">{product.name}</h3>
-              <p className="text-primary font-semibold text-sm sm:text-md">{formatCurrency(product.price)}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {products.map(product => {
+          const category = productCategories.find(c => c.id === product.categoryId);
+          const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+          return (
+            <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
+              <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
+                <IconComponent className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+              <CardContent className="p-2 sm:p-3">
+                <h3 className="font-medium truncate text-xs sm:text-sm">{product.name}</h3>
+                <p className="text-primary font-semibold text-sm sm:text-md">{formatCurrency(product.price)}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      {products.map(product => (
-        <Card key={product.id} className="flex items-center p-3 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted rounded-md flex items-center justify-center mr-3 group-hover:bg-muted/80 transition-colors">
-             {product.icon ? (
-                <product.icon className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground group-hover:text-primary transition-colors" />
-              ) : (
-                <Image src={`https://placehold.co/48x48.png?text=${product.name.substring(0,2)}`} alt={product.name} width={32} height={32} data-ai-hint="product item" />
-              )}
-          </div>
-          <div className="flex-grow">
-            <h3 className="font-medium text-sm sm:text-base">{product.name}</h3>
-            <p className="text-xs text-muted-foreground">{product.category}</p>
-          </div>
-          <p className="text-primary font-semibold text-md sm:text-lg">{formatCurrency(product.price)}</p>
-        </Card>
-      ))}
+      {products.map(product => {
+        const category = productCategories.find(c => c.id === product.categoryId);
+        const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+        const categoryName = category ? category.name : "Desconhecida";
+        return (
+          <Card key={product.id} className="flex items-center p-3 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted rounded-md flex items-center justify-center mr-3 group-hover:bg-muted/80 transition-colors">
+              <IconComponent className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+            <div className="flex-grow">
+              <h3 className="font-medium text-sm sm:text-base">{product.name}</h3>
+              <p className="text-xs text-muted-foreground">{categoryName}</p>
+            </div>
+            <p className="text-primary font-semibold text-md sm:text-lg">{formatCurrency(product.price)}</p>
+          </Card>
+        );
+      })}
     </div>
   );
 }
-
