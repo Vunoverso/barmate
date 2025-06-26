@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ProductCategory } from '@/types';
-import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
+import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -130,7 +130,8 @@ export default function CounterSaleClient() {
       timestamp: new Date(),
       ...saleDetails,
     };
-    console.log('New Counter Sale:', newSale);
+    
+    addSale(newSale);
     
     setCurrentOrderItems([]); 
     if (isMounted) {

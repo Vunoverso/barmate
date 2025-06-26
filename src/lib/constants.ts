@@ -1,6 +1,6 @@
 
 import type { Product, Sale, PaymentMethod, ProductCategory } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, type LucideIcon } from 'lucide-react';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon } from 'lucide-react';
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer,
@@ -12,7 +12,8 @@ export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   CircleDollarSign,
   CreditCard,
   QrCode,
-  Package, // Adicionado o ícone Package ao mapa
+  Package,
+  Banknote,
 };
 
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
@@ -80,10 +81,7 @@ export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: Lucide
   { name: 'PIX', value: 'pix', icon: QrCode },
 ];
 
-// Mantendo INITIAL_SALES para relatórios, mas os produtos referenciados são os de INITIAL_PRODUCTS.
-// Se INITIAL_PRODUCTS mudar muito, estas sales podem ficar inconsistentes.
-// Para um sistema real, sales seriam gravadas com snapshots dos itens.
-export const INITIAL_SALES: Sale[] = [
+const INITIAL_SALES: Sale[] = [
   {
     id: 'sale1',
     items: [
@@ -92,7 +90,7 @@ export const INITIAL_SALES: Sale[] = [
     ],
     totalAmount: (INITIAL_PRODUCTS.find(p=>p.id==='1')!.price * 2) + INITIAL_PRODUCTS.find(p=>p.id==='9')!.price,
     paymentMethod: 'card',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), 
+    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     status: 'completed',
   },
   {
@@ -104,12 +102,45 @@ export const INITIAL_SALES: Sale[] = [
     paymentMethod: 'cash',
     amountPaid: 25.00,
     changeGiven: 25.00 - (INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3),
-    timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000), 
+    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     status: 'completed',
   },
 ];
 
+
+export const SALES_STORAGE_KEY = 'barmate_sales';
+
+export const getSales = (): Sale[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  const storedSales = localStorage.getItem(SALES_STORAGE_KEY);
+  if (storedSales) {
+    try {
+      return JSON.parse(storedSales).map((s: Sale) => ({
+        ...s,
+        timestamp: new Date(s.timestamp)
+      }));
+    } catch (e) {
+      console.error("Failed to parse sales from localStorage", e);
+      localStorage.removeItem(SALES_STORAGE_KEY);
+      return [];
+    }
+  }
+  // Seed with initial data only if nothing is in storage
+  localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(INITIAL_SALES));
+  return INITIAL_SALES;
+};
+
+export const addSale = (newSale: Sale): void => {
+  if (typeof window === 'undefined') return;
+  const currentSales = getSales();
+  const updatedSales = [...currentSales, newSale];
+  localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(updatedSales));
+  window.dispatchEvent(new Event('salesChanged'));
+};
+
+
 export const formatCurrency = (value: number) => {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
-

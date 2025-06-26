@@ -2,8 +2,8 @@
 "use client";
 
 import type { Sale } from '@/types';
-import { INITIAL_SALES, formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
-import { useState, useMemo } from 'react';
+import { getSales, formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
   Table,
@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function ReportsClient() {
-  const [sales, setSales] = useState<Sale[]>(INITIAL_SALES);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30), 
     to: new Date(),
@@ -51,6 +51,19 @@ export default function ReportsClient() {
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const { toast } = useToast();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const handleSalesChange = () => {
+      setSales(getSales());
+    };
+    handleSalesChange(); // Load initial sales
+    window.addEventListener('salesChanged', handleSalesChange);
+    return () => {
+      window.removeEventListener('salesChanged', handleSalesChange);
+    };
+  }, []);
 
   const filteredSales = useMemo(() => {
     return sales
@@ -77,8 +90,10 @@ export default function ReportsClient() {
     const result: Record<string, { count: number, total: number }> = {};
     PAYMENT_METHODS.forEach(pm => result[pm.value] = { count: 0, total: 0 });
     filteredSales.forEach(sale => {
-      result[sale.paymentMethod].count++;
-      result[sale.paymentMethod].total += sale.totalAmount;
+      if (result[sale.paymentMethod]) {
+        result[sale.paymentMethod].count++;
+        result[sale.paymentMethod].total += sale.totalAmount;
+      }
     });
     return result;
   }, [filteredSales]);
@@ -89,15 +104,35 @@ export default function ReportsClient() {
 
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
-    setSales(prevSales => prevSales.filter(s => s.id !== saleToDelete.id));
+
+    // This is a temporary delete for the session as we use localStorage
+    // In a real DB, this would be a "soft delete" or permanent removal.
+    const updatedSales = sales.filter(s => s.id !== saleToDelete!.id);
+    localStorage.setItem('barmate_sales', JSON.stringify(updatedSales));
+    setSales(updatedSales); // Update local state to re-render
+
     toast({
       title: "Venda Removida",
-      description: `A venda ID ${saleToDelete.id.substring(0,8)}... foi removida do relatório.`,
+      description: `A venda ID ${saleToDelete.id.substring(0,8)}... foi removida.`,
       variant: "destructive"
     });
     setSaleToDelete(null);
   };
 
+  if (!isMounted) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Carregando relatórios...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Aguarde um momento.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -162,7 +197,7 @@ export default function ReportsClient() {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
             <p className="text-xs text-muted-foreground">
-              {/* +20.1% from last month (example) */}
+              Total no período filtrado
             </p>
           </CardContent>
         </Card>
@@ -178,11 +213,10 @@ export default function ReportsClient() {
           <CardContent>
             <div className="text-2xl font-bold">+{totalSalesCount}</div>
             <p className="text-xs text-muted-foreground">
-              {/* +180.1% from last month (example) */}
+              Total no período filtrado
             </p>
           </CardContent>
         </Card>
-        {/* Add more summary cards if needed */}
       </div>
       
       <Card>
@@ -256,7 +290,7 @@ export default function ReportsClient() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle>
               <AlertDialogDescription>
-                Tem certeza que deseja remover a venda ID "{saleToDelete.id.substring(0,8)}..." do relatório? Esta ação não pode ser desfeita (para esta sessão).
+                Tem certeza que deseja remover a venda ID "{saleToDelete.id.substring(0,8)}..." do relatório? Esta ação não pode ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

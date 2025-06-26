@@ -43,3 +43,9 @@ export interface ActiveOrder {
   items: OrderItem[];
   createdAt: Date;
 }
+
+export interface CashRegisterStatus {
+  status: 'open' | 'closed';
+  openingTime?: string; // ISO String
+  openingBalance?: number;
+}

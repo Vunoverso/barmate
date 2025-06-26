@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory } from '@/types';
-import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
+import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -245,7 +245,9 @@ export default function OrdersClient() {
       timestamp: new Date(),
       ...saleDetails,
     };
-    console.log('New Sale:', newSale);
+    
+    addSale(newSale);
+
     setOpenOrders(prevOrders => {
       const updatedOpenOrders = prevOrders.filter(order => order.id !== currentOrderId);
       const currentIndex = prevOrders.findIndex(o => o.id === currentOrderId);
