@@ -4,7 +4,7 @@
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory } from '@/types';
 import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -26,6 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { cn } from '@/lib/utils';
 
 const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
@@ -303,11 +304,20 @@ export default function OrdersClient() {
               ) : (
                 <div className="space-y-2">
                   {openOrders.map(order => (
-                    <Button
+                    <div
                       key={order.id}
-                      variant={currentOrderId === order.id ? "secondary" : "outline"}
-                      className="w-full justify-between h-auto py-2 px-3"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleSelectOrder(order.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          handleSelectOrder(order.id);
+                        }
+                      }}
+                      className={cn(
+                        buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }),
+                        "w-full justify-between h-auto py-2 px-3 cursor-pointer"
+                      )}
                     >
                       <div className="flex flex-col items-start text-left">
                         <span className="font-semibold truncate block max-w-full">{order.name}</span>
@@ -318,7 +328,7 @@ export default function OrdersClient() {
                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order);}}>
                         <XCircle className="h-4 w-4" />
                       </Button>
-                    </Button>
+                    </div>
                   ))}
                 </div>
               )}
