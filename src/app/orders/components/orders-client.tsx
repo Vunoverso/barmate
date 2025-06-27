@@ -373,9 +373,9 @@ export default function OrdersClient() {
            <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
             <ScrollArea className="w-full shrink-0">
                 <TabsList className="mx-4 inline-flex">
-                    <TabsTrigger value="Todos" disabled={!currentOrderId} className="text-xs px-2 py-1">Todos</TabsTrigger>
+                    <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
                     {displayCategories.map(categoryName => (
-                        <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId} className="text-xs px-2 py-1">{categoryName}</TabsTrigger>
+                        <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId}>{categoryName}</TabsTrigger>
                     ))}
                 </TabsList>
                 <ScrollBar orientation="horizontal" />
