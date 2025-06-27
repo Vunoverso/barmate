@@ -2,7 +2,7 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries } from '@/lib/constants';
+import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -27,10 +27,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { DoorClosed, DoorOpen, Calculator, PiggyBank, CircleDollarSign, CreditCard, QrCode, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowRightLeft, Edit } from 'lucide-react';
+import { DoorClosed, DoorOpen, Calculator, PiggyBank, CircleDollarSign, CreditCard, QrCode, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowRightLeft, Edit, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus';
@@ -49,10 +64,12 @@ export default function CashRegisterClient() {
   const [isClosingDialog, setIsClosingDialog] = useState(false);
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState<'in' | 'out'>('in');
+  const [editingAdjustment, setEditingAdjustment] = useState<CashAdjustment | null>(null);
+  const [adjustmentToDelete, setAdjustmentToDelete] = useState<CashAdjustment | null>(null);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [isEditCaixa02DialogOpen, setIsEditCaixa02DialogOpen] = useState(false);
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
-
+  const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -68,23 +85,18 @@ export default function CashRegisterClient() {
     }
     // Load secondary cash box
     setSecondaryCashBox(getSecondaryCashBox());
-
     // Load bank account
     setBankAccount(getBankAccount());
-
     // Load sales and listen for changes
     const handleSalesChange = () => setSales(getSales());
     handleSalesChange();
     window.addEventListener('salesChanged', handleSalesChange);
-    
     // Listen for secondary cash box changes
     const handleSecondaryCashBoxChange = () => setSecondaryCashBox(getSecondaryCashBox());
     window.addEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
-
     // Listen for bank account changes
     const handleBankAccountChange = () => setBankAccount(getBankAccount());
     window.addEventListener('bankAccountChanged', handleBankAccountChange);
-
 
     return () => {
       window.removeEventListener('salesChanged', handleSalesChange);
@@ -100,12 +112,14 @@ export default function CashRegisterClient() {
   }, [cashStatus, isMounted]);
 
   const handleOpenCashRegister = (openingBalance: number) => {
-    setCashStatus({
+    const newStatus: CashRegisterStatus = {
       status: 'open',
       openingBalance: openingBalance,
       openingTime: new Date().toISOString(),
       adjustments: [],
-    });
+    };
+    setCashStatus(newStatus);
+    saveCashRegisterStatus(newStatus);
     setIsOpeningDialog(false);
     toast({
       title: "Caixa Aberto!",
@@ -113,41 +127,96 @@ export default function CashRegisterClient() {
     });
   };
 
-  const handleAddAdjustment = (amount: number, description: string) => {
+  const handleSaveAdjustment = (details: { amount: number; description: string }, idToUpdate?: string) => {
     if (cashStatus.status !== 'open') return;
 
-    const newAdjustment: CashAdjustment = {
-      id: `adj-${Date.now()}`,
-      amount,
-      type: adjustmentType,
-      description,
-      timestamp: new Date().toISOString()
-    };
+    if (idToUpdate) { // Editing existing adjustment
+        setCashStatus(prev => {
+            const updatedAdjustments = prev.adjustments?.map(adj => {
+                if (adj.id === idToUpdate) {
+                    if (adj.type === 'out') {
+                        const currentEntries = getFinancialEntries();
+                        const updatedEntries = currentEntries.map(entry => {
+                            if (entry.adjustmentId === idToUpdate) {
+                                return { ...entry, amount: details.amount, description: `Sangria: ${details.description}` };
+                            }
+                            return entry;
+                        });
+                        saveFinancialEntries(updatedEntries);
+                    }
+                    return { ...adj, amount: details.amount, description: details.description };
+                }
+                return adj;
+            });
+            const newState = { ...prev, adjustments: updatedAdjustments };
+            saveCashRegisterStatus(newState);
+            return newState;
+        });
+        toast({ title: "Movimentação Atualizada!" });
+    } else { // Creating new adjustment
+        const newAdjustment: CashAdjustment = {
+            id: `adj-${Date.now()}`,
+            amount: details.amount,
+            type: adjustmentType,
+            description: details.description,
+            timestamp: new Date().toISOString()
+        };
 
-    setCashStatus(prev => ({
-      ...prev,
-      adjustments: [...(prev.adjustments || []), newAdjustment]
-    }));
+        if (adjustmentType === 'out') {
+            const currentEntries = getFinancialEntries();
+            const newExpenseEntry: FinancialEntry = {
+                id: `exp-sangria-${newAdjustment.id}`,
+                description: `Sangria: ${details.description}`,
+                amount: details.amount,
+                type: 'expense',
+                source: 'daily_cash',
+                timestamp: new Date(),
+                adjustmentId: newAdjustment.id
+            };
+            saveFinancialEntries([...currentEntries, newExpenseEntry]);
+        }
 
-    if (adjustmentType === 'out') {
-      const currentEntries = getFinancialEntries();
-      const newExpenseEntry: FinancialEntry = {
-        id: `exp-sangria-${Date.now()}`,
-        description: `Sangria: ${description}`,
-        amount: amount,
-        type: 'expense',
-        source: 'daily_cash',
-        timestamp: new Date(),
-      };
-      saveFinancialEntries([...currentEntries, newExpenseEntry]);
+        const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), newAdjustment] };
+        setCashStatus(newState);
+        saveCashRegisterStatus(newState);
+        
+        toast({
+            title: `Movimentação Registrada!`,
+            description: `${adjustmentType === 'in' ? 'Suprimento' : 'Sangria'} de ${formatCurrency(details.amount)} adicionado.`,
+        });
     }
     
-    toast({
-        title: `Movimentação Registrada!`,
-        description: `${adjustmentType === 'in' ? 'Suprimento' : 'Sangria'} de ${formatCurrency(amount)} adicionado.`,
-    });
     setIsAdjustmentDialogOpen(false);
+    setEditingAdjustment(null);
   };
+  
+  const handleDeleteAdjustment = () => {
+    if (!adjustmentToDelete || cashStatus.status !== 'open') return;
+    const { id, type } = adjustmentToDelete;
+
+    if (type === 'out') {
+        const currentEntries = getFinancialEntries();
+        const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
+        saveFinancialEntries(updatedEntries);
+    }
+    
+    const newState = { ...cashStatus, adjustments: cashStatus.adjustments?.filter(adj => adj.id !== id) };
+    setCashStatus(newState);
+    saveCashRegisterStatus(newState);
+
+    toast({ title: "Movimentação Removida", variant: "destructive" });
+    setAdjustmentToDelete(null);
+  };
+
+  const handleEditInitialBalance = (newBalance: number) => {
+    if (cashStatus.status !== 'open') return;
+    const newState = { ...cashStatus, openingBalance: newBalance };
+    setCashStatus(newState);
+    saveCashRegisterStatus(newState);
+    toast({ title: "Saldo Inicial Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
+    setIsEditInitialBalanceDialogOpen(false);
+  };
+
 
   const handleTransfer = (amount: number) => {
     if (secondaryCashBox.balance < amount) {
@@ -159,17 +228,16 @@ export default function CashRegisterClient() {
     saveSecondaryCashBox({ balance: newSecondaryBalance });
 
     const transferAdjustment: CashAdjustment = {
-        id: `adj-${Date.now()}`,
+        id: `adj-transfer-${Date.now()}`,
         amount,
         type: 'in',
         description: `Transferência do Caixa 02`,
         timestamp: new Date().toISOString()
     };
 
-    setCashStatus(prev => ({
-      ...prev,
-      adjustments: [...(prev.adjustments || []), transferAdjustment]
-    }));
+    const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
+    setCashStatus(newState);
+    saveCashRegisterStatus(newState);
 
     toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o caixa atual.` });
     setIsTransferDialogOpen(false);
@@ -186,7 +254,6 @@ export default function CashRegisterClient() {
     toast({ title: "Conta Bancária Atualizada", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditBankAccountDialogOpen(false);
   }
-
 
   const handleCloseCashRegister = () => {
     const closedSession = {
@@ -236,6 +303,12 @@ export default function CashRegisterClient() {
     };
   }, [cashStatus, sales]);
 
+  const sortedAdjustments = useMemo(() => {
+    if (!cashStatus.adjustments) return [];
+    return [...cashStatus.adjustments].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [cashStatus.adjustments]);
+
+
   if (!isMounted) {
     return (
       <Card>
@@ -275,7 +348,7 @@ export default function CashRegisterClient() {
   return (
     <>
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-4">
             <Card>
                 <CardHeader>
                 <CardTitle>Resumo do Caixa Atual</CardTitle>
@@ -285,7 +358,12 @@ export default function CashRegisterClient() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                    <SummaryCard title="Saldo Inicial" value={formatCurrency(sessionSummary.openingBalance)} icon={PiggyBank} />
+                    <div className="relative">
+                      <SummaryCard title="Saldo Inicial" value={formatCurrency(sessionSummary.openingBalance)} icon={PiggyBank} />
+                      <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7" onClick={() => setIsEditInitialBalanceDialogOpen(true)}>
+                          <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <SummaryCard title="Total de Vendas (no caixa)" value={formatCurrency(sessionSummary.totalRevenue)} icon={Calculator} />
                     <SummaryCard title="Suprimentos (Entradas)" value={formatCurrency(sessionSummary.totalIn)} icon={ArrowUpCircle} />
                     <SummaryCard title="Sangrias (Saídas)" value={formatCurrency(sessionSummary.totalOut)} icon={ArrowDownCircle} className="text-destructive" />
@@ -313,6 +391,61 @@ export default function CashRegisterClient() {
                 </div>
                 </CardContent>
             </Card>
+             <Card>
+                <CardHeader>
+                    <CardTitle>Histórico de Movimentações da Sessão</CardTitle>
+                    <CardDescription>Suprimentos e sangrias realizados desde a abertura do caixa.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Horário</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead><span className="sr-only">Ações</span></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {sortedAdjustments.length > 0 ? sortedAdjustments.map(adj => (
+                                <TableRow key={adj.id}>
+                                    <TableCell>{format(new Date(adj.timestamp), "HH:mm:ss")}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={adj.type === 'in' ? 'secondary' : 'destructive'}>
+                                            {adj.type === 'in' ? 'Entrada' : 'Saída'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>{adj.description}</TableCell>
+                                    <TableCell className={`text-right font-medium ${adj.type === 'in' ? 'text-green-600' : 'text-destructive'}`}>
+                                        {adj.type === 'in' ? '+ ' : '- '}{formatCurrency(adj.amount)}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                                              <MoreHorizontal className="h-4 w-4" />
+                                              <span className="sr-only">Toggle menu</span>
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={() => { setEditingAdjustment(adj); setAdjustmentType(adj.type); setIsAdjustmentDialogOpen(true); }}>
+                                              <Edit className="mr-2 h-4 w-4" /> Editar
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="text-destructive" onClick={() => setAdjustmentToDelete(adj)}>
+                                              <Trash2 className="mr-2 h-4 w-4" /> Remover
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma movimentação nesta sessão.</TableCell></TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
         </div>
         <div className="space-y-4">
             <Card>
@@ -321,10 +454,10 @@ export default function CashRegisterClient() {
                     <CardDescription>Faça entradas ou retiradas de dinheiro do caixa principal.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">
-                    <Button variant="outline" onClick={() => { setAdjustmentType('in'); setIsAdjustmentDialogOpen(true); }}>
+                    <Button variant="outline" onClick={() => { setEditingAdjustment(null); setAdjustmentType('in'); setIsAdjustmentDialogOpen(true); }}>
                         <ArrowUpCircle className="mr-2 h-4 w-4" /> Suprimento
                     </Button>
-                    <Button variant="outline" className="text-destructive" onClick={() => { setAdjustmentType('out'); setIsAdjustmentDialogOpen(true); }}>
+                    <Button variant="outline" className="text-destructive" onClick={() => { setEditingAdjustment(null); setAdjustmentType('out'); setIsAdjustmentDialogOpen(true); }}>
                         <ArrowDownCircle className="mr-2 h-4 w-4" /> Sangria
                     </Button>
                 </CardContent>
@@ -379,10 +512,29 @@ export default function CashRegisterClient() {
       />
       <CashAdjustmentDialog
         isOpen={isAdjustmentDialogOpen}
-        onOpenChange={setIsAdjustmentDialogOpen}
+        onOpenChange={(open) => { if(!open) setEditingAdjustment(null); setIsAdjustmentDialogOpen(open); }}
         type={adjustmentType}
-        onSave={handleAddAdjustment}
+        onSave={handleSaveAdjustment}
+        adjustmentToEdit={editingAdjustment}
       />
+       {adjustmentToDelete && (
+        <AlertDialog open={!!adjustmentToDelete} onOpenChange={() => setAdjustmentToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja remover a movimentação "{adjustmentToDelete.description}" no valor de {formatCurrency(adjustmentToDelete.amount)}? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteAdjustment} className="bg-destructive hover:bg-destructive/90">
+                Remover
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
       <TransferDialog
         isOpen={isTransferDialogOpen}
         onOpenChange={setIsTransferDialogOpen}
@@ -406,6 +558,15 @@ export default function CashRegisterClient() {
         title="Editar Saldo da Conta Bancária"
         description="Ajuste o saldo total da sua conta bancária."
         idPrefix="bank"
+      />
+      <EditBalanceDialog
+        isOpen={isEditInitialBalanceDialogOpen}
+        onOpenChange={setIsEditInitialBalanceDialogOpen}
+        currentBalance={cashStatus.openingBalance || 0}
+        onSave={handleEditInitialBalance}
+        title="Editar Saldo Inicial do Caixa"
+        description="Ajuste o valor de abertura do caixa. Isso afetará o balanço final."
+        idPrefix="initial-balance"
       />
     </>
   );
@@ -511,13 +672,21 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
 }
 
 // Dialog for Cash In/Out
-function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave }: { isOpen: boolean, onOpenChange: (open: boolean) => void, type: 'in' | 'out', onSave: (amount: number, description: string) => void }) {
+function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentToEdit }: { isOpen: boolean, onOpenChange: (open: boolean) => void, type: 'in' | 'out', onSave: (details: { amount: number, description: string }, idToUpdate?: string) => void, adjustmentToEdit?: CashAdjustment | null }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const { toast } = useToast();
 
-  const title = type === 'in' ? 'Suprimento de Caixa (Entrada)' : 'Sangria de Caixa (Retirada)';
-  const dialogDesc = type === 'in' ? 'Registre uma entrada de dinheiro no caixa (ex: reforço de troco).' : 'Registre uma retirada de dinheiro do caixa (ex: guardar em local seguro).';
+  useEffect(() => {
+    if (isOpen && adjustmentToEdit) {
+      setAmount(String(adjustmentToEdit.amount));
+      setDescription(adjustmentToEdit.description);
+    }
+  }, [isOpen, adjustmentToEdit]);
+
+  const isEditing = !!adjustmentToEdit;
+  const title = isEditing ? 'Editar Movimentação' : (type === 'in' ? 'Suprimento de Caixa (Entrada)' : 'Sangria de Caixa (Retirada)');
+  const dialogDesc = isEditing ? 'Altere os detalhes da movimentação.' : (type === 'in' ? 'Registre uma entrada de dinheiro no caixa (ex: reforço de troco).' : 'Registre uma retirada de dinheiro do caixa (ex: guardar em local seguro).');
   const label = type === 'in' ? 'Valor de Entrada (R$)' : 'Valor de Retirada (R$)'
 
   const handleSubmit = () => {
@@ -530,13 +699,22 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave }: { isOpen: 
       toast({ title: "Descrição Obrigatória", description: "Forneça uma breve descrição para a movimentação.", variant: "destructive" });
       return;
     }
-    onSave(value, description.trim());
+    onSave({ amount: value, description: description.trim() }, adjustmentToEdit?.id);
     setAmount('');
     setDescription('');
   };
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setAmount('');
+      setDescription('');
+    }
+    onOpenChange(open);
+  };
+
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if(!open) { setAmount(''); setDescription(''); } onOpenChange(open); }}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{dialogDesc}</DialogDescription></DialogHeader>
         <div className="py-4 space-y-4">
@@ -629,5 +807,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
-
-    

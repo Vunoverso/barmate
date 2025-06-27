@@ -73,4 +73,5 @@ export interface FinancialEntry {
   type: 'expense' | 'income'; // For now, only 'expense' but can be extended
   source: 'daily_cash' | 'secondary_cash' | 'bank_account';
   timestamp: Date;
+  adjustmentId?: string;
 }
