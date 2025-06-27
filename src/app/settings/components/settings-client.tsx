@@ -1,15 +1,15 @@
 
 "use client";
 
-import type { ProductCategory, Product } from '@/types';
-import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, INITIAL_PRODUCTS } from '@/lib/constants';
+import type { ProductCategory } from '@/types';
+import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, INITIAL_PRODUCT_CATEGORIES } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Edit3, PlusCircle, Trash2 } from 'lucide-react';
+import { Save, Edit3, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -93,10 +94,10 @@ function EditCategoryDialog({ isOpen, onOpenChange, category, onSave }: EditCate
 
 
 export default function SettingsClient() {
+  const [isMounted, setIsMounted] = useState(false);
   const [barName, setBarName] = useState('');
   const [initialBarName, setInitialBarName] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
-  // const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS); // products state is not used for modification here.
   
   const { toast } = useToast();
 
@@ -105,8 +106,7 @@ export default function SettingsClient() {
     setBarName(storedName);
     setInitialBarName(storedName);
     setProductCategories(getProductCategories());
-    // Em um app real, os produtos também seriam carregados de uma fonte persistente
-    // setProducts(loadProductsFromStorageOrAPI()); 
+    setIsMounted(true);
 
     const handleCategoriesChange = () => {
       setProductCategories(getProductCategories());
@@ -164,24 +164,66 @@ export default function SettingsClient() {
   const handleDeleteCategory = () => {
     if (!categoryToDelete) return;
 
-    // Removido o bloqueio de exclusão se a categoria estiver em uso.
-    // const isCategoryInUse = INITIAL_PRODUCTS.some(product => product.categoryId === categoryToDelete.id);
-    // if (isCategoryInUse) {
-    //   toast({
-    //     title: "Não é possível remover",
-    //     description: `A categoria "${categoryToDelete.name}" está em uso por um ou mais produtos.`,
-    //     variant: "destructive",
-    //   });
-    //   setCategoryToDelete(null);
-    //   return;
-    // }
-
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
     setProductCategories(updatedCategories);
     saveProductCategories(updatedCategories);
     toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
   };
+
+  if (!isMounted) {
+    return (
+      <div className="space-y-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Nome do Estabelecimento</CardTitle>
+            <CardDescription>Altere o nome do seu bar que será exibido no sistema.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="barName">Nome do Bar</Label>
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <Button disabled>
+              <Save className="mr-2 h-4 w-4" />
+              Salvar Nome do Bar
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Gerenciar Categorias de Produtos</CardTitle>
+            <CardDescription>Renomeie ou remova as categorias de produtos. Os ícones são fixos por categoria original.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ícone</TableHead>
+                  <TableHead>Nome Atual da Categoria</TableHead>
+                  <TableHead>ID (interno)</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...Array(3)].map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-5 w-5 rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Skeleton className="h-9 w-24 inline-block" />
+                      <Skeleton className="h-9 w-24 inline-block" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
 
   return (
@@ -235,7 +277,7 @@ export default function SettingsClient() {
                       <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>
                         <Edit3 className="mr-2 h-4 w-4" /> Renomear
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1 && INITIAL_PRODUCT_CATEGORIES.some(cat => cat.id === category.id) /* Previne deletar a última categoria inicial se for a única */ }>
+                      <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1 && INITIAL_PRODUCT_CATEGORIES.some(cat => cat.id === category.id)}>
                         <Trash2 className="mr-2 h-4 w-4" /> Remover
                       </Button>
                     </TableCell>
@@ -263,7 +305,7 @@ export default function SettingsClient() {
               <AlertDialogTitle>Confirmar Remoção de Categoria</AlertDialogTitle>
               <AlertDialogDescription>
                 Tem certeza que deseja remover a categoria "{categoryToDelete.name}"? 
-                Produtos que utilizam esta categoria podem precisar ser reatribuídos manualmente a uma nova categoria.
+                Produtos que utilizam esta categoria podem precisar ser reatribuídos manually a uma nova categoria.
                 Esta ação não pode ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -283,3 +325,4 @@ export default function SettingsClient() {
   );
 }
 
+    
