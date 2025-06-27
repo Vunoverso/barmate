@@ -78,12 +78,15 @@ export default function CounterSaleClient() {
   }, [products, searchTerm]);
   
   const productsByCategoryDisplay = useMemo(() => groupProductsByCategoryId(filteredProducts, productCategories), [filteredProducts, productCategories]);
-  const displayCategories = useMemo(() => Object.keys(productsByCategoryDisplay).sort(), [productsByCategoryDisplay]);
+  const displayCategories = useMemo(() => {
+    if (!productCategories.length) return [];
+    return Object.keys(productsByCategoryDisplay).sort();
+  }, [productsByCategoryDisplay, productCategories]);
 
-  // Effect to select the first category when they are loaded
+
   useEffect(() => {
-    if (displayCategories.length > 0 && activeDisplayCategory === 'Todos') {
-      setActiveDisplayCategory(displayCategories[0]);
+    if (displayCategories.length > 0 && (activeDisplayCategory === 'Todos' || !displayCategories.includes(activeDisplayCategory))) {
+        setActiveDisplayCategory(displayCategories[0]);
     }
   }, [displayCategories, activeDisplayCategory]);
 
@@ -125,7 +128,7 @@ export default function CounterSaleClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (details: { paymentMethod: PaymentMethod; amountPaid?: number; changeGiven?: number; discountAmount: number; status: 'completed' }) => {
+  const handlePayment = (details: { paymentMethod: PaymentMethod; amountPaid?: number; changeGiven?: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean }) => {
     const finalTotal = orderTotal - details.discountAmount;
     const newSale: Sale = {
       id: `csale-${Date.now()}`,

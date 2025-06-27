@@ -20,26 +20,30 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 
 interface PaymentDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   totalAmount: number;
+  allowCredit?: boolean;
   onSubmit: (saleDetails: {
     paymentMethod: PaymentMethod;
     amountPaid?: number;
     changeGiven?: number;
     discountAmount: number;
     status: 'completed';
+    leaveChangeAsCredit: boolean;
   }) => void;
 }
 
-export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit }: PaymentDialogProps) {
+export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit, allowCredit = false }: PaymentDialogProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
   const [amountPaid, setAmountPaid] = useState<number | string>('');
   const [discount, setDiscount] = useState<number | string>('');
   const [change, setChange] = useState<number>(0);
   const [error, setError] = useState<string>('');
+  const [leaveChangeAsCredit, setLeaveChangeAsCredit] = useState(false);
 
   const numericDiscount = parseFloat(String(discount).replace(',', '.')) || 0;
   const finalTotal = totalAmount > 0 ? totalAmount - numericDiscount : 0;
@@ -53,6 +57,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       setDiscount('');
       setChange(0);
       setError('');
+      setLeaveChangeAsCredit(false);
     }
   }, [isOpen]);
 
@@ -89,9 +94,9 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
         setError('Valor pago inválido ou insuficiente.');
         return;
       }
-      onSubmit({ paymentMethod: 'cash', amountPaid: paid, changeGiven: change, status: 'completed', discountAmount: validDiscount });
+      onSubmit({ paymentMethod: 'cash', amountPaid: paid, changeGiven: change, status: 'completed', discountAmount: validDiscount, leaveChangeAsCredit: leaveChangeAsCredit && change > 0 });
     } else {
-      onSubmit({ paymentMethod: selectedMethod, status: 'completed', discountAmount: validDiscount });
+      onSubmit({ paymentMethod: selectedMethod, status: 'completed', discountAmount: validDiscount, leaveChangeAsCredit: false });
     }
   };
 
@@ -150,8 +155,16 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                 min={finalTotal}
                 step="0.01"
               />
-              {parseFloat(String(amountPaid)) >= finalTotal && change >=0 && (
-                <p className="text-sm text-green-600">Troco: {formatCurrency(change)}</p>
+              {change > 0 && (
+                <div className="pt-2 space-y-2">
+                  <p className="text-sm text-green-600">Troco: {formatCurrency(change)}</p>
+                  {allowCredit && (
+                    <div className="flex items-center space-x-2">
+                      <Switch id="credit-switch" checked={leaveChangeAsCredit} onCheckedChange={setLeaveChangeAsCredit} />
+                      <Label htmlFor="credit-switch" className="cursor-pointer">Deixar troco como crédito</Label>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

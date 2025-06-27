@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
+  if (!categories.length) return {};
   return products.reduce((acc, product) => {
     const category = categories.find(c => c.id === product.categoryId);
     const categoryName = category ? category.name : 'Outros';
@@ -124,14 +125,18 @@ export default function OrdersClient() {
   }, [products, searchTerm]);
   
   const productsByCategoryDisplay = useMemo(() => groupProductsByCategoryId(filteredProducts, productCategories), [filteredProducts, productCategories]);
-  const displayCategories = useMemo(() => Object.keys(productsByCategoryDisplay).sort(), [productsByCategoryDisplay]);
+  const displayCategories = useMemo(() => {
+      if (!productCategories.length) return [];
+      return Object.keys(productsByCategoryDisplay).sort();
+  }, [productsByCategoryDisplay, productCategories]);
+
   
-  // Effect to select the first category when they are loaded
   useEffect(() => {
-    if (displayCategories.length > 0 && activeDisplayCategory === 'Todos') {
-      setActiveDisplayCategory(displayCategories[0]);
+    if (displayCategories.length > 0 && (activeDisplayCategory === 'Todos' || !displayCategories.includes(activeDisplayCategory))) {
+        setActiveDisplayCategory(displayCategories[0]);
     }
   }, [displayCategories, activeDisplayCategory]);
+
 
   const handleOpenCreateOrderDialog = () => {
     setIsCreateOrderDialogOpen(true);
@@ -238,7 +243,7 @@ export default function OrdersClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (details: { paymentMethod: PaymentMethod; amountPaid?: number; changeGiven?: number; discountAmount: number; status: 'completed' }) => {
+  const handlePayment = (details: { paymentMethod: PaymentMethod; amountPaid?: number; changeGiven?: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -260,26 +265,50 @@ export default function OrdersClient() {
     
     addSale(newSale);
 
-    setOpenOrders(prevOrders => {
-      const updatedOpenOrders = prevOrders.filter(order => order.id !== currentOrderId);
-      const currentIndex = prevOrders.findIndex(o => o.id === currentOrderId);
-      let nextSelectedOrderId: string | null = null;
-      if (updatedOpenOrders.length === 0) {
-        nextSelectedOrderId = null;
-      } else if (prevOrders.length === 1) {
-         nextSelectedOrderId = null;
-      } else if (currentIndex >= 0 && updatedOpenOrders.length > 0) {
-         if (currentIndex < updatedOpenOrders.length) {
-           nextSelectedOrderId = updatedOpenOrders[currentIndex].id; 
-         } else {
-           nextSelectedOrderId = updatedOpenOrders[updatedOpenOrders.length - 1].id; 
-         }
-      } else if (updatedOpenOrders.length > 0) {
-         nextSelectedOrderId = updatedOpenOrders[0].id; 
+    let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
+    let nextSelectedOrderId: string | null = null;
+
+    if (details.leaveChangeAsCredit && details.changeGiven && details.changeGiven > 0) {
+      const creditAmount = details.changeGiven;
+      const creditOrderName = `${currentOrder.name} (Crédito)`;
+      
+      const creditItem: OrderItem = {
+          id: `credit-${Date.now()}`,
+          name: `Crédito de Troco`,
+          price: -creditAmount, // Negative price
+          quantity: 1,
+          categoryId: 'cat_outros', // Assign to a generic category
+          categoryName: 'Outros',
+          categoryIconName: 'Wallet', // Using Wallet icon for credit
+      };
+
+      const newCreditOrderId = `order-credit-${Date.now()}`;
+      const newCreditOrder: ActiveOrder = {
+          id: newCreditOrderId,
+          name: creditOrderName,
+          items: [creditItem],
+          createdAt: new Date(),
+      };
+      
+      nextOrdersState.push(newCreditOrder);
+      nextSelectedOrderId = newCreditOrderId;
+
+      toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(creditAmount)}.` });
+
+    } else {
+      if (nextOrdersState.length > 0) {
+        const currentIndex = openOrders.findIndex(o => o.id === currentOrderId);
+        if (currentIndex < nextOrdersState.length) {
+          nextSelectedOrderId = nextOrdersState[currentIndex].id; 
+        } else {
+          nextSelectedOrderId = nextOrdersState[nextOrdersState.length - 1].id; 
+        }
       }
-      setCurrentOrderId(nextSelectedOrderId);
-      return updatedOpenOrders;
-    });
+    }
+
+    setOpenOrders(nextOrdersState);
+    setCurrentOrderId(nextSelectedOrderId);
+
     setIsPaymentDialogOpen(false);
     toast({
       title: "Venda Concluída!",
@@ -492,6 +521,7 @@ export default function OrdersClient() {
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
         onSubmit={handlePayment}
+        allowCredit={true}
       />
 
       {orderToDelete && (

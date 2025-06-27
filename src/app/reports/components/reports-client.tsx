@@ -201,12 +201,15 @@ export default function ReportsClient() {
   
   const handleExportGeneralReport = (formatType: 'csv' | 'pdf') => {
     const combinedData = [
-      ...filteredSales.map(sale => ({
-        timestamp: new Date(sale.timestamp),
-        description: `Venda #${sale.id.slice(-6)}`,
-        type: 'Receita',
-        amount: sale.totalAmount,
-      })),
+      ...filteredSales.map(sale => {
+        const itemsDesc = sale.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
+        return {
+          timestamp: new Date(sale.timestamp),
+          description: `Venda #${sale.id.slice(-6)} (${itemsDesc})`,
+          type: 'Receita',
+          amount: sale.totalAmount,
+        };
+      }),
       ...filteredEntries.filter(e => e.type === 'expense').map(entry => ({
         timestamp: new Date(entry.timestamp),
         description: entry.description,
