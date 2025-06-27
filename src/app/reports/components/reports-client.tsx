@@ -25,9 +25,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { DatePickerWithRange } from '@/components/ui/date-picker-range'; 
 import type { DateRange } from "react-day-picker";
-import { addDays, format, getWeek, getYear, startOfWeek, endOfWeek } from "date-fns";
+import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, TrendingUp, DollarSign, Scale, BarChart } from 'lucide-react';
+import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -77,7 +77,8 @@ export default function ReportsClient() {
       const itemDate = new Date(item.timestamp);
       if (dateRange?.from && itemDate < dateRange.from) return false;
       if (dateRange?.to) {
-        const toDate = addDays(new Date(dateRange.to), 1);
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999); // Include the whole "to" day
         if (itemDate > toDate) return false;
       }
       return true;
@@ -117,8 +118,8 @@ export default function ReportsClient() {
     
     const weekly = combinedData.reduce((acc, item) => {
         const date = new Date(item.timestamp);
-        const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+        const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1)); // Monday as start of week
+        const weekEnd = addDays(weekStart, 6);
         const weekKey = format(weekStart, "yyyy-MM-dd");
         const weekLabel = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
 
@@ -130,17 +131,13 @@ export default function ReportsClient() {
         return acc;
     }, {} as Record<string, { period: string, income: number, expenses: number }>);
 
-    const processMonthly = (group: any) => Object.entries(group)
+    const processSummary = (group: any) => Object.entries(group)
       .map(([key, value]:[string, any]) => ({...value, key, balance: value.income - value.expenses}))
       .sort((a, b) => b.key.localeCompare(a.key));
-
-    const processWeekly = (group: any) => Object.entries(group)
-      .map(([key, value]:[string, any]) => ({...value, key, balance: value.income - value.expenses}))
-      .sort((a,b) => b.key.localeCompare(a.key));
     
     return {
-      monthlySummary: processMonthly(monthly),
-      weeklySummary: processWeekly(weekly)
+      monthlySummary: processSummary(monthly),
+      weeklySummary: processSummary(weekly)
     };
   }, [filteredSales, filteredEntries]);
 
@@ -186,7 +183,7 @@ export default function ReportsClient() {
     const data = filteredSales.map(s => [
       s.id,
       format(new Date(s.timestamp), 'dd/MM/yy HH:mm', { locale: ptBR }),
-      s.items.reduce((sum, item) => sum + item.quantity, 0),
+      String(s.items.reduce((sum, item) => sum + item.quantity, 0)),
       PAYMENT_METHODS.find(pm => pm.value === s.paymentMethod)?.name || s.paymentMethod,
       formatCurrency(s.originalAmount),
       formatCurrency(s.discountAmount),
@@ -202,6 +199,54 @@ export default function ReportsClient() {
     toast({ title: "Relatório de Vendas PDF Exportado" });
   };
   
+  const handleExportGeneralReport = (formatType: 'csv' | 'pdf') => {
+    const combinedData = [
+      ...filteredSales.map(sale => ({
+        timestamp: new Date(sale.timestamp),
+        description: `Venda #${sale.id.slice(-6)}`,
+        type: 'Receita',
+        amount: sale.totalAmount,
+      })),
+      ...filteredEntries.filter(e => e.type === 'expense').map(entry => ({
+        timestamp: new Date(entry.timestamp),
+        description: entry.description,
+        type: 'Despesa',
+        amount: entry.amount,
+      })),
+    ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    if (combinedData.length === 0) {
+      toast({ title: "Nenhum dado para exportar", variant: "destructive" });
+      return;
+    }
+
+    const reportTitle = 'Relatório Financeiro Geral';
+    const filename = `relatorio_geral_${format(new Date(), 'yyyy-MM-dd')}`;
+    const headers = ['Data', 'Descrição', 'Tipo', 'Valor (R$)'];
+    
+    if (formatType === 'pdf') {
+      const pdfHeaders = [headers];
+      const pdfData = combinedData.map(item => [
+        format(item.timestamp, "dd/MM/yy HH:mm", { locale: ptBR }),
+        item.description,
+        item.type,
+        item.type === 'Receita' ? formatCurrency(item.amount) : `- ${formatCurrency(item.amount)}`,
+      ]);
+      downloadAsPDF(reportTitle, pdfHeaders, pdfData, `${filename}.pdf`);
+      toast({ title: "Relatório Geral PDF Exportado" });
+    } else { // CSV
+      const csvData = combinedData.map(item => [
+        format(item.timestamp, "dd/MM/yyyy HH:mm:ss", { locale: ptBR }),
+        item.description,
+        item.type,
+        (item.type === 'Receita' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
+      ]);
+      downloadAsCSV(headers, csvData, `${filename}.csv`);
+      toast({ title: "Relatório Geral CSV Exportado" });
+    }
+  };
+
+
   if (!isMounted) return <p>Carregando relatórios...</p>;
 
   return (
@@ -210,8 +255,8 @@ export default function ReportsClient() {
         <CardHeader>
           <CardTitle>Filtros de Relatório</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+          <div className="md:col-span-2 lg:col-span-1">
             <Label className="mb-1 block">Período</Label>
             <DatePickerWithRange date={dateRange} onDateChange={setDateRange} className="w-full" />
           </div>
@@ -236,6 +281,30 @@ export default function ReportsClient() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="default" className="w-full">
+                  <Download className="mr-2 h-4 w-4" /> Exportar Relatórios
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Relatório Geral (Receitas e Despesas)</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => handleExportGeneralReport('pdf')}>
+                    Exportar em PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => handleExportGeneralReport('csv')}>
+                    Exportar em CSV
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Relatório Apenas de Vendas</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={handleExportSalesPDF}>
+                    Exportar Vendas em PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleExportSalesCSV}>
+                    Exportar Vendas em CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
         </CardContent>
       </Card>
 
@@ -319,23 +388,6 @@ export default function ReportsClient() {
                 <CardTitle>Detalhes das Vendas</CardTitle>
                 <CardDescription>Lista de todas as vendas realizadas no período selecionado.</CardDescription>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" /> Exportar Vendas
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuLabel>Exportar Como</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleExportSalesCSV}>
-                  CSV (.csv)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportSalesPDF}>
-                  PDF (.pdf)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
         </CardHeader>
         <CardContent>
           <Table>
@@ -420,3 +472,5 @@ const SummaryTable = ({ data }: { data: { period: string, income: number, expens
         </TableBody>
     </Table>
 );
+
+    
