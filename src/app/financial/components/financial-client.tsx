@@ -85,7 +85,7 @@ const SOURCE_MAP: Record<ExpenseFormData['source'], string> = {
 export default function FinancialClient() {
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
-  const [bankAccount, setBankAccount] useState<BankAccount>({ balance: 0 });
+  const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
   const [sales, setSales] = useState<Sale[]>([]);
   
@@ -446,6 +446,7 @@ export default function FinancialClient() {
         onSave={handleEditCaixa02}
         title="Editar Saldo do Caixa 02"
         description="Ajuste o valor total do seu caixa secundário."
+        idPrefix="caixa02"
       />
       <EditBalanceDialog
         isOpen={isEditBankAccountDialogOpen}
@@ -454,12 +455,13 @@ export default function FinancialClient() {
         onSave={handleEditBankAccount}
         title="Editar Saldo da Conta Bancária"
         description="Ajuste o saldo total da sua conta bancária."
+        idPrefix="bank"
       />
     </>
   );
 }
 
-function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title, description }: { isOpen: boolean, onOpenChange: (open: boolean) => void, currentBalance: number, onSave: (newBalance: number) => void, title: string, description: string }) {
+function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title, description, idPrefix }: { isOpen: boolean, onOpenChange: (open: boolean) => void, currentBalance: number, onSave: (newBalance: number) => void, title: string, description: string, idPrefix: string }) {
   const [balance, setBalance] = useState<string>('');
   const { toast } = useToast();
 
@@ -483,8 +485,8 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
         <div className="py-4 space-y-2">
-          <Label htmlFor="balance-edit">Novo Saldo Total (R$)</Label>
-          <Input id="balance-edit" value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+          <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
+          <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
         </div>
         <DialogFooter>
           <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
