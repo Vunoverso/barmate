@@ -231,31 +231,31 @@ export default function CounterSaleClient() {
               {currentOrderItems.length === 0 ? (
                 <p className="text-muted-foreground text-center py-10">Adicione produtos à venda.</p>
               ) : (
-                <ul className="space-y-3">
+                <ul className="space-y-2">
                   {currentOrderItems.map(item => {
                     const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
                     return (
-                      <li key={item.id} className="flex items-center gap-3 p-2 rounded-md border">
+                      <li key={item.id} className="flex items-center gap-2 p-1.5 rounded-md border">
                         <div className="flex-shrink-0">
-                          <IconComponent className="h-8 w-8 text-muted-foreground" />
+                          <IconComponent className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <div className="flex-grow">
-                          <p className="font-medium">{item.name}</p>
-                          <p className="text-sm text-muted-foreground">{formatCurrency(item.price)}</p>
+                          <p className="font-medium truncate text-xs">{item.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                        <div className="flex items-center gap-0.5">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
                             <MinusCircle className="h-4 w-4" />
                           </Button>
-                          <span className="w-6 text-center">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                          <span className="w-5 text-center text-sm">{item.quantity}</span>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
                             <PlusCircle className="h-4 w-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80" onClick={() => removeFromOrder(item.id)}>
+                          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                        <p className="font-semibold w-20 text-right">{formatCurrency(item.price * item.quantity)}</p>
+                        <p className="font-semibold w-20 text-right text-sm">{formatCurrency(item.price * item.quantity)}</p>
                       </li>
                     );
                   })}
