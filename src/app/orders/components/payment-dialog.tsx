@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { PaymentMethod, Sale } from '@/types';
+import type { PaymentMethod } from '@/types';
 import { PAYMENT_METHODS, formatCurrency } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import {
@@ -19,37 +19,50 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
+import { Separator } from '@/components/ui/separator';
 
 interface PaymentDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   totalAmount: number;
-  onSubmit: (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount'>) => void;
+  onSubmit: (saleDetails: {
+    paymentMethod: PaymentMethod;
+    amountPaid?: number;
+    changeGiven?: number;
+    discountAmount: number;
+    status: 'completed';
+  }) => void;
 }
 
 export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit }: PaymentDialogProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
   const [amountPaid, setAmountPaid] = useState<number | string>('');
+  const [discount, setDiscount] = useState<number | string>('');
   const [change, setChange] = useState<number>(0);
   const [error, setError] = useState<string>('');
+
+  const numericDiscount = parseFloat(String(discount).replace(',', '.')) || 0;
+  const finalTotal = totalAmount > 0 ? totalAmount - numericDiscount : 0;
+
 
   useEffect(() => {
     if (isOpen) {
       // Reset state when dialog opens
       setSelectedMethod('cash');
       setAmountPaid('');
+      setDiscount('');
       setChange(0);
       setError('');
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (selectedMethod === 'cash' && totalAmount > 0) {
+    if (selectedMethod === 'cash' && finalTotal >= 0) {
       const paid = parseFloat(String(amountPaid));
-      if (!isNaN(paid) && paid >= totalAmount) {
-        setChange(paid - totalAmount);
+      if (!isNaN(paid) && paid >= finalTotal) {
+        setChange(paid - finalTotal);
         setError('');
-      } else if (!isNaN(paid) && paid < totalAmount) {
+      } else if (!isNaN(paid) && paid < finalTotal) {
         setChange(0);
         setError('Valor pago é insuficiente.');
       } else {
@@ -60,18 +73,25 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       setChange(0);
       setError('');
     }
-  }, [amountPaid, selectedMethod, totalAmount]);
+  }, [amountPaid, selectedMethod, finalTotal]);
 
   const handleSubmit = () => {
+    const validDiscount = Math.max(0, numericDiscount);
+
+    if (finalTotal < 0) {
+      setError('O desconto não pode ser maior que o valor total.');
+      return;
+    }
+    
     if (selectedMethod === 'cash') {
       const paid = parseFloat(String(amountPaid));
-      if (isNaN(paid) || paid < totalAmount) {
+      if (isNaN(paid) || paid < finalTotal) {
         setError('Valor pago inválido ou insuficiente.');
         return;
       }
-      onSubmit({ paymentMethod: 'cash', amountPaid: paid, changeGiven: change, status: 'completed' });
+      onSubmit({ paymentMethod: 'cash', amountPaid: paid, changeGiven: change, status: 'completed', discountAmount: validDiscount });
     } else {
-      onSubmit({ paymentMethod: selectedMethod, status: 'completed' });
+      onSubmit({ paymentMethod: selectedMethod, status: 'completed', discountAmount: validDiscount });
     }
   };
 
@@ -81,11 +101,30 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
         <DialogHeader>
           <DialogTitle>Processar Pagamento</DialogTitle>
           <DialogDescription>
-            Total da comanda: <span className="font-bold text-primary">{formatCurrency(totalAmount)}</span>
+            Total Original: <span className="font-bold">{formatCurrency(totalAmount)}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-2">
+           <div className="space-y-2">
+              <Label htmlFor="discount">Desconto (R$)</Label>
+              <Input
+                id="discount"
+                type="number"
+                placeholder="0,00"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                step="0.01"
+              />
+            </div>
+          
+          <div className="flex justify-between items-center text-lg font-bold">
+            <span>Total a Pagar:</span>
+            <span className="text-primary">{formatCurrency(finalTotal)}</span>
+          </div>
+
+          <Separator />
+
           <Label>Método de Pagamento</Label>
           <RadioGroup value={selectedMethod} onValueChange={(value) => setSelectedMethod(value as PaymentMethod)}>
             {PAYMENT_METHODS.map(method => (
@@ -108,10 +147,10 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                 placeholder="0,00"
                 value={amountPaid}
                 onChange={(e) => setAmountPaid(e.target.value)}
-                min={totalAmount}
+                min={finalTotal}
                 step="0.01"
               />
-              {parseFloat(String(amountPaid)) >= totalAmount && change >=0 && (
+              {parseFloat(String(amountPaid)) >= finalTotal && change >=0 && (
                 <p className="text-sm text-green-600">Troco: {formatCurrency(change)}</p>
               )}
             </div>
@@ -130,7 +169,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
-          <Button onClick={handleSubmit} disabled={selectedMethod === 'cash' && (parseFloat(String(amountPaid)) < totalAmount || isNaN(parseFloat(String(amountPaid))))}>
+          <Button onClick={handleSubmit} disabled={selectedMethod === 'cash' && (parseFloat(String(amountPaid)) < finalTotal || isNaN(parseFloat(String(amountPaid)))) || finalTotal < 0}>
             Confirmar Pagamento
           </Button>
         </DialogFooter>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory } from '@/types';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, PaymentMethod } from '@/types';
 import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -238,17 +238,24 @@ export default function OrdersClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount'>) => {
+  const handlePayment = (details: { paymentMethod: PaymentMethod; amountPaid?: number; changeGiven?: number; discountAmount: number; status: 'completed' }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
     }
+    const finalTotal = orderTotal - details.discountAmount;
+
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       items: currentOrderItems,
-      totalAmount: orderTotal,
+      originalAmount: orderTotal,
+      discountAmount: details.discountAmount,
+      totalAmount: finalTotal,
       timestamp: new Date(),
-      ...saleDetails,
+      paymentMethod: details.paymentMethod,
+      amountPaid: details.amountPaid,
+      changeGiven: details.changeGiven,
+      status: 'completed',
     };
     
     addSale(newSale);

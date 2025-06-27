@@ -29,7 +29,9 @@ export type PaymentMethod = 'cash' | 'card' | 'pix';
 export interface Sale {
   id: string;
   items: OrderItem[];
-  totalAmount: number;
+  totalAmount: number; // This is the final amount after discount
+  originalAmount?: number; // The pre-discount total
+  discountAmount?: number; // The discount amount
   paymentMethod: PaymentMethod;
   amountPaid?: number; // For cash transactions
   changeGiven?: number; // For cash transactions

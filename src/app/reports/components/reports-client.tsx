@@ -234,7 +234,8 @@ export default function ReportsClient() {
                 <TableHead>Data</TableHead>
                 <TableHead>Itens</TableHead>
                 <TableHead>Método Pag.</TableHead>
-                <TableHead className="text-right">Valor Total</TableHead>
+                <TableHead className="text-right">Desconto</TableHead>
+                <TableHead className="text-right">Valor Final</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -249,7 +250,10 @@ export default function ReportsClient() {
                       {PAYMENT_METHODS.find(pm => pm.value === sale.paymentMethod)?.name || sale.paymentMethod}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrency(sale.totalAmount)}</TableCell>
+                  <TableCell className="text-right text-destructive">
+                    {sale.discountAmount ? `- ${formatCurrency(sale.discountAmount)}` : formatCurrency(0)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">{formatCurrency(sale.totalAmount)}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -269,7 +273,7 @@ export default function ReportsClient() {
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     Nenhuma venda encontrada para o período e filtros selecionados.
                   </TableCell>
                 </TableRow>
