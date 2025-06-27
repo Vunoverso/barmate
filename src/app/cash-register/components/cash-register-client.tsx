@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount } from '@/types';
-import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount } from '@/lib/constants';
+import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
+import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -128,6 +128,19 @@ export default function CashRegisterClient() {
       ...prev,
       adjustments: [...(prev.adjustments || []), newAdjustment]
     }));
+
+    if (adjustmentType === 'out') {
+      const currentEntries = getFinancialEntries();
+      const newExpenseEntry: FinancialEntry = {
+        id: `exp-sangria-${Date.now()}`,
+        description: `Sangria: ${description}`,
+        amount: amount,
+        type: 'expense',
+        source: 'daily_cash',
+        timestamp: new Date(),
+      };
+      saveFinancialEntries([...currentEntries, newExpenseEntry]);
+    }
     
     toast({
         title: `Movimentação Registrada!`,
@@ -616,3 +629,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    

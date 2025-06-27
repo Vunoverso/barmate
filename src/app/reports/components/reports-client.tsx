@@ -1,10 +1,10 @@
 
 "use client";
 
-import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount } from '@/types';
+import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { 
   getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
-  getSecondaryCashBox, getBankAccount 
+  getSecondaryCashBox, getBankAccount, getCashRegisterStatus 
 } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -30,7 +30,7 @@ import { DatePickerWithRange } from '@/components/ui/date-picker-range';
 import type { DateRange } from "react-day-picker";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart, Landmark, PiggyBank } from 'lucide-react';
+import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart, Landmark, PiggyBank, Banknote } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -58,6 +58,7 @@ export default function ReportsClient() {
   const [financialEntries, setFinancialEntries] = useState<FinancialEntry[]>([]);
   const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
   const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
+  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
@@ -78,6 +79,7 @@ export default function ReportsClient() {
       setFinancialEntries(getFinancialEntries());
       setSecondaryCashBox(getSecondaryCashBox());
       setBankAccount(getBankAccount());
+      setCashStatus(getCashRegisterStatus());
     };
     
     handleStorageChange();
@@ -86,12 +88,14 @@ export default function ReportsClient() {
     window.addEventListener('financialEntriesChanged', handleStorageChange);
     window.addEventListener('secondaryCashBoxChanged', handleStorageChange);
     window.addEventListener('bankAccountChanged', handleStorageChange);
+    window.addEventListener('cashRegisterStatusChanged', handleStorageChange);
     
     return () => {
       window.removeEventListener('salesChanged', handleStorageChange);
       window.removeEventListener('financialEntriesChanged', handleStorageChange);
       window.removeEventListener('secondaryCashBoxChanged', handleStorageChange);
       window.removeEventListener('bankAccountChanged', handleStorageChange);
+      window.removeEventListener('cashRegisterStatusChanged', handleStorageChange);
     };
   }, []);
 
@@ -123,6 +127,25 @@ export default function ReportsClient() {
   const totalRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
   const totalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0), [filteredEntries]);
   const netBalance = useMemo(() => totalRevenue - totalExpenses, [totalRevenue, totalExpenses]);
+
+  const expectedCashInDrawer = useMemo(() => {
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+    
+    const openingTime = new Date(cashStatus.openingTime);
+    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
+    
+    const cashRevenue = sessionSales.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + s.totalAmount, 0);
+    const openingBalance = cashStatus.openingBalance || 0;
+    const adjustments = cashStatus.adjustments || [];
+    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
+    
+    return openingBalance + cashRevenue + totalIn - totalOut;
+  }, [cashStatus, sales]);
+
+  const totalGlobalBalance = useMemo(() => {
+    return expectedCashInDrawer + secondaryCashBox.balance + bankAccount.balance;
+  }, [expectedCashInDrawer, secondaryCashBox, bankAccount]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
     const combinedData = [...filteredSales, ...filteredEntries.filter(e => e.type === 'expense')];
@@ -245,6 +268,26 @@ export default function ReportsClient() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold tracking-tight">Situação Financeira Atual</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Saldo Total (Geral)</CardTitle>
+                    <Scale className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{formatCurrency(totalGlobalBalance)}</div>
+                    <p className="text-xs text-muted-foreground">Caixa Principal + Caixa 02 + Banco</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Caixa Principal (Aberto)</CardTitle>
+                    <Banknote className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{formatCurrency(expectedCashInDrawer)}</div>
+                    <p className="text-xs text-muted-foreground">Status: <span className="capitalize">{cashStatus.status === 'open' ? 'Aberto' : 'Fechado'}</span></p>
+                </CardContent>
+            </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Saldo Caixa 02</CardTitle>
@@ -480,3 +523,5 @@ const SummaryTable = ({ data }: { data: { period: string, income: number, expens
         </TableBody>
     </Table>
 );
+
+    
