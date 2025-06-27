@@ -71,7 +71,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const allNavItems = [...mainNavItems, settingsNavItem];
 
   const SidebarNav = ({ items, className }: { items: NavItem[], className?: string }) => (
-    <nav className={`flex flex-col gap-2 ${className}`}>
+    <nav className={`flex flex-col gap-1 ${className}`}>
       {items.map((item) => (
         <Button
           key={item.href}
@@ -79,8 +79,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           variant={pathname === item.href ? 'secondary' : 'ghost'}
           className="justify-start"
         >
-          <Link href={item.href} className="flex items-center gap-3 rounded-lg px-3 py-2 text-primary transition-all hover:text-primary">
-            <item.icon className="h-5 w-5" />
+          <Link href={item.href} className="flex items-center gap-2 rounded-lg px-3 py-1 text-primary transition-all hover:text-primary">
+            <item.icon className="h-4 w-4" />
             {item.label}
             {item.badge && <Badge className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full">{item.badge}</Badge>}
           </Link>
@@ -92,7 +92,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   if (!isMounted) {
     // Basic skeleton or loading state to prevent hydration issues with theme/localStorage dependent items
     return (
-      <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+      <div className="grid min-h-screen w-full md:grid-cols-[200px_1fr] lg:grid-cols-[220px_1fr]">
         <div className="hidden border-r bg-muted/40 md:block">
            <div className="flex h-full max-h-screen flex-col gap-2">
              <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
@@ -118,7 +118,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+    <div className="grid min-h-screen w-full md:grid-cols-[200px_1fr] lg:grid-cols-[220px_1fr]">
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
@@ -142,7 +142,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="flex flex-col">
-              <nav className="grid gap-2 text-lg font-medium">
+              <nav className="grid gap-1 text-lg font-medium">
                 <Link href="#" className="flex items-center gap-2 text-lg font-semibold mb-4">
                   <Package className="h-6 w-6 text-primary" />
                   <span className="">{barName}</span>
@@ -151,7 +151,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 ${pathname === item.href ? 'bg-muted text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`mx-[-0.65rem] flex items-center gap-3 rounded-xl px-3 py-1 ${pathname === item.href ? 'bg-muted text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     onClick={() => {
                       // Attempt to close sheet on navigation
                       const trigger = document.querySelector('button[aria-expanded="true"][class*="md:hidden"]');
@@ -160,7 +160,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       }
                     }}
                   >
-                    <item.icon className="h-5 w-5" />
+                    <item.icon className="h-4 w-4" />
                     {item.label}
                     {item.badge && <Badge className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full">{item.badge}</Badge>}
                   </Link>
