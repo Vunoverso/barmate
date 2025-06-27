@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
@@ -7,7 +7,7 @@ let productCategoriesCache: ProductCategory[] | null = null;
 let productsCache: Product[] | null = null;
 let salesCache: Sale[] | null = null;
 let financialEntriesCache: FinancialEntry[] | null = null;
-
+let secondaryCashBoxCache: SecondaryCashBox | null = null;
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer,
@@ -241,4 +241,41 @@ export const getFinancialEntries = (): FinancialEntry[] => {
   }
   financialEntriesCache = [];
   return financialEntriesCache;
+};
+
+// New key and functions for secondary cash box
+export const SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox';
+
+export const getSecondaryCashBox = (): SecondaryCashBox => {
+  if (typeof window === 'undefined') {
+    return { balance: 0 };
+  }
+  if (secondaryCashBoxCache !== null) {
+    return secondaryCashBoxCache;
+  }
+  const stored = localStorage.getItem(SECONDARY_CASH_BOX_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (typeof parsed.balance === 'number') {
+        secondaryCashBoxCache = parsed;
+        return secondaryCashBoxCache;
+      }
+    } catch (e) {
+      console.error("Failed to parse secondary cash box from localStorage", e);
+      localStorage.removeItem(SECONDARY_CASH_BOX_KEY);
+    }
+  }
+  const initial = { balance: 0 };
+  localStorage.setItem(SECONDARY_CASH_BOX_KEY, JSON.stringify(initial));
+  secondaryCashBoxCache = initial;
+  return secondaryCashBoxCache;
+};
+
+export const saveSecondaryCashBox = (box: SecondaryCashBox): void => {
+  if (typeof window !== 'undefined') {
+    secondaryCashBoxCache = box;
+    localStorage.setItem(SECONDARY_CASH_BOX_KEY, JSON.stringify(box));
+    window.dispatchEvent(new Event('secondaryCashBoxChanged'));
+  }
 };

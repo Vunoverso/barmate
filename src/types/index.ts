@@ -12,14 +12,11 @@ export interface Product {
   name: string;
   price: number;
   categoryId: string; // Referencia ProductCategory.id
-  // icon?: LucideIcon; // Removido, será obtido dinamicamente da categoria
   stock?: number; // Optional: for inventory management
 }
 
 export interface OrderItem extends Product {
   quantity: number;
-  // Adicionar o nome da categoria e o ícone aqui pode ser útil para exibição,
-  // para não precisar buscar toda hora. Mas por enquanto, manteremos simples.
   categoryName?: string; 
   categoryIconName?: string;
 }
@@ -46,10 +43,23 @@ export interface ActiveOrder {
   createdAt: Date;
 }
 
+export interface CashAdjustment {
+  id: string;
+  amount: number;
+  type: 'in' | 'out'; // 'in' for suprimento, 'out' for sangria
+  description: string;
+  timestamp: string; // ISO String
+}
+
 export interface CashRegisterStatus {
   status: 'open' | 'closed';
   openingTime?: string; // ISO String
   openingBalance?: number;
+  adjustments?: CashAdjustment[];
+}
+
+export interface SecondaryCashBox {
+  balance: number;
 }
 
 export interface FinancialEntry {

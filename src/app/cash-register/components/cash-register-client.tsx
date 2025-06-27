@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { CashRegisterStatus, Sale } from '@/types';
-import { getSales, formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
+import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment } from '@/types';
+import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -30,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { DoorClosed, DoorOpen, Calculator, PiggyBank, CircleDollarSign, CreditCard, QrCode } from 'lucide-react';
+import { DoorClosed, DoorOpen, Calculator, PiggyBank, CircleDollarSign, CreditCard, QrCode, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowRightLeft, Edit } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus';
@@ -38,12 +38,18 @@ const CLOSED_SESSIONS_KEY = 'barmate_closedCashSessions';
 
 export default function CashRegisterClient() {
   const [isMounted, setIsMounted] = useState(false);
-  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
+  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed', adjustments: [] });
+  const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
   const [sales, setSales] = useState<Sale[]>([]);
   const { toast } = useToast();
 
+  // Dialog states
   const [isOpeningDialog, setIsOpeningDialog] = useState(false);
   const [isClosingDialog, setIsClosingDialog] = useState(false);
+  const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
+  const [adjustmentType, setAdjustmentType] = useState<'in' | 'out'>('in');
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [isEditCaixa02DialogOpen, setIsEditCaixa02DialogOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -51,16 +57,28 @@ export default function CashRegisterClient() {
     const storedStatus = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
     if (storedStatus) {
       try {
-        setCashStatus(JSON.parse(storedStatus));
+        const parsedStatus = JSON.parse(storedStatus);
+        setCashStatus({ adjustments: [], ...parsedStatus });
       } catch (e) {
-        setCashStatus({ status: 'closed' });
+        setCashStatus({ status: 'closed', adjustments: [] });
       }
     }
+    // Load secondary cash box
+    setSecondaryCashBox(getSecondaryCashBox());
+
     // Load sales and listen for changes
     const handleSalesChange = () => setSales(getSales());
     handleSalesChange();
     window.addEventListener('salesChanged', handleSalesChange);
-    return () => window.removeEventListener('salesChanged', handleSalesChange);
+    
+    // Listen for secondary cash box changes
+    const handleSecondaryCashBoxChange = () => setSecondaryCashBox(getSecondaryCashBox());
+    window.addEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
+
+    return () => {
+      window.removeEventListener('salesChanged', handleSalesChange);
+      window.removeEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
+    }
   }, []);
 
   useEffect(() => {
@@ -74,6 +92,7 @@ export default function CashRegisterClient() {
       status: 'open',
       openingBalance: openingBalance,
       openingTime: new Date().toISOString(),
+      adjustments: [],
     });
     setIsOpeningDialog(false);
     toast({
@@ -82,9 +101,63 @@ export default function CashRegisterClient() {
     });
   };
 
+  const handleAddAdjustment = (amount: number, description: string) => {
+    if (cashStatus.status !== 'open') return;
+
+    const newAdjustment: CashAdjustment = {
+      id: `adj-${Date.now()}`,
+      amount,
+      type: adjustmentType,
+      description,
+      timestamp: new Date().toISOString()
+    };
+
+    setCashStatus(prev => ({
+      ...prev,
+      adjustments: [...(prev.adjustments || []), newAdjustment]
+    }));
+    
+    toast({
+        title: `Movimentação Registrada!`,
+        description: `${adjustmentType === 'in' ? 'Suprimento' : 'Sangria'} de ${formatCurrency(amount)} adicionado.`,
+    });
+    setIsAdjustmentDialogOpen(false);
+  };
+
+  const handleTransfer = (amount: number) => {
+    if (secondaryCashBox.balance < amount) {
+        toast({ title: "Saldo Insuficiente", description: "O Caixa 02 não possui saldo suficiente para esta transferência.", variant: "destructive" });
+        return;
+    }
+    
+    const newSecondaryBalance = secondaryCashBox.balance - amount;
+    saveSecondaryCashBox({ balance: newSecondaryBalance });
+
+    const transferAdjustment: CashAdjustment = {
+        id: `adj-${Date.now()}`,
+        amount,
+        type: 'in',
+        description: `Transferência do Caixa 02`,
+        timestamp: new Date().toISOString()
+    };
+
+    setCashStatus(prev => ({
+      ...prev,
+      adjustments: [...(prev.adjustments || []), transferAdjustment]
+    }));
+
+    toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o caixa atual.` });
+    setIsTransferDialogOpen(false);
+  }
+
+  const handleEditCaixa02 = (newBalance: number) => {
+    saveSecondaryCashBox({ balance: newBalance });
+    toast({ title: "Caixa 02 Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
+    setIsEditCaixa02DialogOpen(false);
+  }
+
+
   const handleCloseCashRegister = () => {
-    // Here you would typically save the session summary to a persistent store
-    // For now, we just log it and add it to a list in localStorage
     const closedSession = {
       ...sessionSummary,
       id: `session-${Date.now()}`,
@@ -107,41 +180,28 @@ export default function CashRegisterClient() {
   const sessionSummary = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) {
       return {
-        openingBalance: 0,
-        sessionSales: [],
-        totalRevenue: 0,
-        cashRevenue: 0,
-        cardRevenue: 0,
-        pixRevenue: 0,
-        expectedCash: 0,
+        openingBalance: 0, sessionSales: [], totalRevenue: 0, cashRevenue: 0,
+        cardRevenue: 0, pixRevenue: 0, expectedCash: 0, totalIn: 0, totalOut: 0, adjustments: [],
       };
     }
     const openingTime = new Date(cashStatus.openingTime);
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
 
     const totalRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-    const cashRevenue = sessionSales
-      .filter(s => s.paymentMethod === 'cash')
-      .reduce((sum, s) => sum + s.totalAmount, 0);
-    const cardRevenue = sessionSales
-      .filter(s => s.paymentMethod === 'card')
-      .reduce((sum, s) => sum + s.totalAmount, 0);
-    const pixRevenue = sessionSales
-      .filter(s => s.paymentMethod === 'pix')
-      .reduce((sum, s) => sum + s.totalAmount, 0);
+    const cashRevenue = sessionSales.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + s.totalAmount, 0);
+    const cardRevenue = sessionSales.filter(s => s.paymentMethod === 'card').reduce((sum, s) => sum + s.totalAmount, 0);
+    const pixRevenue = sessionSales.filter(s => s.paymentMethod === 'pix').reduce((sum, s) => sum + s.totalAmount, 0);
     
     const openingBalance = cashStatus.openingBalance || 0;
-    const expectedCash = openingBalance + cashRevenue;
+    const adjustments = cashStatus.adjustments || [];
+    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
+
+    const expectedCash = openingBalance + cashRevenue + totalIn - totalOut;
 
     return {
-      openingBalance,
-      sessionSales,
-      totalRevenue,
-      cashRevenue,
-      cardRevenue,
-      pixRevenue,
-      expectedCash,
-      openingTime: cashStatus.openingTime,
+      openingBalance, sessionSales, totalRevenue, cashRevenue, cardRevenue,
+      pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
     };
   }, [cashStatus, sales]);
 
@@ -183,47 +243,117 @@ export default function CashRegisterClient() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumo do Caixa Atual</CardTitle>
-          <CardDescription>
-            Caixa aberto em {format(new Date(cashStatus.openingTime!), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <SummaryCard title="Saldo Inicial" value={formatCurrency(sessionSummary.openingBalance)} icon={PiggyBank} />
-              <SummaryCard title="Total de Vendas" value={formatCurrency(sessionSummary.totalRevenue)} icon={Calculator} />
-              <SummaryCard title="Saldo Final (Esperado)" value={formatCurrency(sessionSummary.expectedCash)} icon={CircleDollarSign} description="Saldo inicial + Vendas em dinheiro" />
-          </div>
-          <Separator />
-          <div>
-            <h3 className="text-lg font-medium mb-2">Vendas por Método de Pagamento</h3>
-            <div className="space-y-2 text-muted-foreground">
-              <div className="flex justify-between items-center"><span className="flex items-center gap-2"><CircleDollarSign className="h-4 w-4" />Dinheiro</span> <strong>{formatCurrency(sessionSummary.cashRevenue)}</strong></div>
-              <div className="flex justify-between items-center"><span className="flex items-center gap-2"><CreditCard className="h-4 w-4" />Cartão</span> <strong>{formatCurrency(sessionSummary.cardRevenue)}</strong></div>
-              <div className="flex justify-between items-center"><span className="flex items-center gap-2"><QrCode className="h-4 w-4" />PIX</span> <strong>{formatCurrency(sessionSummary.pixRevenue)}</strong></div>
-            </div>
-          </div>
-        </CardContent>
-        <CardContent>
-          <Button size="lg" variant="destructive" className="w-full" onClick={() => setIsClosingDialog(true)}>
-            <DoorClosed className="mr-2 h-5 w-5" />
-            Fechar Caixa
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="md:col-span-2">
+            <Card>
+                <CardHeader>
+                <CardTitle>Resumo do Caixa Atual</CardTitle>
+                <CardDescription>
+                    Caixa aberto em {format(new Date(cashStatus.openingTime!), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                    <SummaryCard title="Saldo Inicial" value={formatCurrency(sessionSummary.openingBalance)} icon={PiggyBank} />
+                    <SummaryCard title="Total de Vendas (no caixa)" value={formatCurrency(sessionSummary.totalRevenue)} icon={Calculator} />
+                    <SummaryCard title="Suprimentos (Entradas)" value={formatCurrency(sessionSummary.totalIn)} icon={ArrowUpCircle} />
+                    <SummaryCard title="Sangrias (Saídas)" value={formatCurrency(sessionSummary.totalOut)} icon={ArrowDownCircle} className="text-destructive" />
+                </div>
+                <Separator />
+                 <div className="p-4 bg-muted/50 rounded-lg">
+                    <h3 className="text-lg font-bold mb-2">Balanço de Caixa (Dinheiro)</h3>
+                    <div className="space-y-2 text-sm">
+                        <div className="flex justify-between"><span>Saldo Inicial</span> <span>{formatCurrency(sessionSummary.openingBalance)}</span></div>
+                        <div className="flex justify-between"><span>(+) Vendas em Dinheiro</span> <span className="text-green-600">{formatCurrency(sessionSummary.cashRevenue)}</span></div>
+                        <div className="flex justify-between"><span>(+) Suprimentos</span> <span className="text-green-600">{formatCurrency(sessionSummary.totalIn)}</span></div>
+                        <div className="flex justify-between"><span>(-) Sangrias</span> <span className="text-destructive">{formatCurrency(sessionSummary.totalOut)}</span></div>
+                        <Separator className="my-2" />
+                        <div className="flex justify-between font-bold text-base"><span>(=) Saldo Final Esperado</span> <span>{formatCurrency(sessionSummary.expectedCash)}</span></div>
+                    </div>
+                </div>
+                 <Separator />
+                <div>
+                    <h3 className="text-lg font-medium mb-2">Vendas por Método de Pagamento</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                    <div className="flex justify-between items-center"><span className="flex items-center gap-2"><CircleDollarSign className="h-4 w-4" />Dinheiro</span> <strong>{formatCurrency(sessionSummary.cashRevenue)}</strong></div>
+                    <div className="flex justify-between items-center"><span className="flex items-center gap-2"><CreditCard className="h-4 w-4" />Cartão</span> <strong>{formatCurrency(sessionSummary.cardRevenue)}</strong></div>
+                    <div className="flex justify-between items-center"><span className="flex items-center gap-2"><QrCode className="h-4 w-4" />PIX</span> <strong>{formatCurrency(sessionSummary.pixRevenue)}</strong></div>
+                    </div>
+                </div>
+                </CardContent>
+            </Card>
+        </div>
+        <div className="space-y-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Operações de Caixa</CardTitle>
+                    <CardDescription>Faça entradas ou retiradas de dinheiro do caixa principal.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4">
+                    <Button variant="outline" onClick={() => { setAdjustmentType('in'); setIsAdjustmentDialogOpen(true); }}>
+                        <ArrowUpCircle className="mr-2 h-4 w-4" /> Suprimento
+                    </Button>
+                    <Button variant="outline" className="text-destructive" onClick={() => { setAdjustmentType('out'); setIsAdjustmentDialogOpen(true); }}>
+                        <ArrowDownCircle className="mr-2 h-4 w-4" /> Sangria
+                    </Button>
+                </CardContent>
+                 <CardContent>
+                     <Button size="lg" variant="destructive" className="w-full" onClick={() => setIsClosingDialog(true)}>
+                        <DoorClosed className="mr-2 h-5 w-5" />
+                        Fechar Caixa
+                    </Button>
+                 </CardContent>
+            </Card>
+             <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        Caixa 02 (Secundário)
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditCaixa02DialogOpen(true)}><Edit className="h-4 w-4" /></Button>
+                    </CardTitle>
+                    <CardDescription>Use para guardar valores separadamente.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     <div className="text-center">
+                        <p className="text-sm text-muted-foreground">Saldo Atual</p>
+                        <p className="text-3xl font-bold">{formatCurrency(secondaryCashBox.balance)}</p>
+                    </div>
+                    <Button className="w-full" onClick={() => setIsTransferDialogOpen(true)} disabled={secondaryCashBox.balance <= 0}>
+                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Transferir p/ Caixa Principal
+                    </Button>
+                </CardContent>
+             </Card>
+        </div>
+      </div>
+      
       <CloseCashRegisterDialog 
         isOpen={isClosingDialog}
         onOpenChange={setIsClosingDialog}
         onClose={handleCloseCashRegister}
         summary={sessionSummary}
       />
+      <CashAdjustmentDialog
+        isOpen={isAdjustmentDialogOpen}
+        onOpenChange={setIsAdjustmentDialogOpen}
+        type={adjustmentType}
+        onSave={handleAddAdjustment}
+      />
+      <TransferDialog
+        isOpen={isTransferDialogOpen}
+        onOpenChange={setIsTransferDialogOpen}
+        maxAmount={secondaryCashBox.balance}
+        onTransfer={handleTransfer}
+      />
+      <EditCaixa02Dialog
+        isOpen={isEditCaixa02DialogOpen}
+        onOpenChange={setIsEditCaixa02DialogOpen}
+        currentBalance={secondaryCashBox.balance}
+        onSave={handleEditCaixa02}
+      />
     </>
   );
 }
 
-function SummaryCard({ title, value, icon: Icon, description }: { title: string, value: string, icon: React.ElementType, description?: string }) {
+function SummaryCard({ title, value, icon: Icon, description, className = '' }: { title: string, value: string, icon: React.ElementType, description?: string, className?: string }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -231,13 +361,12 @@ function SummaryCard({ title, value, icon: Icon, description }: { title: string,
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+        <div className={`text-2xl font-bold ${className}`}>{value}</div>
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </CardContent>
     </Card>
   )
 }
-
 
 function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onOpen: (balance: number) => void }) {
   const [balance, setBalance] = useState('');
@@ -254,10 +383,11 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen }: { isOpen: bool
       return;
     }
     onOpen(balanceValue);
+    setBalance('');
   };
 
   return (
-     <Dialog open={isOpen} onOpenChange={onOpenChange}>
+     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) setBalance(''); onOpenChange(open); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Abrir Caixa</DialogTitle>
@@ -298,16 +428,18 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
             Revise os totais antes de fechar. Esta ação não pode ser desfeita.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="text-sm space-y-2">
+        <div className="text-sm space-y-2 my-4">
             <div className="flex justify-between"><span>Saldo Inicial:</span> <strong>{formatCurrency(summary.openingBalance)}</strong></div>
+            <div className="flex justify-between"><span>(+) Vendas em Dinheiro:</span> <span>{formatCurrency(summary.cashRevenue)}</span></div>
+            <div className="flex justify-between"><span>(+) Suprimentos:</span> <span>{formatCurrency(summary.totalIn)}</span></div>
+            <div className="flex justify-between"><span>(-) Sangrias:</span> <span>{formatCurrency(summary.totalOut)}</span></div>
             <Separator />
-            <div className="flex justify-between"><span>Vendas em Dinheiro:</span> <span>{formatCurrency(summary.cashRevenue)}</span></div>
+            <div className="flex justify-between text-base font-bold"><span>(=) Total em Caixa (Esperado):</span> <strong>{formatCurrency(summary.expectedCash)}</strong></div>
+            <Separator />
             <div className="flex justify-between"><span>Vendas em Cartão:</span> <span>{formatCurrency(summary.cardRevenue)}</span></div>
             <div className="flex justify-between"><span>Vendas em PIX:</span> <span>{formatCurrency(summary.pixRevenue)}</span></div>
             <Separator />
-            <div className="flex justify-between"><span>Total de Vendas:</span> <strong>{formatCurrency(summary.totalRevenue)}</strong></div>
-            <Separator />
-            <div className="flex justify-between text-base font-bold"><span>Total em Caixa (Esperado):</span> <strong>{formatCurrency(summary.expectedCash)}</strong></div>
+            <div className="flex justify-between"><span>Total Geral de Vendas:</span> <strong>{formatCurrency(summary.totalRevenue)}</strong></div>
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -318,4 +450,124 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
       </AlertDialogContent>
     </AlertDialog>
   )
+}
+
+// Dialog for Cash In/Out
+function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave }: { isOpen: boolean, onOpenChange: (open: boolean) => void, type: 'in' | 'out', onSave: (amount: number, description: string) => void }) {
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const { toast } = useToast();
+
+  const title = type === 'in' ? 'Suprimento de Caixa (Entrada)' : 'Sangria de Caixa (Retirada)';
+  const dialogDesc = type === 'in' ? 'Registre uma entrada de dinheiro no caixa (ex: reforço de troco).' : 'Registre uma retirada de dinheiro do caixa (ex: guardar em local seguro).';
+  const label = type === 'in' ? 'Valor de Entrada (R$)' : 'Valor de Retirada (R$)'
+
+  const handleSubmit = () => {
+    const value = parseFloat(amount.replace(',', '.'));
+    if (isNaN(value) || value <= 0) {
+      toast({ title: "Valor Inválido", description: "Insira um valor positivo.", variant: "destructive" });
+      return;
+    }
+    if (description.trim() === '') {
+      toast({ title: "Descrição Obrigatória", description: "Forneça uma breve descrição para a movimentação.", variant: "destructive" });
+      return;
+    }
+    onSave(value, description.trim());
+    setAmount('');
+    setDescription('');
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => { if(!open) { setAmount(''); setDescription(''); } onOpenChange(open); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{dialogDesc}</DialogDescription></DialogHeader>
+        <div className="py-4 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="adjustment-amount">{label}</Label>
+            <Input id="adjustment-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="adjustment-desc">Descrição</Label>
+            <Input id="adjustment-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Troco inicial" />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+          <Button onClick={handleSubmit}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Dialog for Transfer
+function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { isOpen: boolean, onOpenChange: (open: boolean) => void, maxAmount: number, onTransfer: (amount: number) => void }) {
+  const [amount, setAmount] = useState('');
+  const { toast } = useToast();
+
+  const handleSubmit = () => {
+    const value = parseFloat(amount.replace(',', '.'));
+    if (isNaN(value) || value <= 0) {
+      toast({ title: "Valor Inválido", description: "Insira um valor positivo.", variant: "destructive" });
+      return;
+    }
+    if (value > maxAmount) {
+      toast({ title: "Saldo Insuficiente", description: `O valor máximo para transferência é ${formatCurrency(maxAmount)}.`, variant: "destructive" });
+      return;
+    }
+    onTransfer(value);
+    setAmount('');
+  };
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => { if(!open) setAmount(''); onOpenChange(open); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Transferir do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para o Caixa Principal. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
+        <div className="py-4 space-y-2">
+          <Label htmlFor="transfer-amount">Valor a Transferir (R$)</Label>
+          <Input id="transfer-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+        </div>
+        <DialogFooter>
+          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+          <Button onClick={handleSubmit}>Confirmar Transferência</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditCaixa02Dialog({ isOpen, onOpenChange, currentBalance, onSave }: { isOpen: boolean, onOpenChange: (open: boolean) => void, currentBalance: number, onSave: (newBalance: number) => void }) {
+  const [balance, setBalance] = useState<string>('');
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if(isOpen) {
+      setBalance(String(currentBalance));
+    }
+  }, [isOpen, currentBalance])
+
+  const handleSubmit = () => {
+    const balanceValue = parseFloat(balance.replace(',', '.'));
+    if (isNaN(balanceValue) || balanceValue < 0) {
+      toast({ title: "Valor Inválido", description: "Por favor, insira um saldo válido.", variant: 'destructive' });
+      return;
+    }
+    onSave(balanceValue);
+  };
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Editar Saldo do Caixa 02</DialogTitle><DialogDescription>Ajuste o valor total do seu caixa secundário.</DialogDescription></DialogHeader>
+        <div className="py-4 space-y-2">
+          <Label htmlFor="caixa02-balance">Novo Saldo Total (R$)</Label>
+          <Input id="caixa02-balance" value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+        </div>
+        <DialogFooter>
+          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+          <Button onClick={handleSubmit}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
