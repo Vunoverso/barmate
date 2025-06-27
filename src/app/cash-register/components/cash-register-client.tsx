@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment } from '@/types';
-import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox } from '@/lib/constants';
+import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount } from '@/types';
+import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -40,6 +40,7 @@ export default function CashRegisterClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed', adjustments: [] });
   const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
+  const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
   const [sales, setSales] = useState<Sale[]>([]);
   const { toast } = useToast();
 
@@ -50,6 +51,8 @@ export default function CashRegisterClient() {
   const [adjustmentType, setAdjustmentType] = useState<'in' | 'out'>('in');
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [isEditCaixa02DialogOpen, setIsEditCaixa02DialogOpen] = useState(false);
+  const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -66,6 +69,9 @@ export default function CashRegisterClient() {
     // Load secondary cash box
     setSecondaryCashBox(getSecondaryCashBox());
 
+    // Load bank account
+    setBankAccount(getBankAccount());
+
     // Load sales and listen for changes
     const handleSalesChange = () => setSales(getSales());
     handleSalesChange();
@@ -75,9 +81,15 @@ export default function CashRegisterClient() {
     const handleSecondaryCashBoxChange = () => setSecondaryCashBox(getSecondaryCashBox());
     window.addEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
 
+    // Listen for bank account changes
+    const handleBankAccountChange = () => setBankAccount(getBankAccount());
+    window.addEventListener('bankAccountChanged', handleBankAccountChange);
+
+
     return () => {
       window.removeEventListener('salesChanged', handleSalesChange);
       window.removeEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
+      window.removeEventListener('bankAccountChanged', handleBankAccountChange);
     }
   }, []);
 
@@ -154,6 +166,12 @@ export default function CashRegisterClient() {
     saveSecondaryCashBox({ balance: newBalance });
     toast({ title: "Caixa 02 Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditCaixa02DialogOpen(false);
+  }
+
+  const handleEditBankAccount = (newBalance: number) => {
+    saveBankAccount({ balance: newBalance });
+    toast({ title: "Conta Bancária Atualizada", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
+    setIsEditBankAccountDialogOpen(false);
   }
 
 
@@ -322,6 +340,21 @@ export default function CashRegisterClient() {
                     </Button>
                 </CardContent>
              </Card>
+             <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        Conta Bancária
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditBankAccountDialogOpen(true)}><Edit className="h-4 w-4" /></Button>
+                    </CardTitle>
+                    <CardDescription>Saldo disponível na sua conta.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                     <div className="text-center">
+                        <p className="text-sm text-muted-foreground">Saldo Atual</p>
+                        <p className="text-3xl font-bold">{formatCurrency(bankAccount.balance)}</p>
+                    </div>
+                </CardContent>
+             </Card>
         </div>
       </div>
       
@@ -343,11 +376,23 @@ export default function CashRegisterClient() {
         maxAmount={secondaryCashBox.balance}
         onTransfer={handleTransfer}
       />
-      <EditCaixa02Dialog
+      <EditBalanceDialog
         isOpen={isEditCaixa02DialogOpen}
         onOpenChange={setIsEditCaixa02DialogOpen}
         currentBalance={secondaryCashBox.balance}
         onSave={handleEditCaixa02}
+        title="Editar Saldo do Caixa 02"
+        description="Ajuste o valor total do seu caixa secundário."
+        idPrefix="caixa02"
+      />
+      <EditBalanceDialog
+        isOpen={isEditBankAccountDialogOpen}
+        onOpenChange={setIsEditBankAccountDialogOpen}
+        currentBalance={bankAccount.balance}
+        onSave={handleEditBankAccount}
+        title="Editar Saldo da Conta Bancária"
+        description="Ajuste o saldo total da sua conta bancária."
+        idPrefix="bank"
       />
     </>
   );
@@ -536,7 +581,7 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { isOpe
   );
 }
 
-function EditCaixa02Dialog({ isOpen, onOpenChange, currentBalance, onSave }: { isOpen: boolean, onOpenChange: (open: boolean) => void, currentBalance: number, onSave: (newBalance: number) => void }) {
+function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title, description, idPrefix }: { isOpen: boolean, onOpenChange: (open: boolean) => void, currentBalance: number, onSave: (newBalance: number) => void, title: string, description: string, idPrefix: string }) {
   const [balance, setBalance] = useState<string>('');
   const { toast } = useToast();
 
@@ -558,10 +603,10 @@ function EditCaixa02Dialog({ isOpen, onOpenChange, currentBalance, onSave }: { i
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Editar Saldo do Caixa 02</DialogTitle><DialogDescription>Ajuste o valor total do seu caixa secundário.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
         <div className="py-4 space-y-2">
-          <Label htmlFor="caixa02-balance">Novo Saldo Total (R$)</Label>
-          <Input id="caixa02-balance" value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+          <Label htmlFor={`${idPrefix}-balance`}>Novo Saldo Total (R$)</Label>
+          <Input id={`${idPrefix}-balance`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
         </div>
         <DialogFooter>
           <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
