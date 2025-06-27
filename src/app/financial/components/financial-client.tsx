@@ -41,7 +41,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet } from 'lucide-react';
+import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote } from 'lucide-react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -162,9 +162,9 @@ export default function FinancialClient() {
     // Deduct from source
     if (data.source === 'daily_cash' && cashStatus.status === 'open') {
       const sangriaAdjustment = {
-        id: `adj-${Date.now()}`,
+        id: `adj-exp-${Date.now()}`,
         amount: data.amount,
-        type: 'out',
+        type: 'out' as 'out',
         description: `Despesa: ${data.description}`,
         timestamp: new Date().toISOString()
       };
@@ -239,7 +239,17 @@ export default function FinancialClient() {
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Caixa Principal (Aberto)</CardTitle>
+                <Banknote className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(expectedCashInDrawer)}</div>
+                <p className="text-xs text-muted-foreground">Status: <span className="font-semibold capitalize">{cashStatus.status === 'open' ? `Aberto` : 'Fechado'}</span></p>
+            </CardContent>
+        </Card>
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Saldo Caixa 02</CardTitle>
@@ -496,3 +506,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
