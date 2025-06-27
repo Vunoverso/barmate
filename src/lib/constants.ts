@@ -28,22 +28,22 @@ export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
 const PRODUCT_CATEGORIES_STORAGE_KEY = 'barmate_productCategories';
 
 export const getProductCategories = (): ProductCategory[] => {
-  if (typeof window !== 'undefined') {
-    const storedCategories = localStorage.getItem(PRODUCT_CATEGORIES_STORAGE_KEY);
-    if (storedCategories) {
-      try {
-        const parsed = JSON.parse(storedCategories);
-        if (Array.isArray(parsed) && parsed.every(cat => cat.id && cat.name && cat.iconName)) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error("Erro ao parsear categorias do localStorage", e);
-        localStorage.removeItem(PRODUCT_CATEGORIES_STORAGE_KEY);
-      }
-    }
-    localStorage.setItem(PRODUCT_CATEGORIES_STORAGE_KEY, JSON.stringify(INITIAL_PRODUCT_CATEGORIES));
-    return INITIAL_PRODUCT_CATEGORIES;
+  if (typeof window === 'undefined') {
+    return []; // Return empty on server to avoid hydration errors
   }
+  const storedCategories = localStorage.getItem(PRODUCT_CATEGORIES_STORAGE_KEY);
+  if (storedCategories) {
+    try {
+      const parsed = JSON.parse(storedCategories);
+      if (Array.isArray(parsed) && parsed.every(cat => cat.id && cat.name && cat.iconName)) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error("Erro ao parsear categorias do localStorage", e);
+      localStorage.removeItem(PRODUCT_CATEGORIES_STORAGE_KEY);
+    }
+  }
+  localStorage.setItem(PRODUCT_CATEGORIES_STORAGE_KEY, JSON.stringify(INITIAL_PRODUCT_CATEGORIES));
   return INITIAL_PRODUCT_CATEGORIES;
 };
 

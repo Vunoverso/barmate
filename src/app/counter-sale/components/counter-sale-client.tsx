@@ -39,6 +39,7 @@ export default function CounterSaleClient() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
+  const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
   useEffect(() => {
     setIsMounted(true);
@@ -78,13 +79,11 @@ export default function CounterSaleClient() {
   
   const productsByCategoryDisplay = useMemo(() => groupProductsByCategoryId(filteredProducts, productCategories), [filteredProducts, productCategories]);
   const displayCategories = useMemo(() => Object.keys(productsByCategoryDisplay).sort(), [productsByCategoryDisplay]);
-  const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>(displayCategories[0] || 'Todos');
 
- useEffect(() => {
-    if (displayCategories.length > 0 && (!activeDisplayCategory || activeDisplayCategory === 'Todos' || !displayCategories.includes(activeDisplayCategory))) {
+  // Effect to select the first category when they are loaded
+  useEffect(() => {
+    if (displayCategories.length > 0 && activeDisplayCategory === 'Todos') {
       setActiveDisplayCategory(displayCategories[0]);
-    } else if (displayCategories.length === 0 && activeDisplayCategory !== 'Todos') {
-      setActiveDisplayCategory('Todos');
     }
   }, [displayCategories, activeDisplayCategory]);
 
@@ -183,7 +182,7 @@ export default function CounterSaleClient() {
           </CardHeader>
           <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
             <ScrollArea className="w-full shrink-0">
-                <TabsList className="mx-4 inline-flex">
+                <TabsList>
                   <TabsTrigger value="Todos">Todos</TabsTrigger>
                   {displayCategories.map(categoryName => (
                     <TabsTrigger key={categoryName} value={categoryName}>{categoryName}</TabsTrigger>
