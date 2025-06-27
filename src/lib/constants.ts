@@ -198,9 +198,20 @@ export const getSales = (): Sale[] => {
 
 export const addSale = (newSale: Sale): void => {
   if (typeof window === 'undefined') return;
+  
+  // Update sales record
   const currentSales = getSales();
   const updatedSales = [...currentSales, newSale];
   saveSales(updatedSales);
+
+  // Update bank account for non-cash payments
+  if (newSale.paymentMethod === 'card' || newSale.paymentMethod === 'pix') {
+    const bankAccount = getBankAccount();
+    const updatedBankAccount = {
+      balance: bankAccount.balance + newSale.totalAmount
+    };
+    saveBankAccount(updatedBankAccount);
+  }
 };
 
 

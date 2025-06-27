@@ -141,7 +141,7 @@ export default function FinancialClient() {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
     const openingTime = new Date(cashStatus.openingTime);
-    const sessionSales = getSales().filter(sale => new Date(sale.timestamp) >= openingTime);
+    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + s.totalAmount, 0);
     const openingBalance = cashStatus.openingBalance || 0;

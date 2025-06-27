@@ -221,22 +221,29 @@ export default function CashRegisterClient() {
   
   const handleDeleteAdjustment = () => {
     if (!adjustmentToDelete || cashStatus.status !== 'open') return;
-    const { id, type, amount, destination } = adjustmentToDelete;
+    const { id, type, amount, destination, source } = adjustmentToDelete;
 
+    // Revert 'out' transfers (main cash -> destination) or expenses
     if (type === 'out') {
-        if (destination) { // It was a transfer, revert the destination balance
-            if (destination === 'secondary_cash') {
-                const currentBox = getSecondaryCashBox();
-                saveSecondaryCashBox({ balance: currentBox.balance - amount });
-            } else if (destination === 'bank_account') {
-                const currentAccount = getBankAccount();
-                saveBankAccount({ balance: currentAccount.balance - amount });
-            }
-        } else { // It was an expense, remove the financial entry
-            const currentEntries = getFinancialEntries();
-            const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
-            saveFinancialEntries(updatedEntries);
-        }
+      if (destination === 'secondary_cash') {
+        const currentBox = getSecondaryCashBox();
+        saveSecondaryCashBox({ balance: currentBox.balance - amount });
+      } else if (destination === 'bank_account') {
+        const currentAccount = getBankAccount();
+        saveBankAccount({ balance: currentAccount.balance - amount });
+      } else { // It was an expense, remove the financial entry
+        const currentEntries = getFinancialEntries();
+        const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
+        saveFinancialEntries(updatedEntries);
+      }
+    } 
+    // Revert 'in' transfers (source -> main cash)
+    else if (type === 'in') {
+      if (source === 'secondary_cash') {
+        const currentBox = getSecondaryCashBox();
+        saveSecondaryCashBox({ balance: currentBox.balance + amount }); // Return money
+      }
+      // Note: No logic for reverting bank transfers yet, but can be added here
     }
     
     const newState = { ...cashStatus, adjustments: cashStatus.adjustments?.filter(adj => adj.id !== id) };
@@ -246,6 +253,7 @@ export default function CashRegisterClient() {
     toast({ title: "Movimentação Removida", variant: "destructive" });
     setAdjustmentToDelete(null);
   };
+
 
   const handleEditInitialBalance = (newBalance: number) => {
     if (cashStatus.status !== 'open') return;
@@ -271,7 +279,8 @@ export default function CashRegisterClient() {
         amount,
         type: 'in',
         description: `Transferência do Caixa 02`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        source: 'secondary_cash'
     };
 
     const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
@@ -452,7 +461,7 @@ export default function CashRegisterClient() {
                                     <TableCell>{format(new Date(adj.timestamp), "HH:mm:ss")}</TableCell>
                                     <TableCell>
                                         <Badge variant={adj.type === 'in' ? 'secondary' : 'destructive'}>
-                                            {adj.type === 'in' ? 'Entrada' : (adj.destination ? 'Transferência' : 'Saída')}
+                                            {adj.type === 'in' ? (adj.source ? 'Transferência' : 'Entrada') : (adj.destination ? 'Transferência' : 'Saída')}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
@@ -566,7 +575,7 @@ export default function CashRegisterClient() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
               <AlertDialogDescription>
-                Tem certeza que deseja remover a movimentação "{adjustmentToDelete.description}" no valor de {formatCurrency(adjustmentToDelete.amount)}? Esta ação não pode ser desfeita.
+                Tem certeza que deseja remover a movimentação "{adjustmentToDelete.description}" no valor de {formatCurrency(adjustmentToDelete.amount)}? Esta ação não pode ser desfeita e irá reverter o valor da origem/destino se aplicável.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

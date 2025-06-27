@@ -49,6 +49,7 @@ export interface CashAdjustment {
   type: 'in' | 'out'; // 'in' for suprimento, 'out' for sangria
   description: string;
   timestamp: string; // ISO String
+  source?: 'secondary_cash' | 'bank_account'; // For 'in' types that are transfers
   destination?: 'secondary_cash' | 'bank_account'; // For 'out' types that are transfers
 }
 
