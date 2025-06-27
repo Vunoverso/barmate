@@ -66,6 +66,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
 
   useEffect(() => {
     if (calculatedChange > 0) {
+      // Using toFixed(2) to avoid floating point issues in display
       setChangeReturned(calculatedChange.toFixed(2));
     } else {
       setChangeReturned('');
@@ -80,12 +81,12 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
 
     if (amountToPay > 0) { // Standard payment flow
       if (selectedMethod === 'cash') {
-        if (paidAmountValue < amountToPay) {
+        if (Math.round(paidAmountValue * 100) < Math.round(amountToPay * 100)) {
           setError('Valor pago é insuficiente.');
           return;
         }
         if (allowCredit) {
-          if (changeReturnedValue > calculatedChange) {
+          if (Math.round(changeReturnedValue * 100) > Math.round(calculatedChange * 100)) {
               setError('O troco devolvido não pode ser maior que o troco calculado.');
               return;
           }
@@ -120,12 +121,14 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   const isSubmitDisabled = () => {
     if (amountToPay > 0) {
         if (selectedMethod === 'cash') {
-          if (isNaN(paidAmountValue) || paidAmountValue < amountToPay) {
+          // Use rounding to cents to prevent floating point issues
+          if (isNaN(paidAmountValue) || Math.round(paidAmountValue * 100) < Math.round(amountToPay * 100)) {
             return true;
           }
           if (allowCredit) {
-             const returnedValue = parseFloat(String(changeReturned));
-             if (isNaN(returnedValue) || returnedValue < 0 || returnedValue > calculatedChange) {
+             const returnedValue = parseFloat(String(changeReturned).replace(',', '.'));
+             // Use rounding to cents to prevent floating point issues
+             if (isNaN(returnedValue) || returnedValue < 0 || Math.round(returnedValue * 100) > Math.round(calculatedChange * 100)) {
                return true;
              }
           }
