@@ -119,23 +119,28 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   };
 
   const isSubmitDisabled = () => {
+    // If there's an amount to be paid...
     if (amountToPay > 0) {
-        if (selectedMethod === 'cash') {
-          // Use rounding to cents to prevent floating point issues
-          if (isNaN(paidAmountValue) || Math.round(paidAmountValue * 100) < Math.round(amountToPay * 100)) {
+      // ...and payment is in cash...
+      if (selectedMethod === 'cash') {
+        // ...the button is disabled if the paid amount is not a number or is less than what's due.
+        if (isNaN(paidAmountValue) || Math.round(paidAmountValue * 100) < Math.round(amountToPay * 100)) {
+          return true;
+        }
+
+        // If credit is allowed and there is change to be given...
+        if (allowCredit && calculatedChange > 0) {
+          const returnedValue = parseFloat(String(changeReturned).replace(',', '.'));
+          // ...the button is disabled if the returned amount is not a number, is negative, or is more than the calculated change.
+          if (isNaN(returnedValue) || returnedValue < 0 || Math.round(returnedValue * 100) > Math.round(calculatedChange * 100)) {
             return true;
           }
-          if (allowCredit) {
-             const returnedValue = parseFloat(String(changeReturned).replace(',', '.'));
-             // Use rounding to cents to prevent floating point issues
-             if (isNaN(returnedValue) || returnedValue < 0 || Math.round(returnedValue * 100) > Math.round(calculatedChange * 100)) {
-               return true;
-             }
-          }
         }
+      }
     }
+    // In all other valid cases (e.g., card payment, PIX, or exact cash), the button is enabled.
     return false;
-  }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
