@@ -397,7 +397,7 @@ export default function OrdersClient() {
         </Card>
       </div>
 
-      <div className="md:col-span-5 flex flex-col h-full">
+      <div className="md:col-span-4 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
             <CardTitle>Selecionar Produtos</CardTitle>
@@ -456,7 +456,7 @@ export default function OrdersClient() {
         </Card>
       </div>
 
-      <div className="md:col-span-3 flex flex-col h-full">
+      <div className="md:col-span-4 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
