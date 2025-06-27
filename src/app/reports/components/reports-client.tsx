@@ -59,10 +59,7 @@ export default function ReportsClient() {
   const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
   const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
   
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: addDays(new Date(), -30), 
-    to: new Date(),
-  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const { toast } = useToast();
@@ -70,6 +67,12 @@ export default function ReportsClient() {
 
   useEffect(() => {
     setIsMounted(true);
+    // Set initial date range on client-side to avoid hydration mismatch
+    setDateRange({
+      from: addDays(new Date(), -30),
+      to: new Date(),
+    });
+
     const handleStorageChange = () => {
       setSales(getSales());
       setFinancialEntries(getFinancialEntries());
