@@ -2,7 +2,7 @@
 "use client";
 
 import type { Sale } from '@/types';
-import { getSales, formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
+import { getSales, saveSales, formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
@@ -105,11 +105,11 @@ export default function ReportsClient() {
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
 
-    // This is a temporary delete for the session as we use localStorage
-    // In a real DB, this would be a "soft delete" or permanent removal.
-    const updatedSales = sales.filter(s => s.id !== saleToDelete!.id);
-    localStorage.setItem('barmate_sales', JSON.stringify(updatedSales));
-    setSales(updatedSales); // Update local state to re-render
+    // The component's local `sales` state is updated by the `salesChanged` event listener,
+    // which is triggered by saveSales.
+    const currentSales = getSales();
+    const updatedSales = currentSales.filter(s => s.id !== saleToDelete!.id);
+    saveSales(updatedSales);
 
     toast({
       title: "Venda Removida",

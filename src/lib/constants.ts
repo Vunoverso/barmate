@@ -2,6 +2,12 @@
 import type { Product, Sale, PaymentMethod, ProductCategory } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon } from 'lucide-react';
 
+// In-memory cache to reduce localStorage reads and improve performance
+let productCategoriesCache: ProductCategory[] | null = null;
+let productsCache: Product[] | null = null;
+let salesCache: Sale[] | null = null;
+
+
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer,
   Wine,
@@ -29,14 +35,18 @@ const PRODUCT_CATEGORIES_STORAGE_KEY = 'barmate_productCategories';
 
 export const getProductCategories = (): ProductCategory[] => {
   if (typeof window === 'undefined') {
-    return []; // Return empty on server to avoid hydration errors
+    return [];
+  }
+  if (productCategoriesCache !== null) {
+    return productCategoriesCache;
   }
   const storedCategories = localStorage.getItem(PRODUCT_CATEGORIES_STORAGE_KEY);
   if (storedCategories) {
     try {
       const parsed = JSON.parse(storedCategories);
       if (Array.isArray(parsed) && parsed.every(cat => cat.id && cat.name && cat.iconName)) {
-        return parsed;
+        productCategoriesCache = parsed;
+        return productCategoriesCache;
       }
     } catch (e) {
       console.error("Erro ao parsear categorias do localStorage", e);
@@ -44,11 +54,13 @@ export const getProductCategories = (): ProductCategory[] => {
     }
   }
   localStorage.setItem(PRODUCT_CATEGORIES_STORAGE_KEY, JSON.stringify(INITIAL_PRODUCT_CATEGORIES));
-  return INITIAL_PRODUCT_CATEGORIES;
+  productCategoriesCache = INITIAL_PRODUCT_CATEGORIES;
+  return productCategoriesCache;
 };
 
 export const saveProductCategories = (categories: ProductCategory[]): void => {
   if (typeof window !== 'undefined') {
+    productCategoriesCache = categories;
     localStorage.setItem(PRODUCT_CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
     window.dispatchEvent(new Event('productCategoriesChanged'));
   }
@@ -75,14 +87,18 @@ export const PRODUCTS_STORAGE_KEY = 'barmate_products';
 
 export const getProducts = (): Product[] => {
   if (typeof window === 'undefined') {
-    return []; // Return empty on server to avoid hydration errors
+    return [];
+  }
+  if (productsCache !== null) {
+    return productsCache;
   }
   const storedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
   if (storedProducts) {
     try {
       const parsed = JSON.parse(storedProducts);
       if (Array.isArray(parsed)) {
-         return parsed;
+         productsCache = parsed;
+         return productsCache;
       }
     } catch (e) {
       console.error("Failed to parse products from localStorage", e);
@@ -90,11 +106,13 @@ export const getProducts = (): Product[] => {
     }
   }
   localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(INITIAL_PRODUCTS));
-  return INITIAL_PRODUCTS;
+  productsCache = INITIAL_PRODUCTS;
+  return productsCache;
 };
 
 export const saveProducts = (products: Product[]): void => {
   if (typeof window !== 'undefined') {
+    productsCache = products;
     localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
     window.dispatchEvent(new Event('productsChanged'));
   }
@@ -135,34 +153,46 @@ const INITIAL_SALES: Sale[] = [
 
 export const SALES_STORAGE_KEY = 'barmate_sales';
 
+export const saveSales = (sales: Sale[]): void => {
+  if (typeof window === 'undefined') return;
+  salesCache = sales;
+  localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(sales));
+  window.dispatchEvent(new Event('salesChanged'));
+};
+
 export const getSales = (): Sale[] => {
   if (typeof window === 'undefined') {
     return [];
   }
+  if (salesCache !== null) {
+    return salesCache;
+  }
   const storedSales = localStorage.getItem(SALES_STORAGE_KEY);
   if (storedSales) {
     try {
-      return JSON.parse(storedSales).map((s: Sale) => ({
+      salesCache = JSON.parse(storedSales).map((s: Sale) => ({
         ...s,
         timestamp: new Date(s.timestamp)
       }));
+      return salesCache;
     } catch (e) {
       console.error("Failed to parse sales from localStorage", e);
       localStorage.removeItem(SALES_STORAGE_KEY);
-      return [];
+      salesCache = [];
+      return salesCache;
     }
   }
   // Seed with initial data only if nothing is in storage
-  localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(INITIAL_SALES));
-  return INITIAL_SALES;
+  const initialSalesWithDate = INITIAL_SALES.map(s => ({...s, timestamp: new Date(s.timestamp)}));
+  saveSales(initialSalesWithDate);
+  return initialSalesWithDate;
 };
 
 export const addSale = (newSale: Sale): void => {
   if (typeof window === 'undefined') return;
   const currentSales = getSales();
   const updatedSales = [...currentSales, newSale];
-  localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(updatedSales));
-  window.dispatchEvent(new Event('salesChanged'));
+  saveSales(updatedSales);
 };
 
 
