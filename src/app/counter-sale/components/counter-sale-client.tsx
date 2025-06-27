@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ProductCategory } from '@/types';
-import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,7 +31,7 @@ const groupProductsByCategoryId = (products: Product[], categories: ProductCateg
 };
 
 export default function CounterSaleClient() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,6 +42,7 @@ export default function CounterSaleClient() {
 
   useEffect(() => {
     setIsMounted(true);
+    setProducts(getProducts());
     setProductCategories(getProductCategories());
     const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
     if (storedOrderItems) {
@@ -52,12 +53,15 @@ export default function CounterSaleClient() {
         localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
       }
     }
-     // Listen for category changes from settings
-    const handleCategoriesChange = () => {
-      setProductCategories(getProductCategories());
-    };
+     
+    const handleProductsChange = () => setProducts(getProducts());
+    const handleCategoriesChange = () => setProductCategories(getProductCategories());
+
+    window.addEventListener('productsChanged', handleProductsChange);
     window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+
     return () => {
+      window.removeEventListener('productsChanged', handleProductsChange);
       window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
     };
   }, []);

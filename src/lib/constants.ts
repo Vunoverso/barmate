@@ -33,27 +33,23 @@ export const getProductCategories = (): ProductCategory[] => {
     if (storedCategories) {
       try {
         const parsed = JSON.parse(storedCategories);
-        // Validação simples para garantir que é um array e tem os campos esperados
         if (Array.isArray(parsed) && parsed.every(cat => cat.id && cat.name && cat.iconName)) {
           return parsed;
         }
       } catch (e) {
         console.error("Erro ao parsear categorias do localStorage", e);
-        // Se der erro, remove o item corrompido e retorna o padrão
         localStorage.removeItem(PRODUCT_CATEGORIES_STORAGE_KEY);
       }
     }
-    // Se não houver nada ou se deu erro, salva e retorna o padrão
     localStorage.setItem(PRODUCT_CATEGORIES_STORAGE_KEY, JSON.stringify(INITIAL_PRODUCT_CATEGORIES));
     return INITIAL_PRODUCT_CATEGORIES;
   }
-  return INITIAL_PRODUCT_CATEGORIES; // Fallback para SSR ou ambiente sem window
+  return INITIAL_PRODUCT_CATEGORIES;
 };
 
 export const saveProductCategories = (categories: ProductCategory[]): void => {
   if (typeof window !== 'undefined') {
     localStorage.setItem(PRODUCT_CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
-    // Disparar um evento para que outras partes da UI possam reagir se necessário
     window.dispatchEvent(new Event('productCategoriesChanged'));
   }
 };
@@ -74,6 +70,35 @@ export const INITIAL_PRODUCTS: Product[] = [
   { id: '12', name: 'Petit Gâteau', price: 20.00, categoryId: 'cat_sobremesas', stock: 40 },
   { id: '13', name: 'Mousse de Maracujá', price: 15.00, categoryId: 'cat_sobremesas', stock: 50 },
 ];
+
+export const PRODUCTS_STORAGE_KEY = 'barmate_products';
+
+export const getProducts = (): Product[] => {
+  if (typeof window === 'undefined') {
+    return []; // Return empty on server to avoid hydration errors
+  }
+  const storedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+  if (storedProducts) {
+    try {
+      const parsed = JSON.parse(storedProducts);
+      if (Array.isArray(parsed)) {
+         return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to parse products from localStorage", e);
+      localStorage.removeItem(PRODUCTS_STORAGE_KEY);
+    }
+  }
+  localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(INITIAL_PRODUCTS));
+  return INITIAL_PRODUCTS;
+};
+
+export const saveProducts = (products: Product[]): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+    window.dispatchEvent(new Event('productsChanged'));
+  }
+};
 
 export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: LucideIcon }[] = [
   { name: 'Dinheiro', value: 'cash', icon: CircleDollarSign },

@@ -2,12 +2,12 @@
 "use client";
 
 import type { Product, ProductCategory } from '@/types';
-import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, saveProductCategories as saveCategoriesToStorage } from '@/lib/constants'; // Assuming save is not needed here directly unless modifying products affects categories
+import { getProducts, saveProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { PlusCircle, Edit3, Trash2, Search, Filter, Package } from 'lucide-react'; // Added Package for default icon
+import { PlusCircle, Edit3, Trash2, Search, Filter, Package } from 'lucide-react';
 import AddProductDialog from './add-product-dialog';
 import {
   Table,
@@ -41,7 +41,7 @@ import {
 
 
 export default function ProductManagement() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS); // Consider loading from localStorage if products become editable beyond constants
+  const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -52,27 +52,33 @@ export default function ProductManagement() {
   const { toast } = useToast();
 
   useEffect(() => {
+    setProducts(getProducts());
     setProductCategories(getProductCategories());
-    // Listen for category changes from settings
-    const handleCategoriesChange = () => {
-      setProductCategories(getProductCategories());
-    };
+
+    const handleProductsChange = () => setProducts(getProducts());
+    const handleCategoriesChange = () => setProductCategories(getProductCategories());
+
+    window.addEventListener('productsChanged', handleProductsChange);
     window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+
     return () => {
+      window.removeEventListener('productsChanged', handleProductsChange);
       window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
     };
   }, []);
 
   const handleAddProduct = (product: Product) => {
-    // In a real app, products would be saved to a backend or localStorage
-    // For now, just adding to local state.
     const newProduct = { ...product, id: `prod-${Date.now()}` };
-    setProducts(prev => [...prev, newProduct]);
+    const updatedProducts = [...products, newProduct];
+    setProducts(updatedProducts);
+    saveProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
   const handleEditProduct = (updatedProduct: Product) => {
-    setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+    setProducts(updatedProducts);
+    saveProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
 
@@ -88,7 +94,9 @@ export default function ProductManagement() {
   
   const handleDeleteProduct = (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
-    setProducts(prev => prev.filter(p => p.id !== productId));
+    const updatedProducts = products.filter(p => p.id !== productId);
+    setProducts(updatedProducts);
+    saveProducts(updatedProducts);
     setProductToDelete(null); 
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });

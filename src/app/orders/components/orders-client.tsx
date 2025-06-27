@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory } from '@/types';
-import { INITIAL_PRODUCTS, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,7 +44,7 @@ const groupProductsByCategoryId = (products: Product[], categories: ProductCateg
 
 
 export default function OrdersClient() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
@@ -59,7 +59,11 @@ export default function OrdersClient() {
 
   useEffect(() => {
     setIsMounted(true);
-    setProductCategories(getProductCategories());
+    const allProducts = getProducts();
+    const allCategories = getProductCategories();
+    setProducts(allProducts);
+    setProductCategories(allCategories);
+
     const storedOrders = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
     if (storedOrders) {
       try {
@@ -67,8 +71,8 @@ export default function OrdersClient() {
           ...order,
           createdAt: new Date(order.createdAt),
           items: order.items.map(item => { // Hydrate items with category details
-            const productDetails = INITIAL_PRODUCTS.find(p => p.id === item.id);
-            const category = productCategories.find(c => c.id === productDetails?.categoryId);
+            const productDetails = allProducts.find(p => p.id === item.id);
+            const category = allCategories.find(c => c.id === productDetails?.categoryId);
             return {
               ...item,
               categoryName: category?.name,
@@ -85,13 +89,15 @@ export default function OrdersClient() {
         localStorage.removeItem(LOCAL_STORAGE_ORDERS_KEY); 
       }
     }
-     // Listen for category changes from settings
-    const handleCategoriesChange = () => {
-      setProductCategories(getProductCategories());
-      // Potentially re-hydrate open orders if category names/icons changed significantly
-    };
+     
+    const handleProductsChange = () => setProducts(getProducts());
+    const handleCategoriesChange = () => setProductCategories(getProductCategories());
+
+    window.addEventListener('productsChanged', handleProductsChange);
     window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+
     return () => {
+      window.removeEventListener('productsChanged', handleProductsChange);
       window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
     };
   }, []);
