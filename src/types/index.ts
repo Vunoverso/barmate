@@ -62,10 +62,15 @@ export interface SecondaryCashBox {
   balance: number;
 }
 
+export interface BankAccount {
+  balance: number;
+}
+
 export interface FinancialEntry {
   id: string;
   description: string;
   amount: number;
   type: 'expense' | 'income'; // For now, only 'expense' but can be extended
+  source: 'daily_cash' | 'secondary_cash' | 'bank_account';
   timestamp: Date;
 }

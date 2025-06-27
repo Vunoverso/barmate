@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
@@ -8,6 +8,8 @@ let productsCache: Product[] | null = null;
 let salesCache: Sale[] | null = null;
 let financialEntriesCache: FinancialEntry[] | null = null;
 let secondaryCashBoxCache: SecondaryCashBox | null = null;
+let bankAccountCache: BankAccount | null = null;
+let cashRegisterStatusCache: CashRegisterStatus | null = null;
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer,
@@ -203,7 +205,7 @@ export const addSale = (newSale: Sale): void => {
 
 
 export const formatCurrency = (value: number) => {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
 
@@ -243,7 +245,7 @@ export const getFinancialEntries = (): FinancialEntry[] => {
   return financialEntriesCache;
 };
 
-// New key and functions for secondary cash box
+// --- Caixa 02 ---
 export const SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox';
 
 export const getSecondaryCashBox = (): SecondaryCashBox => {
@@ -279,3 +281,67 @@ export const saveSecondaryCashBox = (box: SecondaryCashBox): void => {
     window.dispatchEvent(new Event('secondaryCashBoxChanged'));
   }
 };
+
+// --- Conta Bancária ---
+export const BANK_ACCOUNT_KEY = 'barmate_bankAccount';
+
+export const getBankAccount = (): BankAccount => {
+  if (typeof window === 'undefined') return { balance: 0 };
+  if (bankAccountCache !== null) return bankAccountCache;
+
+  const stored = localStorage.getItem(BANK_ACCOUNT_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (typeof parsed.balance === 'number') {
+        bankAccountCache = parsed;
+        return bankAccountCache;
+      }
+    } catch (e) {
+      console.error("Failed to parse bank account from localStorage", e);
+      localStorage.removeItem(BANK_ACCOUNT_KEY);
+    }
+  }
+  const initial = { balance: 0 };
+  localStorage.setItem(BANK_ACCOUNT_KEY, JSON.stringify(initial));
+  bankAccountCache = initial;
+  return bankAccountCache;
+};
+
+export const saveBankAccount = (account: BankAccount): void => {
+  if (typeof window !== 'undefined') {
+    bankAccountCache = account;
+    localStorage.setItem(BANK_ACCOUNT_KEY, JSON.stringify(account));
+    window.dispatchEvent(new Event('bankAccountChanged'));
+  }
+};
+
+// --- Status do Caixa Principal ---
+const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus';
+
+export const getCashRegisterStatus = (): CashRegisterStatus => {
+  if (typeof window === 'undefined') return { status: 'closed', adjustments: [] };
+  if (cashRegisterStatusCache !== null) return cashRegisterStatusCache;
+  
+  const storedStatus = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
+  if (storedStatus) {
+    try {
+      const parsedStatus = JSON.parse(storedStatus);
+      cashRegisterStatusCache = { adjustments: [], ...parsedStatus };
+      return cashRegisterStatusCache;
+    } catch (e) {
+      cashRegisterStatusCache = { status: 'closed', adjustments: [] };
+      return cashRegisterStatusCache;
+    }
+  }
+  cashRegisterStatusCache = { status: 'closed', adjustments: [] };
+  return cashRegisterStatusCache;
+}
+
+export const saveCashRegisterStatus = (status: CashRegisterStatus): void => {
+  if (typeof window !== 'undefined') {
+    cashRegisterStatusCache = status;
+    localStorage.setItem(CASH_REGISTER_STATUS_KEY, JSON.stringify(status));
+    window.dispatchEvent(new Event('cashRegisterStatusChanged'));
+  }
+}

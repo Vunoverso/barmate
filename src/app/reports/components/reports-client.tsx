@@ -1,8 +1,11 @@
 
 "use client";
 
-import type { Sale, FinancialEntry } from '@/types';
-import { getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
+import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount } from '@/types';
+import { 
+  getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
+  getSecondaryCashBox, getBankAccount 
+} from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
@@ -27,7 +30,7 @@ import { DatePickerWithRange } from '@/components/ui/date-picker-range';
 import type { DateRange } from "react-day-picker";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart } from 'lucide-react';
+import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart, Landmark, PiggyBank } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -43,9 +46,19 @@ import {
 import { downloadAsCSV } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
+const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
+  daily_cash: 'Caixa Principal',
+  secondary_cash: 'Caixa 02',
+  bank_account: 'Conta Bancária',
+};
+
+
 export default function ReportsClient() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [financialEntries, setFinancialEntries] = useState<FinancialEntry[]>([]);
+  const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
+  const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
+  
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30), 
     to: new Date(),
@@ -57,18 +70,25 @@ export default function ReportsClient() {
 
   useEffect(() => {
     setIsMounted(true);
-    const handleSalesChange = () => setSales(getSales());
-    const handleEntriesChange = () => setFinancialEntries(getFinancialEntries());
+    const handleStorageChange = () => {
+      setSales(getSales());
+      setFinancialEntries(getFinancialEntries());
+      setSecondaryCashBox(getSecondaryCashBox());
+      setBankAccount(getBankAccount());
+    };
     
-    handleSalesChange();
-    handleEntriesChange();
+    handleStorageChange();
 
-    window.addEventListener('salesChanged', handleSalesChange);
-    window.addEventListener('financialEntriesChanged', handleEntriesChange);
+    window.addEventListener('salesChanged', handleStorageChange);
+    window.addEventListener('financialEntriesChanged', handleStorageChange);
+    window.addEventListener('secondaryCashBoxChanged', handleStorageChange);
+    window.addEventListener('bankAccountChanged', handleStorageChange);
     
     return () => {
-      window.removeEventListener('salesChanged', handleSalesChange);
-      window.removeEventListener('financialEntriesChanged', handleEntriesChange);
+      window.removeEventListener('salesChanged', handleStorageChange);
+      window.removeEventListener('financialEntriesChanged', handleStorageChange);
+      window.removeEventListener('secondaryCashBoxChanged', handleStorageChange);
+      window.removeEventListener('bankAccountChanged', handleStorageChange);
     };
   }, []);
 
@@ -182,6 +202,7 @@ export default function ReportsClient() {
           description: `Venda #${sale.id.slice(-6)} (${itemsDesc})`,
           type: 'Receita',
           amount: sale.totalAmount,
+          source: PAYMENT_METHODS.find(p => p.value === sale.paymentMethod)?.name || sale.paymentMethod
         };
       }),
       ...filteredEntries.filter(e => e.type === 'expense').map(entry => ({
@@ -189,6 +210,7 @@ export default function ReportsClient() {
         description: entry.description,
         type: 'Despesa',
         amount: entry.amount,
+        source: SOURCE_MAP[entry.source]
       })),
     ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
@@ -198,12 +220,13 @@ export default function ReportsClient() {
     }
 
     const filename = `relatorio_geral_${format(new Date(), 'yyyy-MM-dd')}`;
-    const headers = ['Data', 'Descrição', 'Tipo', 'Valor (R$)'];
+    const headers = ['Data', 'Descrição', 'Tipo', 'Origem/Método', 'Valor (R$)'];
     
     const csvData = combinedData.map(item => [
       format(item.timestamp, "dd/MM/yyyy HH:mm:ss", { locale: ptBR }),
       item.description,
       item.type,
+      item.source,
       (item.type === 'Receita' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
     ]);
     downloadAsCSV(headers, csvData, `${filename}.csv`);
@@ -215,9 +238,35 @@ export default function ReportsClient() {
 
   return (
     <div className="space-y-6">
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold tracking-tight">Situação Financeira Atual</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Saldo Caixa 02</CardTitle>
+                    <PiggyBank className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{formatCurrency(secondaryCashBox.balance)}</div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Saldo Conta Bancária</CardTitle>
+                    <Landmark className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{formatCurrency(bankAccount.balance)}</div>
+                </CardContent>
+            </Card>
+        </div>
+      </div>
+      
       <Card>
         <CardHeader>
-          <CardTitle>Filtros de Relatório</CardTitle>
+          <CardTitle>Balanço por Período</CardTitle>
+          <CardDescription>Use os filtros para analisar um período específico.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
           <div className="md:col-span-2 lg:col-span-1">
@@ -263,52 +312,51 @@ export default function ReportsClient() {
               </DropdownMenuContent>
             </DropdownMenu>
         </CardContent>
+        <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
+                <p className="text-xs text-muted-foreground">Total de vendas no período</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Despesas Totais</CardTitle>
+                <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
+                <p className="text-xs text-muted-foreground">Total de saídas no período</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Balanço Líquido</CardTitle>
+                <Scale className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                {formatCurrency(netBalance)}
+                </div>
+                <p className="text-xs text-muted-foreground">Receita - Despesas</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total de Vendas</CardTitle>
+                <BarChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">+{filteredSales.length}</div>
+                <p className="text-xs text-muted-foreground">Vendas realizadas no período</p>
+            </CardContent>
+            </Card>
+        </CardContent>
       </Card>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
-            <p className="text-xs text-muted-foreground">Total de vendas no período</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Despesas Totais</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
-            <p className="text-xs text-muted-foreground">Total de saídas no período</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Balanço Líquido</CardTitle>
-            <Scale className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-              {formatCurrency(netBalance)}
-            </div>
-            <p className="text-xs text-muted-foreground">Receita - Despesas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Vendas</CardTitle>
-             <BarChart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+{filteredSales.length}</div>
-            <p className="text-xs text-muted-foreground">Vendas realizadas no período</p>
-          </CardContent>
-        </Card>
-      </div>
 
       <Accordion type="multiple" className="w-full space-y-4">
         <Card>
@@ -429,5 +477,3 @@ const SummaryTable = ({ data }: { data: { period: string, income: number, expens
         </TableBody>
     </Table>
 );
-
-    
