@@ -57,7 +57,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { downloadAsCSV, downloadAsPDF } from '@/lib/utils';
+import { downloadAsCSV } from '@/lib/utils';
 
 const expenseSchema = z.object({
   description: z.string().min(3, { message: "A descrição deve ter pelo menos 3 caracteres." }),
@@ -133,25 +133,6 @@ export default function FinancialClient() {
     downloadAsCSV(headers, dataToExport, `relatorio_financeiro_${formattedDate}.csv`);
     toast({ title: "Relatório Exportado", description: "O arquivo CSV foi baixado com sucesso." });
   }
-  
-  const handleExportPDF = async () => {
-    if (sortedEntries.length === 0) {
-      toast({ title: "Nenhum dado para exportar", variant: "destructive" });
-      return;
-    }
-    const headers = [['ID', 'Descrição', 'Data', 'Valor']];
-    const dataToExport = sortedEntries.map(entry => [
-      entry.id,
-      entry.description,
-      format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR }),
-      `- ${formatCurrency(entry.amount)}`,
-    ]);
-
-    const formattedDate = format(new Date(), 'yyyy-MM-dd');
-    await downloadAsPDF('Relatório Financeiro (Despesas)', headers, dataToExport, `relatorio_financeiro_${formattedDate}.pdf`);
-    toast({ title: "Relatório PDF Exportado", description: "O arquivo PDF foi baixado com sucesso." });
-  };
-
 
   return (
     <>
@@ -177,24 +158,9 @@ export default function FinancialClient() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" /> Exportar
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuLabel>Exportar Relatório Como</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleExportCSV}>
-                  CSV (.csv)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportPDF}>
-                  PDF (.pdf)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
+            <Button variant="outline" onClick={handleExportCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportar CSV
+            </Button>
             <Button onClick={() => {
               form.reset({ description: '', amount: 0 });
               setIsDialogOpen(true)}

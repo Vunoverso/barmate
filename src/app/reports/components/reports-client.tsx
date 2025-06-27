@@ -40,7 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { downloadAsCSV, downloadAsPDF } from '@/lib/utils';
+import { downloadAsCSV } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 export default function ReportsClient() {
@@ -173,33 +173,7 @@ export default function ReportsClient() {
     toast({ title: "Relatório de Vendas Exportado" });
   };
   
-  const handleExportSalesPDF = async () => {
-    if (filteredSales.length === 0) {
-      toast({ title: "Nenhuma venda para exportar", variant: "destructive" });
-      return;
-    }
-
-    const headers = [['ID Venda', 'Data', 'Itens', 'Método', 'Original', 'Desconto', 'Final']];
-    const data = filteredSales.map(s => [
-      s.id,
-      format(new Date(s.timestamp), 'dd/MM/yy HH:mm', { locale: ptBR }),
-      String(s.items.reduce((sum, item) => sum + item.quantity, 0)),
-      PAYMENT_METHODS.find(pm => pm.value === s.paymentMethod)?.name || s.paymentMethod,
-      formatCurrency(s.originalAmount),
-      formatCurrency(s.discountAmount),
-      formatCurrency(s.totalAmount),
-    ]);
-    
-    await downloadAsPDF(
-      'Relatório de Vendas',
-      headers,
-      data,
-      `relatorio_vendas_${format(new Date(), 'yyyy-MM-dd')}.pdf`
-    );
-    toast({ title: "Relatório de Vendas PDF Exportado" });
-  };
-  
-  const handleExportGeneralReport = async (formatType: 'csv' | 'pdf') => {
+  const handleExportGeneralReport = () => {
     const combinedData = [
       ...filteredSales.map(sale => {
         const itemsDesc = sale.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
@@ -223,30 +197,17 @@ export default function ReportsClient() {
       return;
     }
 
-    const reportTitle = 'Relatório Financeiro Geral';
     const filename = `relatorio_geral_${format(new Date(), 'yyyy-MM-dd')}`;
     const headers = ['Data', 'Descrição', 'Tipo', 'Valor (R$)'];
     
-    if (formatType === 'pdf') {
-      const pdfHeaders = [headers];
-      const pdfData = combinedData.map(item => [
-        format(item.timestamp, "dd/MM/yy HH:mm", { locale: ptBR }),
-        item.description,
-        item.type,
-        item.type === 'Receita' ? formatCurrency(item.amount) : `- ${formatCurrency(item.amount)}`,
-      ]);
-      await downloadAsPDF(reportTitle, pdfHeaders, pdfData, `${filename}.pdf`);
-      toast({ title: "Relatório Geral PDF Exportado" });
-    } else { // CSV
-      const csvData = combinedData.map(item => [
-        format(item.timestamp, "dd/MM/yyyy HH:mm:ss", { locale: ptBR }),
-        item.description,
-        item.type,
-        (item.type === 'Receita' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
-      ]);
-      downloadAsCSV(headers, csvData, `${filename}.csv`);
-      toast({ title: "Relatório Geral CSV Exportado" });
-    }
+    const csvData = combinedData.map(item => [
+      format(item.timestamp, "dd/MM/yyyy HH:mm:ss", { locale: ptBR }),
+      item.description,
+      item.type,
+      (item.type === 'Receita' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
+    ]);
+    downloadAsCSV(headers, csvData, `${filename}.csv`);
+    toast({ title: "Relatório Geral CSV Exportado" });
   };
 
 
@@ -291,20 +252,13 @@ export default function ReportsClient() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Relatório Geral (Receitas e Despesas)</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => handleExportGeneralReport('pdf')}>
-                    Exportar em PDF
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleExportGeneralReport('csv')}>
-                    Exportar em CSV
-                </DropdownMenuItem>
+                <DropdownMenuLabel>Escolha o Relatório</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>Relatório Apenas de Vendas</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={handleExportSalesPDF}>
-                    Exportar Vendas em PDF
+                <DropdownMenuItem onSelect={handleExportGeneralReport}>
+                    Exportar Geral (CSV)
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={handleExportSalesCSV}>
-                    Exportar Vendas em CSV
+                    Exportar Apenas Vendas (CSV)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
