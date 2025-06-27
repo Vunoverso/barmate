@@ -45,7 +45,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { DoorClosed, DoorOpen, Calculator, PiggyBank, CircleDollarSign, CreditCard, QrCode, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowRightLeft, Edit, MoreHorizontal, Trash2 } from 'lucide-react';
+import { DoorClosed, DoorOpen, PiggyBank, CircleDollarSign, CreditCard, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowRightLeft, Edit, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -404,39 +404,56 @@ export default function CashRegisterClient() {
                     Caixa aberto em {format(new Date(cashStatus.openingTime!), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                    <div className="relative">
-                      <SummaryCard title="Saldo Inicial" value={formatCurrency(sessionSummary.openingBalance)} icon={PiggyBank} />
-                      <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7" onClick={() => setIsEditInitialBalanceDialogOpen(true)}>
-                          <Edit className="h-4 w-4" />
-                      </Button>
+                <CardContent className="space-y-6">
+                    <div className="relative flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">Saldo Inicial</p>
+                            <p className="text-2xl font-bold">{formatCurrency(sessionSummary.openingBalance)}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditInitialBalanceDialogOpen(true)}>
+                            <Edit className="h-4 w-4" />
+                        </Button>
                     </div>
-                    <SummaryCard title="Total de Vendas (no caixa)" value={formatCurrency(sessionSummary.totalRevenue)} icon={Calculator} />
-                    <SummaryCard title="Suprimentos (Entradas)" value={formatCurrency(sessionSummary.totalIn)} icon={ArrowUpCircle} />
-                    <SummaryCard title="Sangrias (Saídas)" value={formatCurrency(sessionSummary.totalOut)} icon={ArrowDownCircle} className="text-destructive" />
-                </div>
-                <Separator />
-                 <div className="p-4 bg-muted/50 rounded-lg">
-                    <h3 className="text-lg font-bold mb-2">Balanço de Caixa (Dinheiro)</h3>
-                    <div className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span>Saldo Inicial</span> <span>{formatCurrency(sessionSummary.openingBalance)}</span></div>
-                        <div className="flex justify-between"><span>(+) Vendas em Dinheiro</span> <span className="text-green-600">{formatCurrency(sessionSummary.cashRevenue)}</span></div>
-                        <div className="flex justify-between"><span>(+) Suprimentos</span> <span className="text-green-600">{formatCurrency(sessionSummary.totalIn)}</span></div>
-                        <div className="flex justify-between"><span>(-) Sangrias</span> <span className="text-destructive">{formatCurrency(sessionSummary.totalOut)}</span></div>
-                        <Separator className="my-2" />
-                        <div className="flex justify-between font-bold text-base"><span>(=) Saldo Final Esperado</span> <span>{formatCurrency(sessionSummary.expectedCash)}</span></div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="text-lg font-semibold mb-2">Movimentações da Sessão</h3>
+                            <div className="space-y-2 text-sm p-4 border rounded-lg">
+                                <div className="flex justify-between">
+                                    <span className="flex items-center gap-2"><CircleDollarSign className="h-4 w-4 text-green-600"/>Vendas em Dinheiro</span>
+                                    <span className="font-medium text-green-600">+ {formatCurrency(sessionSummary.cashRevenue)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-blue-600"/>Vendas (Cartão & PIX)</span>
+                                    <span className="font-medium text-blue-600">+ {formatCurrency(sessionSummary.cardRevenue + sessionSummary.pixRevenue)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="flex items-center gap-2"><ArrowUpCircle className="h-4 w-4 text-green-600"/>Suprimentos (Entradas)</span>
+                                    <span className="font-medium text-green-600">+ {formatCurrency(sessionSummary.totalIn)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-destructive"/>Sangrias (Saídas)</span>
+                                    <span className="font-medium text-destructive">- {formatCurrency(sessionSummary.totalOut)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="text-lg font-semibold mb-2">Balanço Final</h3>
+                            <div className="space-y-2 text-sm p-4 bg-muted/50 rounded-lg">
+                                <div className="flex justify-between font-bold text-base">
+                                    <span>Total Geral de Vendas</span> 
+                                    <strong className="text-primary">{formatCurrency(sessionSummary.totalRevenue)}</strong>
+                                </div>
+                                <Separator className="my-2"/>
+                                <div className="flex justify-between font-bold text-base">
+                                    <span>Saldo Final em Dinheiro (Esperado)</span>
+                                    <strong>{formatCurrency(sessionSummary.expectedCash)}</strong>
+                                </div>
+                                <p className="text-xs text-muted-foreground pt-1">Saldo Inicial + Vendas Dinheiro + Suprimentos - Sangrias</p>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                 <Separator />
-                <div>
-                    <h3 className="text-lg font-medium mb-2">Vendas por Método de Pagamento</h3>
-                    <div className="space-y-2 text-muted-foreground">
-                    <div className="flex justify-between items-center"><span className="flex items-center gap-2"><CircleDollarSign className="h-4 w-4" />Dinheiro</span> <strong>{formatCurrency(sessionSummary.cashRevenue)}</strong></div>
-                    <div className="flex justify-between items-center"><span className="flex items-center gap-2"><CreditCard className="h-4 w-4" />Cartão</span> <strong>{formatCurrency(sessionSummary.cardRevenue)}</strong></div>
-                    <div className="flex justify-between items-center"><span className="flex items-center gap-2"><QrCode className="h-4 w-4" />PIX</span> <strong>{formatCurrency(sessionSummary.pixRevenue)}</strong></div>
-                    </div>
-                </div>
                 </CardContent>
             </Card>
              <Card>
@@ -622,21 +639,6 @@ export default function CashRegisterClient() {
       />
     </>
   );
-}
-
-function SummaryCard({ title, value, icon: Icon, description, className = '' }: { title: string, value: string, icon: React.ElementType, description?: string, className?: string }) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-bold ${className}`}>{value}</div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
-      </CardContent>
-    </Card>
-  )
 }
 
 function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onOpen: (balance: number) => void }) {
