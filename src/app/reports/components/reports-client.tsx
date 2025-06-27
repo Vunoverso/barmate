@@ -40,7 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { downloadAsCSV } from '@/lib/utils';
+import { downloadAsCSV, downloadAsPDF } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 export default function ReportsClient() {
@@ -157,7 +157,7 @@ export default function ReportsClient() {
     setSaleToDelete(null);
   };
   
-  const handleExportSales = () => {
+  const handleExportSalesCSV = () => {
     if (filteredSales.length === 0) {
       toast({ title: "Nenhuma venda para exportar", variant: "destructive" });
       return;
@@ -174,6 +174,32 @@ export default function ReportsClient() {
     ]);
     downloadAsCSV(headers, data, `relatorio_vendas_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     toast({ title: "Relatório de Vendas Exportado" });
+  };
+  
+  const handleExportSalesPDF = () => {
+    if (filteredSales.length === 0) {
+      toast({ title: "Nenhuma venda para exportar", variant: "destructive" });
+      return;
+    }
+
+    const headers = [['ID Venda', 'Data', 'Itens', 'Método', 'Original', 'Desconto', 'Final']];
+    const data = filteredSales.map(s => [
+      s.id,
+      format(new Date(s.timestamp), 'dd/MM/yy HH:mm', { locale: ptBR }),
+      s.items.reduce((sum, item) => sum + item.quantity, 0),
+      PAYMENT_METHODS.find(pm => pm.value === s.paymentMethod)?.name || s.paymentMethod,
+      formatCurrency(s.originalAmount),
+      formatCurrency(s.discountAmount),
+      formatCurrency(s.totalAmount),
+    ]);
+    
+    downloadAsPDF(
+      'Relatório de Vendas',
+      headers,
+      data,
+      `relatorio_vendas_${format(new Date(), 'yyyy-MM-dd')}.pdf`
+    );
+    toast({ title: "Relatório de Vendas PDF Exportado" });
   };
   
   if (!isMounted) return <p>Carregando relatórios...</p>;
@@ -293,9 +319,23 @@ export default function ReportsClient() {
                 <CardTitle>Detalhes das Vendas</CardTitle>
                 <CardDescription>Lista de todas as vendas realizadas no período selecionado.</CardDescription>
             </div>
-            <Button onClick={handleExportSales} variant="outline">
-                <Download className="mr-2 h-4 w-4" /> Exportar Vendas
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" /> Exportar Vendas
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>Exportar Como</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExportSalesCSV}>
+                  CSV (.csv)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportSalesPDF}>
+                  PDF (.pdf)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
         </CardHeader>
         <CardContent>
           <Table>

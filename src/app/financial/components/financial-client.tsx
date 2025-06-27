@@ -54,9 +54,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { downloadAsCSV } from '@/lib/utils';
+import { downloadAsCSV, downloadAsPDF } from '@/lib/utils';
 
 const expenseSchema = z.object({
   description: z.string().min(3, { message: "A descrição deve ter pelo menos 3 caracteres." }),
@@ -115,7 +116,7 @@ export default function FinancialClient() {
      return [...entries].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries]);
 
-  const handleExport = () => {
+  const handleExportCSV = () => {
     if(sortedEntries.length === 0){
       toast({ title: "Nenhum dado para exportar", variant: "destructive" });
       return;
@@ -132,6 +133,25 @@ export default function FinancialClient() {
     downloadAsCSV(headers, dataToExport, `relatorio_financeiro_${formattedDate}.csv`);
     toast({ title: "Relatório Exportado", description: "O arquivo CSV foi baixado com sucesso." });
   }
+  
+  const handleExportPDF = () => {
+    if (sortedEntries.length === 0) {
+      toast({ title: "Nenhum dado para exportar", variant: "destructive" });
+      return;
+    }
+    const headers = [['ID', 'Descrição', 'Data', 'Valor']];
+    const dataToExport = sortedEntries.map(entry => [
+      entry.id,
+      entry.description,
+      format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR }),
+      `- ${formatCurrency(entry.amount)}`,
+    ]);
+
+    const formattedDate = format(new Date(), 'yyyy-MM-dd');
+    downloadAsPDF('Relatório Financeiro (Despesas)', headers, dataToExport, `relatorio_financeiro_${formattedDate}.pdf`);
+    toast({ title: "Relatório PDF Exportado", description: "O arquivo PDF foi baixado com sucesso." });
+  };
+
 
   return (
     <>
@@ -157,9 +177,24 @@ export default function FinancialClient() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={handleExport} variant="outline">
-              <Download className="mr-2 h-4 w-4" /> Exportar
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" /> Exportar
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>Exportar Relatório Como</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExportCSV}>
+                  CSV (.csv)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF}>
+                  PDF (.pdf)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button onClick={() => {
               form.reset({ description: '', amount: 0 });
               setIsDialogOpen(true)}
