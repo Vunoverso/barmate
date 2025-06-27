@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, TrendingDown, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download } from 'lucide-react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -56,6 +56,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { downloadAsCSV } from '@/lib/utils';
 
 const expenseSchema = z.object({
   description: z.string().min(3, { message: "A descrição deve ter pelo menos 3 caracteres." }),
@@ -114,6 +115,24 @@ export default function FinancialClient() {
      return [...entries].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries]);
 
+  const handleExport = () => {
+    if(sortedEntries.length === 0){
+      toast({ title: "Nenhum dado para exportar", variant: "destructive" });
+      return;
+    }
+    const headers = ['ID', 'Descrição', 'Data', 'Valor (R$)'];
+    const dataToExport = sortedEntries.map(entry => [
+      entry.id,
+      entry.description,
+      format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm:ss", { locale: ptBR }),
+      entry.amount.toFixed(2).replace('.', ',')
+    ]);
+
+    const formattedDate = format(new Date(), 'yyyy-MM-dd');
+    downloadAsCSV(headers, dataToExport, `relatorio_financeiro_${formattedDate}.csv`);
+    toast({ title: "Relatório Exportado", description: "O arquivo CSV foi baixado com sucesso." });
+  }
+
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -137,12 +156,17 @@ export default function FinancialClient() {
               Visualize todas as suas despesas registradas.
             </CardDescription>
           </div>
-          <Button onClick={() => {
-            form.reset({ description: '', amount: 0 });
-            setIsDialogOpen(true)}
-          }>
-            <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Despesa
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleExport} variant="outline">
+              <Download className="mr-2 h-4 w-4" /> Exportar
+            </Button>
+            <Button onClick={() => {
+              form.reset({ description: '', amount: 0 });
+              setIsDialogOpen(true)}
+            }>
+              <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Despesa
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
