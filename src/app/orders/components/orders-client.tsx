@@ -7,7 +7,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package } from 'lucide-react';
@@ -370,13 +370,16 @@ export default function OrdersClient() {
              {!currentOrderId && openOrders.length > 0 && <CardDescription className="text-destructive pt-2">Selecione uma comanda para adicionar produtos.</CardDescription>}
              {!currentOrderId && openOrders.length === 0 && <CardDescription className="text-destructive pt-2">Crie uma nova comanda para começar.</CardDescription>}
           </CardHeader>
-          <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
-            <TabsList className="mx-4">
-              <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
-              {displayCategories.map(categoryName => (
-                <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId}>{categoryName}</TabsTrigger>
-              ))}
-            </TabsList>
+           <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
+            <ScrollArea className="w-full shrink-0">
+                <TabsList className="mx-4 inline-flex">
+                    <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
+                    {displayCategories.map(categoryName => (
+                        <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId}>{categoryName}</TabsTrigger>
+                    ))}
+                </TabsList>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
             <ScrollArea className="flex-grow p-4">
               {currentOrderId ? (
                 <>
@@ -431,8 +434,8 @@ export default function OrdersClient() {
                           <IconComponent className="h-8 w-8 text-muted-foreground" />
                         </div>
                         <div className="flex-grow">
-                          <p className="font-medium">{item.name}</p>
-                          <p className="text-sm text-muted-foreground">{formatCurrency(item.price)}</p>
+                          <p className="font-medium truncate text-sm">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}</p>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
@@ -446,7 +449,7 @@ export default function OrdersClient() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                        <p className="font-semibold w-20 text-right">{formatCurrency(item.price * item.quantity)}</p>
+                        <p className="font-semibold w-24 text-right">{formatCurrency(item.price * item.quantity)}</p>
                       </li>
                     );
                   })}
@@ -524,18 +527,18 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
   
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {products.map(product => {
           const category = productCategories.find(c => c.id === product.categoryId);
           const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
           return (
             <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
               <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
-                <IconComponent className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground group-hover:text-primary transition-colors" />
+                <IconComponent className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
               <CardContent className="p-2 sm:p-3">
                 <h3 className="font-medium truncate text-xs sm:text-sm">{product.name}</h3>
-                <p className="text-primary font-semibold text-sm sm:text-md">{formatCurrency(product.price)}</p>
+                <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
               </CardContent>
             </Card>
           );
@@ -559,10 +562,12 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
               <h3 className="font-medium text-sm sm:text-base">{product.name}</h3>
               <p className="text-xs text-muted-foreground">{categoryName}</p>
             </div>
-            <p className="text-primary font-semibold text-md sm:text-lg">{formatCurrency(product.price)}</p>
+            <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
           </Card>
         );
       })}
     </div>
   );
 }
+
+    
