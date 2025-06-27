@@ -20,7 +20,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
 
 interface PaymentDialogProps {
   isOpen: boolean;
@@ -30,7 +29,7 @@ interface PaymentDialogProps {
   onSubmit: (saleDetails: {
     paymentMethod: PaymentMethod;
     amountPaid?: number;
-    changeGiven?: number;
+    changeGiven?: number; // This will represent the credit amount.
     discountAmount: number;
     status: 'completed';
     leaveChangeAsCredit: boolean;
@@ -41,12 +40,18 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
   const [amountPaid, setAmountPaid] = useState<number | string>('');
   const [discount, setDiscount] = useState<number | string>('');
-  const [change, setChange] = useState<number>(0);
+  const [changeReturned, setChangeReturned] = useState<number | string>(''); // The actual cash returned to customer
   const [error, setError] = useState<string>('');
-  const [leaveChangeAsCredit, setLeaveChangeAsCredit] = useState(false);
 
   const numericDiscount = parseFloat(String(discount).replace(',', '.')) || 0;
   const finalTotal = totalAmount > 0 ? totalAmount - numericDiscount : 0;
+  
+  const paidAmountValue = parseFloat(String(amountPaid).replace(',', '.')) || 0;
+  const calculatedChange = paidAmountValue > finalTotal ? paidAmountValue - finalTotal : 0;
+
+  const changeReturnedValue = parseFloat(String(changeReturned).replace(',', '.')) || 0;
+  // The credit is the difference between what should have been returned and what was actually returned.
+  const creditToLeave = allowCredit && calculatedChange > changeReturnedValue ? calculatedChange - changeReturnedValue : 0;
 
 
   useEffect(() => {
@@ -55,32 +60,26 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       setSelectedMethod('cash');
       setAmountPaid('');
       setDiscount('');
-      setChange(0);
+      setChangeReturned('');
       setError('');
-      setLeaveChangeAsCredit(false);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (selectedMethod === 'cash' && finalTotal >= 0) {
-      const paid = parseFloat(String(amountPaid));
-      if (!isNaN(paid) && paid >= finalTotal) {
-        setChange(paid - finalTotal);
-        setError('');
-      } else if (!isNaN(paid) && paid < finalTotal) {
-        setChange(0);
-        setError('Valor pago é insuficiente.');
-      } else {
-        setChange(0);
-        setError('');
-      }
+    // When calculated change is updated, pre-fill the change returned input
+    // This runs whenever calculatedChange updates
+    if (calculatedChange > 0) {
+      setChangeReturned(calculatedChange.toFixed(2));
     } else {
-      setChange(0);
-      setError('');
+      setChangeReturned('');
     }
-  }, [amountPaid, selectedMethod, finalTotal]);
+    // Reset error on dependency change, it will be re-validated on submit
+    setError('');
+  }, [calculatedChange]);
+
 
   const handleSubmit = () => {
+    setError(''); // Clear previous errors
     const validDiscount = Math.max(0, numericDiscount);
 
     if (finalTotal < 0) {
@@ -89,16 +88,49 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     }
     
     if (selectedMethod === 'cash') {
-      const paid = parseFloat(String(amountPaid));
-      if (isNaN(paid) || paid < finalTotal) {
-        setError('Valor pago inválido ou insuficiente.');
+      if (paidAmountValue < finalTotal) {
+        setError('Valor pago é insuficiente.');
         return;
       }
-      onSubmit({ paymentMethod: 'cash', amountPaid: paid, changeGiven: change, status: 'completed', discountAmount: validDiscount, leaveChangeAsCredit: leaveChangeAsCredit && change > 0 });
+      if (allowCredit) {
+        if (changeReturnedValue > calculatedChange) {
+            setError('O troco devolvido não pode ser maior que o troco calculado.');
+            return;
+        }
+        if (changeReturnedValue < 0) {
+            setError('O troco devolvido não pode ser negativo.');
+            return;
+        }
+      }
+      // The `changeGiven` prop in onSubmit is used by the parent component as the amount for credit.
+      onSubmit({ 
+          paymentMethod: 'cash', 
+          amountPaid: paidAmountValue, 
+          changeGiven: creditToLeave, 
+          status: 'completed', 
+          discountAmount: validDiscount, 
+          leaveChangeAsCredit: creditToLeave > 0 
+      });
     } else {
       onSubmit({ paymentMethod: selectedMethod, status: 'completed', discountAmount: validDiscount, leaveChangeAsCredit: false });
     }
   };
+
+  const isSubmitDisabled = () => {
+    if (finalTotal < 0) return true;
+    if (selectedMethod === 'cash') {
+      if (isNaN(paidAmountValue) || paidAmountValue < finalTotal) {
+        return true;
+      }
+      if (allowCredit) {
+         const returnedValue = parseFloat(String(changeReturned));
+         if (isNaN(returnedValue) || returnedValue < 0 || returnedValue > calculatedChange) {
+           return true;
+         }
+      }
+    }
+    return false;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -144,25 +176,46 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           </RadioGroup>
 
           {selectedMethod === 'cash' && (
-            <div className="space-y-2">
-              <Label htmlFor="amountPaid">Valor Pago</Label>
-              <Input
-                id="amountPaid"
-                type="number"
-                placeholder="0,00"
-                value={amountPaid}
-                onChange={(e) => setAmountPaid(e.target.value)}
-                min={finalTotal}
-                step="0.01"
-              />
-              {change > 0 && (
-                <div className="pt-2 space-y-2">
-                  <p className="text-sm text-green-600">Troco: {formatCurrency(change)}</p>
-                  {allowCredit && (
-                    <div className="flex items-center space-x-2">
-                      <Switch id="credit-switch" checked={leaveChangeAsCredit} onCheckedChange={setLeaveChangeAsCredit} />
-                      <Label htmlFor="credit-switch" className="cursor-pointer">Deixar troco como crédito</Label>
-                    </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="amountPaid">Valor Pago</Label>
+                <Input
+                  id="amountPaid"
+                  type="number"
+                  placeholder="0,00"
+                  value={amountPaid}
+                  onChange={(e) => setAmountPaid(e.target.value)}
+                  min={finalTotal}
+                  step="0.01"
+                />
+              </div>
+
+              {calculatedChange > 0 && (
+                <div className="pt-2 space-y-2 p-3 bg-muted/50 rounded-md">
+                  <p className="text-sm font-medium">Troco Calculado: <span className="text-green-600 font-bold">{formatCurrency(calculatedChange)}</span></p>
+                  
+                  {allowCredit ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="changeReturned">Troco Devolvido Efetivamente</Label>
+                        <Input
+                          id="changeReturned"
+                          type="number"
+                          value={changeReturned}
+                          onChange={(e) => setChangeReturned(e.target.value)}
+                          step="0.01"
+                        />
+                      </div>
+                      {creditToLeave > 0 && (
+                        <p className="text-sm text-blue-600">
+                          Crédito a ser gerado para o cliente: <span className="font-bold">{formatCurrency(creditToLeave)}</span>
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                     <p className="text-sm text-green-600">
+                        Troco a ser devolvido: <span className="font-bold">{formatCurrency(calculatedChange)}</span>
+                     </p>
                   )}
                 </div>
               )}
@@ -182,7 +235,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
-          <Button onClick={handleSubmit} disabled={selectedMethod === 'cash' && (parseFloat(String(amountPaid)) < finalTotal || isNaN(parseFloat(String(amountPaid)))) || finalTotal < 0}>
+          <Button onClick={handleSubmit} disabled={isSubmitDisabled()}>
             Confirmar Pagamento
           </Button>
         </DialogFooter>
