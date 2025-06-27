@@ -47,6 +47,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { DoorClosed, DoorOpen, Calculator, PiggyBank, CircleDollarSign, CreditCard, QrCode, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowRightLeft, Edit, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus';
 const CLOSED_SESSIONS_KEY = 'barmate_closedCashSessions';
@@ -127,27 +129,43 @@ export default function CashRegisterClient() {
     });
   };
 
-  const handleSaveAdjustment = (details: { amount: number; description: string }, idToUpdate?: string) => {
+  const handleSaveAdjustment = (details: { amount: number; description: string; destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => {
     if (cashStatus.status !== 'open') return;
 
     if (idToUpdate) { // Editing existing adjustment
         setCashStatus(prev => {
-            const updatedAdjustments = prev.adjustments?.map(adj => {
-                if (adj.id === idToUpdate) {
-                    if (adj.type === 'out') {
-                        const currentEntries = getFinancialEntries();
-                        const updatedEntries = currentEntries.map(entry => {
-                            if (entry.adjustmentId === idToUpdate) {
-                                return { ...entry, amount: details.amount, description: `Sangria: ${details.description}` };
-                            }
-                            return entry;
-                        });
-                        saveFinancialEntries(updatedEntries);
-                    }
-                    return { ...adj, amount: details.amount, description: details.description };
+            const originalAdjustment = prev.adjustments?.find(adj => adj.id === idToUpdate);
+            if (!originalAdjustment) return prev;
+
+            const amountDifference = details.amount - originalAdjustment.amount;
+
+            // Handle balance changes for transfers
+            if (originalAdjustment.type === 'out' && originalAdjustment.destination) {
+                if (originalAdjustment.destination === 'secondary_cash') {
+                    const currentSecondaryBox = getSecondaryCashBox();
+                    saveSecondaryCashBox({ balance: currentSecondaryBox.balance + amountDifference });
+                } else if (originalAdjustment.destination === 'bank_account') {
+                    const currentBankAccount = getBankAccount();
+                    saveBankAccount({ balance: currentBankAccount.balance + amountDifference });
                 }
-                return adj;
-            });
+            } else if (originalAdjustment.type === 'out') {
+                // Handle financial entry for expenses (if it was an expense)
+                const currentEntries = getFinancialEntries();
+                const updatedEntries = currentEntries.map(entry => {
+                    if (entry.adjustmentId === idToUpdate) {
+                        return { ...entry, amount: details.amount, description: `Sangria: ${details.description}` };
+                    }
+                    return entry;
+                });
+                saveFinancialEntries(updatedEntries);
+            }
+            
+            const updatedAdjustments = prev.adjustments?.map(adj => 
+                adj.id === idToUpdate 
+                    ? { ...adj, amount: details.amount, description: details.description } 
+                    : adj
+            );
+
             const newState = { ...prev, adjustments: updatedAdjustments };
             saveCashRegisterStatus(newState);
             return newState;
@@ -159,21 +177,32 @@ export default function CashRegisterClient() {
             amount: details.amount,
             type: adjustmentType,
             description: details.description,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            destination: details.destination && details.destination !== 'none' ? details.destination : undefined
         };
-
-        if (adjustmentType === 'out') {
-            const currentEntries = getFinancialEntries();
-            const newExpenseEntry: FinancialEntry = {
-                id: `exp-sangria-${newAdjustment.id}`,
-                description: `Sangria: ${details.description}`,
-                amount: details.amount,
-                type: 'expense',
-                source: 'daily_cash',
-                timestamp: new Date(),
-                adjustmentId: newAdjustment.id
-            };
-            saveFinancialEntries([...currentEntries, newExpenseEntry]);
+        
+        if (adjustmentType === 'out') { // Sangria
+            if (details.destination === 'secondary_cash') {
+                const currentBox = getSecondaryCashBox();
+                saveSecondaryCashBox({ balance: currentBox.balance + details.amount });
+            } else if (details.destination === 'bank_account') {
+                const currentAccount = getBankAccount();
+                saveBankAccount({ balance: currentAccount.balance + details.amount });
+            } else { // It's an expense
+                const currentEntries = getFinancialEntries();
+                const newExpenseEntry: FinancialEntry = {
+                    id: `exp-sangria-${newAdjustment.id}`,
+                    description: `Sangria: ${details.description}`,
+                    amount: details.amount,
+                    type: 'expense',
+                    source: 'daily_cash',
+                    timestamp: new Date(),
+                    adjustmentId: newAdjustment.id
+                };
+                saveFinancialEntries([...currentEntries, newExpenseEntry]);
+            }
+        } else { // Suprimento (in)
+           // No special logic for 'in' currently, just adds to cash register
         }
 
         const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), newAdjustment] };
@@ -192,12 +221,22 @@ export default function CashRegisterClient() {
   
   const handleDeleteAdjustment = () => {
     if (!adjustmentToDelete || cashStatus.status !== 'open') return;
-    const { id, type } = adjustmentToDelete;
+    const { id, type, amount, destination } = adjustmentToDelete;
 
     if (type === 'out') {
-        const currentEntries = getFinancialEntries();
-        const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
-        saveFinancialEntries(updatedEntries);
+        if (destination) { // It was a transfer, revert the destination balance
+            if (destination === 'secondary_cash') {
+                const currentBox = getSecondaryCashBox();
+                saveSecondaryCashBox({ balance: currentBox.balance - amount });
+            } else if (destination === 'bank_account') {
+                const currentAccount = getBankAccount();
+                saveBankAccount({ balance: currentAccount.balance - amount });
+            }
+        } else { // It was an expense, remove the financial entry
+            const currentEntries = getFinancialEntries();
+            const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
+            saveFinancialEntries(updatedEntries);
+        }
     }
     
     const newState = { ...cashStatus, adjustments: cashStatus.adjustments?.filter(adj => adj.id !== id) };
@@ -413,10 +452,14 @@ export default function CashRegisterClient() {
                                     <TableCell>{format(new Date(adj.timestamp), "HH:mm:ss")}</TableCell>
                                     <TableCell>
                                         <Badge variant={adj.type === 'in' ? 'secondary' : 'destructive'}>
-                                            {adj.type === 'in' ? 'Entrada' : 'Saída'}
+                                            {adj.type === 'in' ? 'Entrada' : (adj.destination ? 'Transferência' : 'Saída')}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell>{adj.description}</TableCell>
+                                    <TableCell>
+                                        {adj.description}
+                                        {adj.destination === 'secondary_cash' && <span className="text-xs text-muted-foreground block">Destino: Caixa 02</span>}
+                                        {adj.destination === 'bank_account' && <span className="text-xs text-muted-foreground block">Destino: Conta Bancária</span>}
+                                    </TableCell>
                                     <TableCell className={`text-right font-medium ${adj.type === 'in' ? 'text-green-600' : 'text-destructive'}`}>
                                         {adj.type === 'in' ? '+ ' : '- '}{formatCurrency(adj.amount)}
                                     </TableCell>
@@ -672,15 +715,21 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
 }
 
 // Dialog for Cash In/Out
-function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentToEdit }: { isOpen: boolean, onOpenChange: (open: boolean) => void, type: 'in' | 'out', onSave: (details: { amount: number, description: string }, idToUpdate?: string) => void, adjustmentToEdit?: CashAdjustment | null }) {
+function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentToEdit }: { isOpen: boolean, onOpenChange: (open: boolean) => void, type: 'in' | 'out', onSave: (details: { amount: number, description: string, destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => void, adjustmentToEdit?: CashAdjustment | null }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [destination, setDestination] = useState<'none' | 'secondary_cash' | 'bank_account'>('none');
   const { toast } = useToast();
 
   useEffect(() => {
-    if (isOpen && adjustmentToEdit) {
-      setAmount(String(adjustmentToEdit.amount));
-      setDescription(adjustmentToEdit.description);
+    if (isOpen) {
+      if (adjustmentToEdit) {
+        setAmount(String(adjustmentToEdit.amount));
+        setDescription(adjustmentToEdit.description);
+        setDestination(adjustmentToEdit.destination || 'none');
+      } else {
+        setDestination('none');
+      }
     }
   }, [isOpen, adjustmentToEdit]);
 
@@ -699,7 +748,7 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
       toast({ title: "Descrição Obrigatória", description: "Forneça uma breve descrição para a movimentação.", variant: "destructive" });
       return;
     }
-    onSave({ amount: value, description: description.trim() }, adjustmentToEdit?.id);
+    onSave({ amount: value, description: description.trim(), destination }, adjustmentToEdit?.id);
     setAmount('');
     setDescription('');
   };
@@ -726,6 +775,21 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
             <Label htmlFor="adjustment-desc">Descrição</Label>
             <Input id="adjustment-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Troco inicial" />
           </div>
+          {type === 'out' && !isEditing && (
+            <div className="space-y-2">
+              <Label htmlFor="adjustment-destination">Destino da Retirada</Label>
+              <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
+                <SelectTrigger id="adjustment-destination">
+                  <SelectValue placeholder="Selecione um destino..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum (Registrar como Despesa)</SelectItem>
+                  <SelectItem value="secondary_cash">Transferir para Caixa 02</SelectItem>
+                  <SelectItem value="bank_account">Transferir para Conta Bancária</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
