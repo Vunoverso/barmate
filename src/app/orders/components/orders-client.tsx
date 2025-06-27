@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, PaymentMethod } from '@/types';
@@ -344,8 +343,8 @@ export default function OrdersClient() {
   }
 
   return (
-    <div className="grid md:grid-cols-5 gap-4 h-[calc(100vh-100px)]">
-      <div className="md:col-span-1 flex flex-col h-full">
+    <div className="grid md:grid-cols-10 gap-4 h-[calc(100vh-100px)]">
+      <div className="md:col-span-2 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -398,7 +397,7 @@ export default function OrdersClient() {
         </Card>
       </div>
 
-      <div className="md:col-span-3 flex flex-col h-full">
+      <div className="md:col-span-5 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
             <CardTitle>Selecionar Produtos</CardTitle>
@@ -457,7 +456,7 @@ export default function OrdersClient() {
         </Card>
       </div>
 
-      <div className="md:col-span-1 flex flex-col h-full">
+      <div className="md:col-span-3 flex flex-col h-full">
         <Card className="flex-grow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
