@@ -10,9 +10,9 @@ export default {
   theme: {
   	extend: {
       fontSize: {
-        'xl': ['1.125rem', '1.5rem'],
-        '2xl': ['1.375rem', '1.75rem'],
-        '3xl': ['1.75rem', '2.25rem'],
+        'xl': ['1rem', '1.5rem'],
+        '2xl': ['1.125rem', '1.75rem'],
+        '3xl': ['1.25rem', '1.75rem'],
       },
   		colors: {
   			background: 'hsl(var(--background))',
