@@ -51,3 +51,11 @@ export interface CashRegisterStatus {
   openingTime?: string; // ISO String
   openingBalance?: number;
 }
+
+export interface FinancialEntry {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'expense' | 'income'; // For now, only 'expense' but can be extended
+  timestamp: Date;
+}

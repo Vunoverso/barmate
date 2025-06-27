@@ -1,11 +1,12 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon } from 'lucide-react';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry } from '@/types';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
 let productCategoriesCache: ProductCategory[] | null = null;
 let productsCache: Product[] | null = null;
 let salesCache: Sale[] | null = null;
+let financialEntriesCache: FinancialEntry[] | null = null;
 
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
@@ -20,6 +21,7 @@ export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   QrCode,
   Package,
   Banknote,
+  Wallet,
 };
 
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
@@ -131,6 +133,8 @@ const INITIAL_SALES: Sale[] = [
       { ...INITIAL_PRODUCTS.find(p=>p.id==='1')!, quantity: 2 }, 
       { ...INITIAL_PRODUCTS.find(p=>p.id==='9')!, quantity: 1 }, 
     ],
+    originalAmount: (INITIAL_PRODUCTS.find(p=>p.id==='1')!.price * 2) + INITIAL_PRODUCTS.find(p=>p.id==='9')!.price,
+    discountAmount: 0,
     totalAmount: (INITIAL_PRODUCTS.find(p=>p.id==='1')!.price * 2) + INITIAL_PRODUCTS.find(p=>p.id==='9')!.price,
     paymentMethod: 'card',
     timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
@@ -141,6 +145,8 @@ const INITIAL_SALES: Sale[] = [
     items: [
       { ...INITIAL_PRODUCTS.find(p=>p.id==='4')!, quantity: 3 },
     ],
+    originalAmount: INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3,
+    discountAmount: 0,
     totalAmount: INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3,
     paymentMethod: 'cash',
     amountPaid: 25.00,
@@ -198,4 +204,41 @@ export const addSale = (newSale: Sale): void => {
 
 export const formatCurrency = (value: number) => {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
+
+export const FINANCIAL_ENTRIES_STORAGE_KEY = 'barmate_financialEntries';
+
+export const saveFinancialEntries = (entries: FinancialEntry[]): void => {
+  if (typeof window === 'undefined') return;
+  financialEntriesCache = entries;
+  localStorage.setItem(FINANCIAL_ENTRIES_STORAGE_KEY, JSON.stringify(entries));
+  window.dispatchEvent(new Event('financialEntriesChanged'));
+};
+
+export const getFinancialEntries = (): FinancialEntry[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  if (financialEntriesCache !== null) {
+    return financialEntriesCache;
+  }
+  const storedEntries = localStorage.getItem(FINANCIAL_ENTRIES_STORAGE_KEY);
+  if (storedEntries) {
+    try {
+      const parsed = JSON.parse(storedEntries);
+      if (Array.isArray(parsed)) {
+        financialEntriesCache = parsed.map((e: FinancialEntry) => ({
+          ...e,
+          timestamp: new Date(e.timestamp)
+        }));
+        return financialEntriesCache;
+      }
+    } catch (e) {
+      console.error("Failed to parse financial entries from localStorage", e);
+      localStorage.removeItem(FINANCIAL_ENTRIES_STORAGE_KEY);
+    }
+  }
+  financialEntriesCache = [];
+  return financialEntriesCache;
 };
