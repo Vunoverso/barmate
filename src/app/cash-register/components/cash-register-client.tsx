@@ -88,7 +88,7 @@ export default function CashRegisterClient() {
     // Load bank account
     setBankAccount(getBankAccount());
     // Load sales and listen for changes
-    const handleSalesChange = () => setSales(getSales());
+    const handleSalesChange = () => setSales([...getSales()]);
     handleSalesChange();
     window.addEventListener('salesChanged', handleSalesChange);
     // Listen for secondary cash box changes
