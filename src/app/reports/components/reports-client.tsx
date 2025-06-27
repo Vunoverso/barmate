@@ -173,7 +173,7 @@ export default function ReportsClient() {
     toast({ title: "Relatório de Vendas Exportado" });
   };
   
-  const handleExportSalesPDF = () => {
+  const handleExportSalesPDF = async () => {
     if (filteredSales.length === 0) {
       toast({ title: "Nenhuma venda para exportar", variant: "destructive" });
       return;
@@ -190,7 +190,7 @@ export default function ReportsClient() {
       formatCurrency(s.totalAmount),
     ]);
     
-    downloadAsPDF(
+    await downloadAsPDF(
       'Relatório de Vendas',
       headers,
       data,
@@ -199,7 +199,7 @@ export default function ReportsClient() {
     toast({ title: "Relatório de Vendas PDF Exportado" });
   };
   
-  const handleExportGeneralReport = (formatType: 'csv' | 'pdf') => {
+  const handleExportGeneralReport = async (formatType: 'csv' | 'pdf') => {
     const combinedData = [
       ...filteredSales.map(sale => {
         const itemsDesc = sale.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
@@ -235,7 +235,7 @@ export default function ReportsClient() {
         item.type,
         item.type === 'Receita' ? formatCurrency(item.amount) : `- ${formatCurrency(item.amount)}`,
       ]);
-      downloadAsPDF(reportTitle, pdfHeaders, pdfData, `${filename}.pdf`);
+      await downloadAsPDF(reportTitle, pdfHeaders, pdfData, `${filename}.pdf`);
       toast({ title: "Relatório Geral PDF Exportado" });
     } else { // CSV
       const csvData = combinedData.map(item => [

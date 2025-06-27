@@ -134,7 +134,7 @@ export default function FinancialClient() {
     toast({ title: "Relatório Exportado", description: "O arquivo CSV foi baixado com sucesso." });
   }
   
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (sortedEntries.length === 0) {
       toast({ title: "Nenhum dado para exportar", variant: "destructive" });
       return;
@@ -148,7 +148,7 @@ export default function FinancialClient() {
     ]);
 
     const formattedDate = format(new Date(), 'yyyy-MM-dd');
-    downloadAsPDF('Relatório Financeiro (Despesas)', headers, dataToExport, `relatorio_financeiro_${formattedDate}.pdf`);
+    await downloadAsPDF('Relatório Financeiro (Despesas)', headers, dataToExport, `relatorio_financeiro_${formattedDate}.pdf`);
     toast({ title: "Relatório PDF Exportado", description: "O arquivo PDF foi baixado com sucesso." });
   };
 

@@ -1,7 +1,5 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 // Augment jsPDF interface for autoTable plugin
 declare module 'jspdf' {
@@ -41,7 +39,10 @@ export function downloadAsCSV(headers: string[], data: (string | number)[][], fi
   document.body.removeChild(link);
 }
 
-export function downloadAsPDF(title: string, headers: string[][], data: (string | number)[][], filename:string) {
+export async function downloadAsPDF(title: string, headers: string[][], data: (string | number)[][], filename:string) {
+  const { default: jsPDF } = await import('jspdf');
+  await import('jspdf-autotable');
+
   const doc = new jsPDF();
   
   doc.setFontSize(18);
