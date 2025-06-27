@@ -5,7 +5,7 @@ export default function FinancialPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Controle Financeiro</h1>
+        <h1 className="text-2xl font-semibold">Financeiro e Relatórios</h1>
       </div>
       <FinancialClient />
     </div>
