@@ -248,73 +248,91 @@ export default function OrdersClient() {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
     }
+    
+    const positiveItemsValue = currentOrderItems.filter(i => i.price > 0).reduce((sum, item) => sum + item.price * item.quantity, 0);
     const finalTotal = orderTotal - details.discountAmount;
 
+    // Create the sale record
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       items: currentOrderItems,
-      originalAmount: orderTotal,
-      discountAmount: details.discountAmount,
-      totalAmount: finalTotal,
+      originalAmount: positiveItemsValue,
+      discountAmount: details.discountAmount + (orderTotal < positiveItemsValue ? positiveItemsValue - orderTotal : 0),
+      totalAmount: Math.max(0, finalTotal),
       timestamp: new Date(),
       paymentMethod: details.paymentMethod,
       amountPaid: details.amountPaid,
       changeGiven: details.changeGiven,
       status: 'completed',
     };
-    
     addSale(newSale);
 
-    let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
-    let nextSelectedOrderId: string | null = null;
-
-    if (details.leaveChangeAsCredit && details.changeGiven && details.changeGiven > 0) {
-      const creditAmount = details.changeGiven;
-      const creditOrderName = `${currentOrder.name} (Crédito)`;
-      
+    // Handle order state after payment
+    if (finalTotal < 0) { // Credit remaining
       const creditItem: OrderItem = {
           id: `credit-${Date.now()}`,
           name: `Crédito de Troco`,
-          price: -creditAmount, // Negative price
+          price: finalTotal,
           quantity: 1,
-          categoryId: 'cat_outros', // Assign to a generic category
+          categoryId: 'cat_outros',
           categoryName: 'Outros',
-          categoryIconName: 'Wallet', // Using Wallet icon for credit
+          categoryIconName: 'Wallet',
       };
-
-      const newCreditOrderId = `order-credit-${Date.now()}`;
-      const newCreditOrder: ActiveOrder = {
-          id: newCreditOrderId,
-          name: creditOrderName,
+      const updatedOrder: ActiveOrder = {
+          ...currentOrder,
           items: [creditItem],
-          createdAt: new Date(),
       };
-      
-      nextOrdersState.push(newCreditOrder);
-      nextSelectedOrderId = newCreditOrderId;
+      setOpenOrders(openOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
+      toast({ title: "Compra Paga com Crédito", description: `A comanda foi atualizada com o crédito restante de ${formatCurrency(Math.abs(finalTotal))}.` });
 
-      toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(creditAmount)}.` });
-
-    } else {
-      if (nextOrdersState.length > 0) {
-        const currentIndex = openOrders.findIndex(o => o.id === currentOrderId);
-        if (currentIndex < nextOrdersState.length) {
-          nextSelectedOrderId = nextOrdersState[currentIndex].id; 
+    } else { // No credit remaining, standard flow (which might create a new credit from change)
+        let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
+        let nextSelectedOrderId: string | null = null;
+        
+        if (details.leaveChangeAsCredit && details.changeGiven && details.changeGiven > 0) {
+            const creditAmount = details.changeGiven;
+            const creditOrderName = `${currentOrder.name} (Crédito)`;
+            const creditItem: OrderItem = {
+                id: `credit-${Date.now()}`,
+                name: `Crédito de Troco`,
+                price: -creditAmount,
+                quantity: 1,
+                categoryId: 'cat_outros',
+                categoryName: 'Outros',
+                categoryIconName: 'Wallet',
+            };
+            const newCreditOrderId = `order-credit-${Date.now()}`;
+            const newCreditOrder: ActiveOrder = {
+                id: newCreditOrderId,
+                name: creditOrderName,
+                items: [creditItem],
+                createdAt: new Date(),
+            };
+            nextOrdersState.push(newCreditOrder);
+            nextSelectedOrderId = newCreditOrderId;
+            toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(creditAmount)}.` });
         } else {
-          nextSelectedOrderId = nextOrdersState[nextOrdersState.length - 1].id; 
+            if (nextOrdersState.length > 0) {
+                const currentIndex = openOrders.findIndex(o => o.id === currentOrderId);
+                if (currentIndex < nextOrdersState.length) {
+                    nextSelectedOrderId = nextOrdersState[currentIndex].id;
+                } else {
+                    nextSelectedOrderId = nextOrdersState[nextOrdersState.length - 1].id;
+                }
+            }
+             if (!details.leaveChangeAsCredit) {
+                 toast({
+                    title: "Venda Concluída!",
+                    description: `Venda de ${formatCurrency(newSale.totalAmount)} (${currentOrder.name}) registrada com sucesso.`,
+                    action: <CheckCircle className="text-green-500" />,
+                });
+             }
         }
-      }
+        setOpenOrders(nextOrdersState);
+        setCurrentOrderId(nextSelectedOrderId);
     }
-
-    setOpenOrders(nextOrdersState);
-    setCurrentOrderId(nextSelectedOrderId);
-
+    
     setIsPaymentDialogOpen(false);
-    toast({
-      title: "Venda Concluída!",
-      description: `Venda de ${formatCurrency(newSale.totalAmount)} (${currentOrder.name}) registrada com sucesso.`,
-      action: <CheckCircle className="text-green-500" />,
-    });
   };
   
   if (!isMounted) {
@@ -473,14 +491,14 @@ export default function OrdersClient() {
                           <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}</p>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
                             <MinusCircle className="h-4 w-4" />
                           </Button>
                           <span className="w-6 text-center">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                          <Button size="icon" variant="ghost" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
                             <PlusCircle className="h-4 w-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80" onClick={() => removeFromOrder(item.id)}>
+                          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80" onClick={() => removeFromOrder(item.id)} disabled={item.price < 0}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -605,5 +623,3 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
     </div>
   );
 }
-
-    
