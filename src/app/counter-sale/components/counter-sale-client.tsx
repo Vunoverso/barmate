@@ -7,7 +7,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package } from 'lucide-react';
@@ -182,12 +182,15 @@ export default function CounterSaleClient() {
             </div>
           </CardHeader>
           <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
-            <TabsList className="mx-4">
-              <TabsTrigger value="Todos">Todos</TabsTrigger>
-              {displayCategories.map(categoryName => (
-                <TabsTrigger key={categoryName} value={categoryName}>{categoryName}</TabsTrigger>
-              ))}
-            </TabsList>
+            <ScrollArea className="w-full shrink-0">
+                <TabsList className="mx-4 inline-flex">
+                  <TabsTrigger value="Todos" className="text-xs px-2 py-1">Todos</TabsTrigger>
+                  {displayCategories.map(categoryName => (
+                    <TabsTrigger key={categoryName} value={categoryName} className="text-xs px-2 py-1">{categoryName}</TabsTrigger>
+                  ))}
+                </TabsList>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
             <ScrollArea className="flex-grow p-4">
                 <>
                   <TabsContent value="Todos" className="mt-0">
