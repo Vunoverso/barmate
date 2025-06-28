@@ -334,9 +334,21 @@ export default function CashRegisterClient() {
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
 
     const totalRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-    const cashRevenue = sessionSales.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + s.totalAmount, 0);
-    const cardRevenue = sessionSales.filter(s => s.paymentMethod === 'card').reduce((sum, s) => sum + s.totalAmount, 0);
-    const pixRevenue = sessionSales.filter(s => s.paymentMethod === 'pix').reduce((sum, s) => sum + s.totalAmount, 0);
+
+    const cashRevenue = sessionSales.reduce((total, sale) => {
+        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount || 0;
+        return total + cashPayment;
+    }, 0);
+    
+    const cardRevenue = sessionSales.reduce((total, sale) => {
+        const cardPayment = sale.payments.find(p => p.method === 'card')?.amount || 0;
+        return total + cardPayment;
+    }, 0);
+
+    const pixRevenue = sessionSales.reduce((total, sale) => {
+        const pixPayment = sale.payments.find(p => p.method === 'pix')?.amount || 0;
+        return total + pixPayment;
+    }, 0);
     
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];

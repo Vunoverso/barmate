@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ProductCategory, PaymentMethod } from '@/types';
+import type { Product, OrderItem, Sale, ProductCategory, Payment } from '@/types';
 import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,6 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package } from 'lucide-react';
-import Image from 'next/image';
 import PaymentDialog from '@/app/orders/components/payment-dialog'; 
 import { useToast } from '@/hooks/use-toast';
 
@@ -128,7 +127,7 @@ export default function CounterSaleClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (details: { paymentMethod: PaymentMethod; amountPaid?: number; changeGiven?: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean }) => {
+  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed' }) => {
     const finalTotal = orderTotal - details.discountAmount;
     const newSale: Sale = {
       id: `csale-${Date.now()}`,
@@ -136,10 +135,9 @@ export default function CounterSaleClient() {
       originalAmount: orderTotal,
       discountAmount: details.discountAmount,
       totalAmount: finalTotal,
-      timestamp: new Date(),
-      paymentMethod: details.paymentMethod,
-      amountPaid: details.amountPaid,
+      payments: details.payments,
       changeGiven: details.changeGiven,
+      timestamp: new Date(),
       status: 'completed',
     };
     
@@ -285,7 +283,7 @@ export default function CounterSaleClient() {
         isOpen={isPaymentDialogOpen}
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
-        onSubmit={handlePayment}
+        onSubmit={handlePayment as any}
       />
     </div>
   );

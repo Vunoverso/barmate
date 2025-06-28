@@ -1,6 +1,7 @@
+
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, PaymentMethod } from '@/types';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
 import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -10,7 +11,6 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package } from 'lucide-react';
-import Image from 'next/image';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -242,7 +242,7 @@ export default function OrdersClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (details: { paymentMethod: PaymentMethod; amountPaid?: number; changeGiven?: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean }) => {
+  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -258,10 +258,9 @@ export default function OrdersClient() {
       originalAmount: positiveItemsValue,
       discountAmount: details.discountAmount + (orderTotal < positiveItemsValue ? positiveItemsValue - orderTotal : 0),
       totalAmount: Math.max(0, finalTotal),
-      timestamp: new Date(),
-      paymentMethod: details.paymentMethod,
-      amountPaid: details.amountPaid,
+      payments: details.payments,
       changeGiven: details.changeGiven,
+      timestamp: new Date(),
       status: 'completed',
     };
     addSale(newSale);

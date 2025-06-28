@@ -23,14 +23,18 @@ export interface OrderItem extends Product {
 
 export type PaymentMethod = 'cash' | 'card' | 'pix';
 
+export interface Payment {
+  method: PaymentMethod;
+  amount: number;
+}
+
 export interface Sale {
   id: string;
   items: OrderItem[];
   totalAmount: number; // This is the final amount after discount
   originalAmount: number; // The pre-discount total
   discountAmount: number; // The discount amount
-  paymentMethod: PaymentMethod;
-  amountPaid?: number; // For cash transactions
+  payments: Payment[];
   changeGiven?: number; // For cash transactions
   timestamp: Date;
   status: 'completed' | 'pending' | 'cancelled';

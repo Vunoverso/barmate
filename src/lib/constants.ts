@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
@@ -128,6 +128,9 @@ export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: Lucide
   { name: 'PIX', value: 'pix', icon: QrCode },
 ];
 
+const saleTotal1 = (INITIAL_PRODUCTS.find(p=>p.id==='1')!.price * 2) + INITIAL_PRODUCTS.find(p=>p.id==='9')!.price;
+const saleTotal2 = INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3;
+
 const INITIAL_SALES: Sale[] = [
   {
     id: 'sale1',
@@ -135,10 +138,10 @@ const INITIAL_SALES: Sale[] = [
       { ...INITIAL_PRODUCTS.find(p=>p.id==='1')!, quantity: 2 }, 
       { ...INITIAL_PRODUCTS.find(p=>p.id==='9')!, quantity: 1 }, 
     ],
-    originalAmount: (INITIAL_PRODUCTS.find(p=>p.id==='1')!.price * 2) + INITIAL_PRODUCTS.find(p=>p.id==='9')!.price,
+    originalAmount: saleTotal1,
     discountAmount: 0,
-    totalAmount: (INITIAL_PRODUCTS.find(p=>p.id==='1')!.price * 2) + INITIAL_PRODUCTS.find(p=>p.id==='9')!.price,
-    paymentMethod: 'card',
+    totalAmount: saleTotal1,
+    payments: [{ method: 'card', amount: saleTotal1 }],
     timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     status: 'completed',
   },
@@ -147,12 +150,11 @@ const INITIAL_SALES: Sale[] = [
     items: [
       { ...INITIAL_PRODUCTS.find(p=>p.id==='4')!, quantity: 3 },
     ],
-    originalAmount: INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3,
+    originalAmount: saleTotal2,
     discountAmount: 0,
-    totalAmount: INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3,
-    paymentMethod: 'cash',
-    amountPaid: 25.00,
-    changeGiven: 25.00 - (INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3),
+    totalAmount: saleTotal2,
+    payments: [{ method: 'cash', amount: saleTotal2 }],
+    changeGiven: 25.00 - saleTotal2,
     timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     status: 'completed',
   },
@@ -178,10 +180,24 @@ export const getSales = (): Sale[] => {
   const storedSales = localStorage.getItem(SALES_STORAGE_KEY);
   if (storedSales) {
     try {
-      salesCache = JSON.parse(storedSales).map((s: Sale) => ({
-        ...s,
-        timestamp: new Date(s.timestamp)
-      }));
+      const parsedSales = JSON.parse(storedSales);
+       // Migration for old sales structure
+      const migratedSales = parsedSales.map((s: any) => {
+        if (s.paymentMethod && !s.payments) {
+          s.payments = [{ method: s.paymentMethod, amount: s.totalAmount }];
+          delete s.paymentMethod;
+          if (s.amountPaid) delete s.amountPaid;
+        }
+        return {
+          ...s,
+          timestamp: new Date(s.timestamp)
+        }
+      });
+      salesCache = migratedSales;
+      // Resave with migrated structure if changes were made
+      if (JSON.stringify(parsedSales) !== JSON.stringify(migratedSales)) {
+          saveSales(salesCache);
+      }
       return salesCache;
     } catch (e) {
       console.error("Failed to parse sales from localStorage", e);
@@ -205,10 +221,14 @@ export const addSale = (newSale: Sale): void => {
   saveSales(updatedSales);
 
   // Update bank account for non-cash payments
-  if (newSale.paymentMethod === 'card' || newSale.paymentMethod === 'pix') {
-    const bankAccount = getBankAccount();
+  const bankAccount = getBankAccount();
+  const electronicPaymentsTotal = newSale.payments
+    .filter(p => p.method === 'card' || p.method === 'pix')
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  if (electronicPaymentsTotal > 0) {
     const updatedBankAccount = {
-      balance: bankAccount.balance + newSale.totalAmount
+      balance: bankAccount.balance + electronicPaymentsTotal
     };
     saveBankAccount(updatedBankAccount);
   }
