@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, MinusCircle, Wallet, Info } from "lucide-react";
+import { Terminal, Wallet } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
 
 interface PaymentDialogProps {
@@ -77,6 +77,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       setCardAmount('');
       setPixAmount('');
       setCashTendered('');
+      setChangeReturned('');
       setError('');
     }
   }, [isOpen]);
@@ -94,16 +95,31 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     if (method === 'pix') setPixAmount(value);
   }
 
+  const isSubmitDisabled = useMemo(() => {
+    if (totalPaid <= 0 && amountToPay > 0) {
+      return true; 
+    }
+    if (!allowPartialPayment && Math.abs(remainingToPay) > 0.01) {
+      return true; 
+    }
+    if (allowCredit && numChangeReturned > calculatedCashChange) {
+      return true; 
+    }
+    return false;
+  }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay, allowCredit, numChangeReturned, calculatedCashChange]);
+
+
   const handleSubmit = () => {
     setError('');
-    
-    if (!allowPartialPayment && Math.abs(remainingToPay) > 0.001) {
-      setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
-      return;
-    }
-    
-    if (allowCredit && numChangeReturned > calculatedCashChange) {
-      setError('O troco devolvido não pode ser maior que o troco calculado.');
+
+    if (isSubmitDisabled) {
+      if (totalPaid <= 0 && amountToPay > 0) {
+        setError('Nenhum valor de pagamento foi inserido.');
+      } else if (!allowPartialPayment && Math.abs(remainingToPay) > 0.01) {
+        setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
+      } else if (allowCredit && numChangeReturned > calculatedCashChange) {
+        setError('O troco devolvido não pode ser maior que o troco calculado.');
+      }
       return;
     }
 
@@ -111,11 +127,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     if (numCashAmount > 0) payments.push({ method: 'cash', amount: numCashAmount });
     if (numCardAmount > 0) payments.push({ method: 'card', amount: numCardAmount });
     if (numPixAmount > 0) payments.push({ method: 'pix', amount: numPixAmount });
-
-    if (payments.length === 0 && totalPaid <= 0 && amountToPay > 0) {
-      setError('Nenhum método de pagamento informado.');
-      return;
-    }
 
     onSubmit({
       payments,
@@ -125,9 +136,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       leaveChangeAsCredit: creditToLeave > 0
     });
   };
-
-  const isSubmitDisabled = (totalPaid <= 0 && amountToPay > 0) || (allowCredit && numChangeReturned > calculatedCashChange);
-
+  
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
