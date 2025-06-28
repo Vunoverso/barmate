@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
-import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale } from '@/lib/constants';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, PAYMENT_METHODS } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Wallet } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -241,23 +241,74 @@ export default function OrdersClient() {
   const orderTotal = useMemo(() => {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
-
+  
   const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
     }
-    
-    const positiveItemsValue = currentOrderItems.filter(i => i.price > 0).reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const finalTotal = orderTotal - details.discountAmount;
 
-    // Create the sale record
+    const totalPaid = details.payments.reduce((sum, p) => sum + p.amount, 0);
+    const effectiveOrderTotal = orderTotal - details.discountAmount;
+
+    // Partial Payment Logic
+    if (totalPaid < effectiveOrderTotal) {
+        const paymentItems: OrderItem[] = details.payments.map(p => {
+            const methodName = PAYMENT_METHODS.find(pm => pm.value === p.method)?.name || 'Pagamento';
+            return {
+                id: `payment-${p.method}-${Date.now()}`,
+                name: `Pagamento Parcial (${methodName})`,
+                price: -p.amount,
+                quantity: 1,
+                categoryId: 'cat_outros',
+                categoryName: 'Pagamento',
+                categoryIconName: 'Wallet',
+            };
+        });
+
+        if (details.discountAmount > 0) {
+            paymentItems.push({
+                id: `discount-${Date.now()}`,
+                name: `Desconto Aplicado`,
+                price: -details.discountAmount,
+                quantity: 1,
+                categoryId: 'cat_outros',
+                categoryName: 'Pagamento',
+                categoryIconName: 'Wallet',
+            });
+        }
+        
+        const updatedOrder: ActiveOrder = {
+            ...currentOrder,
+            items: [...currentOrder.items, ...paymentItems],
+        };
+
+        addSale({
+            id: `sale-partial-${Date.now()}`,
+            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), // Log positive amounts in sale
+            originalAmount: totalPaid,
+            discountAmount: details.discountAmount,
+            totalAmount: totalPaid - details.discountAmount,
+            payments: details.payments,
+            changeGiven: 0,
+            timestamp: new Date(),
+            status: 'completed'
+        })
+        
+        setOpenOrders(openOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
+        toast({ title: "Pagamento Parcial Registrado", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
+        setIsPaymentDialogOpen(false);
+        return;
+    }
+    
+    // Full Payment Logic (totalPaid >= effectiveOrderTotal)
+    const finalTotal = effectiveOrderTotal;
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
-      items: currentOrderItems,
-      originalAmount: positiveItemsValue,
-      discountAmount: details.discountAmount + (orderTotal < positiveItemsValue ? positiveItemsValue - orderTotal : 0),
-      totalAmount: Math.max(0, finalTotal),
+      items: currentOrderItems, // includes products and previous partial payments as negative items
+      originalAmount: currentOrderItems.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0),
+      discountAmount: details.discountAmount,
+      totalAmount: finalTotal,
       payments: details.payments,
       changeGiven: details.changeGiven,
       timestamp: new Date(),
@@ -265,71 +316,47 @@ export default function OrdersClient() {
     };
     addSale(newSale);
 
-    // Handle order state after payment
-    if (finalTotal < 0) { // Credit remaining
-      const creditItem: OrderItem = {
-          id: `credit-${Date.now()}`,
-          name: `Crédito de Troco`,
-          price: finalTotal,
-          quantity: 1,
-          categoryId: 'cat_outros',
-          categoryName: 'Outros',
-          categoryIconName: 'Wallet',
-      };
-      const updatedOrder: ActiveOrder = {
-          ...currentOrder,
-          items: [creditItem],
-      };
-      setOpenOrders(openOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
-      toast({ title: "Compra Paga com Crédito", description: `A comanda foi atualizada com o crédito restante de ${formatCurrency(Math.abs(finalTotal))}.` });
-
-    } else { // No credit remaining, standard flow (which might create a new credit from change)
-        let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
-        let nextSelectedOrderId: string | null = null;
-        
-        if (details.leaveChangeAsCredit && details.changeGiven && details.changeGiven > 0) {
-            const creditAmount = details.changeGiven;
-            const creditOrderName = `${currentOrder.name} (Crédito)`;
-            const creditItem: OrderItem = {
-                id: `credit-${Date.now()}`,
-                name: `Crédito de Troco`,
-                price: -creditAmount,
-                quantity: 1,
-                categoryId: 'cat_outros',
-                categoryName: 'Outros',
-                categoryIconName: 'Wallet',
-            };
-            const newCreditOrderId = `order-credit-${Date.now()}`;
-            const newCreditOrder: ActiveOrder = {
-                id: newCreditOrderId,
-                name: creditOrderName,
-                items: [creditItem],
-                createdAt: new Date(),
-            };
-            nextOrdersState.push(newCreditOrder);
-            nextSelectedOrderId = newCreditOrderId;
-            toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(creditAmount)}.` });
-        } else {
-            if (nextOrdersState.length > 0) {
-                const currentIndex = openOrders.findIndex(o => o.id === currentOrderId);
-                if (currentIndex < nextOrdersState.length) {
-                    nextSelectedOrderId = nextOrdersState[currentIndex].id;
-                } else {
-                    nextSelectedOrderId = nextOrdersState[nextOrdersState.length - 1].id;
-                }
-            }
-             if (!details.leaveChangeAsCredit) {
-                 toast({
-                    title: "Venda Concluída!",
-                    description: `Venda de ${formatCurrency(newSale.totalAmount)} (${currentOrder.name}) registrada com sucesso.`,
-                    action: <CheckCircle className="text-green-500" />,
-                });
-             }
-        }
-        setOpenOrders(nextOrdersState);
-        setCurrentOrderId(nextSelectedOrderId);
-    }
+    // Handle order state after full payment
+    let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
+    let nextSelectedOrderId: string | null = null;
     
+    if (details.leaveChangeAsCredit && details.changeGiven > 0) {
+        const creditAmount = details.changeGiven;
+        const creditOrderName = `${currentOrder.name} (Crédito)`;
+        const creditItem: OrderItem = {
+            id: `credit-${Date.now()}`,
+            name: `Crédito de Troco`,
+            price: -creditAmount,
+            quantity: 1,
+            categoryId: 'cat_outros',
+            categoryName: 'Outros',
+            categoryIconName: 'Wallet',
+        };
+        const newCreditOrderId = `order-credit-${Date.now()}`;
+        const newCreditOrder: ActiveOrder = {
+            id: newCreditOrderId,
+            name: creditOrderName,
+            items: [creditItem],
+            createdAt: new Date(),
+        };
+        nextOrdersState.push(newCreditOrder);
+        nextSelectedOrderId = newCreditOrderId;
+        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(creditAmount)}.` });
+    } else {
+        if (nextOrdersState.length > 0) {
+            const currentIndex = openOrders.findIndex(o => o.id === currentOrderId);
+            nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
+        }
+         if (!details.leaveChangeAsCredit) {
+             toast({
+                title: "Venda Concluída!",
+                description: `Venda de ${formatCurrency(newSale.totalAmount)} (${currentOrder.name}) registrada com sucesso.`,
+                action: <CheckCircle className="text-green-500" />,
+            });
+         }
+    }
+    setOpenOrders(nextOrdersState);
+    setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
   };
   
@@ -517,10 +544,10 @@ export default function OrdersClient() {
             <Button
               size="lg"
               className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-              disabled={currentOrderItems.length === 0 || !currentOrderId}
+              disabled={orderTotal === 0 || !currentOrderId}
               onClick={() => setIsPaymentDialogOpen(true)}
             >
-              Finalizar Pagamento
+              Realizar Pagamento
             </Button>
           </CardFooter>
         </Card>
@@ -538,6 +565,7 @@ export default function OrdersClient() {
         totalAmount={orderTotal}
         onSubmit={handlePayment}
         allowCredit={true}
+        allowPartialPayment={true}
       />
 
       {orderToDelete && (

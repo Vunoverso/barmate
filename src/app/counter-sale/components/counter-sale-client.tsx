@@ -284,6 +284,7 @@ export default function CounterSaleClient() {
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
         onSubmit={handlePayment as any}
+        allowPartialPayment={false}
       />
     </div>
   );

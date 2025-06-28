@@ -25,6 +25,7 @@ interface PaymentDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   totalAmount: number;
   allowCredit?: boolean;
+  allowPartialPayment?: boolean;
   onSubmit: (saleDetails: {
     payments: Payment[];
     changeGiven: number;
@@ -36,7 +37,7 @@ interface PaymentDialogProps {
 
 const parseLocaleFloat = (value: string) => parseFloat(value.replace(',', '.')) || 0;
 
-export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit, allowCredit = false }: PaymentDialogProps) {
+export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit, allowCredit = false, allowPartialPayment = false }: PaymentDialogProps) {
   const [discount, setDiscount] = useState<string>('');
   const [cashAmount, setCashAmount] = useState<string>('');
   const [cardAmount, setCardAmount] = useState<string>('');
@@ -68,7 +69,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       return Math.max(0, calculatedCashChange - numChangeReturned);
   }, [allowCredit, calculatedCashChange, numChangeReturned]);
 
-  const remainingCredit = finalBalance < 0 ? Math.abs(finalBalance) : 0;
 
   useEffect(() => {
     if (isOpen) {
@@ -82,13 +82,13 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   }, [isOpen]);
   
   useEffect(() => {
-    setChangeReturned(calculatedCashChange > 0 ? calculatedCashChange.toFixed(2) : '');
+    setChangeReturned(calculatedCashChange > 0 ? calculatedCashChange.toFixed(2).replace('.', ',') : '');
   }, [calculatedCashChange]);
 
   const setPayFull = (method: PaymentMethod) => {
     const otherPaid = (method === 'cash' ? 0 : numCashAmount) + (method === 'card' ? 0 : numCardAmount) + (method === 'pix' ? 0 : numPixAmount);
     const amount = Math.max(0, amountToPay - otherPaid);
-    const value = amount > 0 ? amount.toFixed(2) : '';
+    const value = amount > 0 ? amount.toFixed(2).replace('.', ',') : '';
     if (method === 'cash') setCashAmount(value);
     if (method === 'card') setCardAmount(value);
     if (method === 'pix') setPixAmount(value);
@@ -97,7 +97,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   const handleSubmit = () => {
     setError('');
     
-    if (Math.abs(remainingToPay) > 0.001) {
+    if (!allowPartialPayment && Math.abs(remainingToPay) > 0.001) {
       setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
       return;
     }
@@ -112,20 +112,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     if (numCardAmount > 0) payments.push({ method: 'card', amount: numCardAmount });
     if (numPixAmount > 0) payments.push({ method: 'pix', amount: numPixAmount });
 
-    if (payments.length === 0 && amountToPay > 0) {
+    if (payments.length === 0 && totalPaid <= 0 && amountToPay > 0) {
       setError('Nenhum método de pagamento informado.');
-      return;
-    }
-
-    // Handle payment with existing credit
-    if (finalBalance < 0) {
-       onSubmit({
-        payments: [], // No new payment
-        discountAmount: numDiscount,
-        changeGiven: 0,
-        status: 'completed',
-        leaveChangeAsCredit: false,
-      });
       return;
     }
 
@@ -138,7 +126,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     });
   };
 
-  const isSubmitDisabled = Math.abs(remainingToPay) > 0.001 || (allowCredit && numChangeReturned > calculatedCashChange) || (amountToPay > 0 && totalPaid === 0);
+  const isSubmitDisabled = (totalPaid <= 0 && amountToPay > 0) || (allowCredit && numChangeReturned > calculatedCashChange);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -155,11 +143,10 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
               <Label htmlFor="discount">Desconto (R$)</Label>
               <Input
                 id="discount"
-                type="number"
+                type="text"
                 placeholder="0,00"
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
-                step="0.01"
               />
             </div>
           
@@ -181,7 +168,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                     <Label htmlFor={`pay-${method.value}`} className="w-24 flex items-center gap-2">
                        <method.icon className="h-5 w-5 text-muted-foreground" /> {method.name}
                     </Label>
-                    <Input id={`pay-${method.value}`} type="number" placeholder="0,00" value={state} onChange={e => setState(e.target.value)} />
+                    <Input id={`pay-${method.value}`} type="text" placeholder="0,00" value={state} onChange={e => setState(e.target.value)} />
                     <Button variant="outline" size="sm" onClick={() => setPayFull(method.value)}>Total</Button>
                   </div>
                 );
@@ -195,8 +182,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
             </Alert>
           )}
 
-          <div className={`p-3 rounded-md font-semibold text-center transition-colors ${remainingToPay === 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-            {remainingToPay === 0 ? `Total pago: ${formatCurrency(totalPaid)}` : `Restante: ${formatCurrency(remainingToPay)}`}
+          <div className={`p-3 rounded-md font-semibold text-center transition-colors ${remainingToPay === 0 ? 'bg-green-100 text-green-800' : (remainingToPay > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800')}`}>
+            {Math.abs(remainingToPay) < 0.01 ? `Total pago: ${formatCurrency(totalPaid)}` : 
+             remainingToPay > 0 ? `Faltante: ${formatCurrency(remainingToPay)}` :
+             `Troco/Crédito: ${formatCurrency(Math.abs(remainingToPay))}`
+            }
           </div>
           
           {numCashAmount > 0 && (
@@ -204,7 +194,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                 <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
                 <div className="space-y-2">
                     <Label htmlFor="cashTendered">Valor Entregue (Dinheiro)</Label>
-                    <Input id="cashTendered" type="number" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} />
+                    <Input id="cashTendered" type="text" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} />
                 </div>
                 {calculatedCashChange > 0 && (
                     <div className="space-y-2">
@@ -213,7 +203,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                         <>
                           <div className="space-y-2">
                             <Label htmlFor="changeReturned">Troco Devolvido Efetivamente</Label>
-                            <Input id="changeReturned" type="number" value={changeReturned} onChange={(e) => setChangeReturned(e.target.value)} step="0.01" />
+                            <Input id="changeReturned" type="text" value={changeReturned} onChange={(e) => setChangeReturned(e.target.value)} />
                           </div>
                           {creditToLeave > 0 && (
                             <p className="text-sm text-blue-600">
@@ -227,16 +217,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                     </div>
                 )}
             </div>
-          )}
-
-          {remainingCredit > 0 && (
-            <Alert variant="default" className="mt-4">
-              <Info className="h-4 w-4" />
-              <AlertTitle>Crédito Restante</AlertTitle>
-              <AlertDescription>
-                A comanda possui um crédito de {formatCurrency(remainingCredit)} que será usado nesta compra.
-              </AlertDescription>
-            </Alert>
           )}
 
           {error && (
@@ -253,11 +233,10 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
           <Button onClick={handleSubmit} disabled={isSubmitDisabled}>
-            {finalBalance < 0 ? "Confirmar Uso do Crédito" : "Confirmar Pagamento"}
+            Confirmar Pagamento
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
