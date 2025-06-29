@@ -150,14 +150,14 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh] p-0">
-        <DialogHeader className="p-6 pb-4">
+        <DialogHeader className="p-6 pb-4 shrink-0">
           <DialogTitle>Processar Pagamento</DialogTitle>
           <DialogDescription>
             Total Original da Comanda: <span className="font-bold">{formatCurrency(totalAmount)}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-grow px-6">
+        <ScrollArea className="flex-1 px-6">
           <div className="space-y-4 pb-4">
             <div className="space-y-1">
                 <Label htmlFor="discount">Desconto (R$)</Label>
@@ -250,7 +250,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           </div>
         </ScrollArea>
 
-        <DialogFooter className="p-6 pt-4 border-t">
+        <DialogFooter className="p-6 pt-4 border-t shrink-0">
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
