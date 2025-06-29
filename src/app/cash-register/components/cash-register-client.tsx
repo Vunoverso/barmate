@@ -75,45 +75,48 @@ export default function CashRegisterClient() {
 
   useEffect(() => {
     setIsMounted(true);
-    // Load cash status
-    const storedStatus = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
-    if (storedStatus) {
-      try {
-        const parsedStatus = JSON.parse(storedStatus);
-        setCashStatus({ adjustments: [], ...parsedStatus });
-      } catch (e) {
-        setCashStatus({ status: 'closed', adjustments: [] });
-      }
-    }
-    // Load secondary cash box
-    setSecondaryCashBox(getSecondaryCashBox());
-    // Load bank account
-    setBankAccount(getBankAccount());
-    // Load sales and listen for changes
-    const handleSalesChange = () => setSales([...getSales()]);
-    handleSalesChange();
-    window.addEventListener('salesChanged', handleSalesChange);
-    // Listen for secondary cash box changes
-    const handleSecondaryCashBoxChange = () => setSecondaryCashBox(getSecondaryCashBox());
-    window.addEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
-    // Listen for bank account changes
-    const handleBankAccountChange = () => setBankAccount(getBankAccount());
-    window.addEventListener('bankAccountChanged', handleBankAccountChange);
-    // Listen for cash status changes from other components (like reports)
-    window.addEventListener('cashRegisterStatusChanged', () => {
-        const storedStatus = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
-        if (storedStatus) setCashStatus(JSON.parse(storedStatus));
-    });
 
+    const handleSalesChange = () => setSales([...getSales()]);
+    const handleSecondaryCashBoxChange = () => setSecondaryCashBox(getSecondaryCashBox());
+    const handleBankAccountChange = () => setBankAccount(getBankAccount());
+    const handleCashStatusChange = () => {
+        const storedStatusRaw = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
+        if (storedStatusRaw) {
+            // Using functional update to prevent re-renders if the state is the same
+            // This is the key to breaking the infinite loop.
+            setCashStatus(currentState => {
+                try {
+                    const newState = JSON.parse(storedStatusRaw);
+                    // Deep comparison is expensive, string comparison is a good-enough proxy here.
+                    if (JSON.stringify(currentState) !== JSON.stringify(newState)) {
+                        return { adjustments: [], ...newState };
+                    }
+                } catch (e) {
+                    console.error("Failed to parse cash register status from storage", e);
+                }
+                return currentState;
+            });
+        }
+    };
+
+    // Initial load
+    handleSalesChange();
+    handleSecondaryCashBoxChange();
+    handleBankAccountChange();
+    handleCashStatusChange();
+
+    // Add event listeners
+    window.addEventListener('salesChanged', handleSalesChange);
+    window.addEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
+    window.addEventListener('bankAccountChanged', handleBankAccountChange);
+    window.addEventListener('cashRegisterStatusChanged', handleCashStatusChange);
 
     return () => {
+      // Remove event listeners
       window.removeEventListener('salesChanged', handleSalesChange);
       window.removeEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
       window.removeEventListener('bankAccountChanged', handleBankAccountChange);
-      window.removeEventListener('cashRegisterStatusChanged', () => {
-          const storedStatus = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
-          if (storedStatus) setCashStatus(JSON.parse(storedStatus));
-      });
+      window.removeEventListener('cashRegisterStatusChanged', handleCashStatusChange);
     }
   }, []);
 
