@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
@@ -113,6 +114,13 @@ export default function OrdersClient() {
   const currentOrder = useMemo(() => {
     return openOrders.find(o => o.id === currentOrderId);
   }, [openOrders, currentOrderId]);
+
+  const totalOpenOrdersValue = useMemo(() => {
+    return openOrders.reduce((total, order) => {
+      const orderTotal = order.items.reduce((orderSum, item) => orderSum + (item.price * item.quantity), 0);
+      return total + orderTotal;
+    }, 0);
+  }, [openOrders]);
 
   const currentOrderItems = useMemo(() => {
     return currentOrder?.items || [];
@@ -380,6 +388,11 @@ export default function OrdersClient() {
             </CardTitle>
             <CardDescription>
               {openOrders.length} comanda(s) em aberto.
+              {openOrders.length > 0 && (
+                <span className="block font-semibold mt-1">
+                  Total: <span className="text-primary">{formatCurrency(totalOpenOrdersValue)}</span>
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-grow overflow-hidden p-0">
