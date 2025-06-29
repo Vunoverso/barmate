@@ -41,7 +41,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart, Eye, EyeOff } from 'lucide-react';
+import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { ptBR } from "date-fns/locale";
@@ -70,6 +70,9 @@ import { Label } from '@/components/ui/label';
 import { DatePickerWithRange } from '@/components/ui/date-picker-range'; 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 const expenseSchema = z.object({
   description: z.string().min(3, { message: "A descrição deve ter pelo menos 3 caracteres." }),
@@ -105,6 +108,9 @@ export default function FinancialClient() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
   const [isBalanceVisible, setIsBalanceVisible] = useState(false);
+  
+  const [salesPagination, setSalesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
+  const [expensesPagination, setExpensesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
 
   const { toast } = useToast();
   const form = useForm<ExpenseFormData>({
@@ -184,6 +190,28 @@ export default function FinancialClient() {
     return (filterByDate(entries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries, dateRange]);
 
+  // Pagination Logic
+  const paginatedSales = useMemo(() => {
+    const startIndex = (salesPagination.currentPage - 1) * salesPagination.itemsPerPage;
+    return filteredSales.slice(startIndex, startIndex + salesPagination.itemsPerPage);
+  }, [filteredSales, salesPagination]);
+
+  const totalSalesPages = useMemo(() => {
+    if (filteredSales.length === 0) return 1;
+    return Math.ceil(filteredSales.length / salesPagination.itemsPerPage);
+  }, [filteredSales, salesPagination.itemsPerPage]);
+
+  const paginatedExpenses = useMemo(() => {
+    const startIndex = (expensesPagination.currentPage - 1) * expensesPagination.itemsPerPage;
+    return filteredEntries.slice(startIndex, startIndex + expensesPagination.itemsPerPage);
+  }, [filteredEntries, expensesPagination]);
+
+  const totalExpensePages = useMemo(() => {
+    if (filteredEntries.length === 0) return 1;
+    return Math.ceil(filteredEntries.length / expensesPagination.itemsPerPage);
+  }, [filteredEntries, expensesPagination.itemsPerPage]);
+
+
   const totalRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
   const totalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0), [filteredEntries]);
   const netBalance = useMemo(() => totalRevenue - totalExpenses, [totalRevenue, totalExpenses]);
@@ -227,6 +255,20 @@ export default function FinancialClient() {
       weeklySummary: processSummary(weekly)
     };
   }, [filteredSales, filteredEntries]);
+
+    // Pagination Handlers
+  const handleSalesPageChange = (page: number) => {
+    setSalesPagination(prev => ({ ...prev, currentPage: page }));
+  };
+  const handleSalesItemsPerPageChange = (items: number) => {
+    setSalesPagination({ currentPage: 1, itemsPerPage: items });
+  };
+  const handleExpensesPageChange = (page: number) => {
+    setExpensesPagination(prev => ({ ...prev, currentPage: page }));
+  };
+  const handleExpensesItemsPerPageChange = (items: number) => {
+    setExpensesPagination({ currentPage: 1, itemsPerPage: items });
+  };
 
 
   const handleAddExpense = (data: ExpenseFormData) => {
@@ -567,95 +609,121 @@ export default function FinancialClient() {
           </AccordionItem></Card>
         </Accordion>
       
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-                <CardTitle>Histórico de Despesas</CardTitle>
-                <CardDescription>Visualize todas as suas saídas registradas.</CardDescription>
-            </div>
-            <Button onClick={() => { form.reset({ description: '', amount: 0, source: 'daily_cash' }); setIsExpenseDialogOpen(true); }}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Despesa
-            </Button>
-            </CardHeader>
-            <CardContent>
-            <Table>
-                <TableHeader><TableRow>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Origem</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead><span className="sr-only">Ações</span></TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                {filteredEntries.length > 0 ? filteredEntries.map(entry => (
-                    <TableRow key={entry.id}>
-                    <TableCell className="font-medium">{entry.description}</TableCell>
-                    <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
-                    <TableCell>{SOURCE_MAP[entry.source]}</TableCell>
-                    <TableCell className="text-right text-destructive font-semibold">- {formatCurrency(entry.amount)}</TableCell>
-                    <TableCell className="text-right"><DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                            <DropdownMenuItem className="text-destructive" onClick={() => setEntryToDelete(entry)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu></TableCell>
-                    </TableRow>
-                )) : (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhum lançamento encontrado.</TableCell></TableRow>
-                )}
-                </TableBody>
-            </Table>
-            </CardContent>
-            <CardFooter><div className="text-xs text-muted-foreground">Mostrando <strong>{filteredEntries.length}</strong> despesas.</div></CardFooter>
-        </Card>
-
-        <Card>
-            <CardHeader className="flex-row items-center justify-between">
-                <div><CardTitle>Detalhes das Vendas</CardTitle><CardDescription>Lista de todas as vendas realizadas no período selecionado.</CardDescription></div>
-            </CardHeader>
-            <CardContent>
-            <Table>
-                <TableHeader><TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Itens</TableHead>
-                    <TableHead>Método Pag.</TableHead>
-                    <TableHead className="text-right">Desconto</TableHead>
-                    <TableHead className="text-right">Valor Final</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                {filteredSales.length > 0 ? filteredSales.map(sale => (
-                    <TableRow key={sale.id}>
-                    <TableCell>{format(new Date(sale.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
-                    <TableCell>{sale.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
-                    <TableCell><div className="flex flex-wrap gap-1">
-                        {sale.payments.map(p => (
-                            <Badge key={p.method} variant="outline" className="capitalize">
-                                {PAYMENT_METHODS.find(pm => pm.value === p.method)?.name || p.method}
-                            </Badge>
-                        ))}
-                    </div></TableCell>
-                    <TableCell className="text-right text-destructive">{sale.discountAmount > 0 ? `- ${formatCurrency(sale.discountAmount)}` : formatCurrency(0)}</TableCell>
-                    <TableCell className="text-right font-semibold">{formatCurrency(sale.totalAmount)}</TableCell>
-                    <TableCell className="text-right">
-                        <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Menu</span></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                            <DropdownMenuItem className="text-destructive" onClick={() => setSaleToDelete(sale)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
-                        </DropdownMenuContent>
-                        </DropdownMenu>
-                    </TableCell>
-                    </TableRow>
-                )) : (
-                    <TableRow><TableCell colSpan={6} className="h-24 text-center">Nenhuma venda encontrada.</TableCell></TableRow>
-                )}
-                </TableBody>
-            </Table>
-            </CardContent>
-            <CardFooter><div className="text-xs text-muted-foreground">Mostrando <strong>{filteredSales.length}</strong> vendas.</div></CardFooter>
-        </Card>
+        <Tabs defaultValue="sales" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="sales">Detalhes das Vendas</TabsTrigger>
+                <TabsTrigger value="expenses">Histórico de Despesas</TabsTrigger>
+            </TabsList>
+            <TabsContent value="sales">
+                <Card>
+                    <CardContent className="pt-6">
+                        <Table>
+                            <TableHeader><TableRow>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Itens</TableHead>
+                                <TableHead>Método Pag.</TableHead>
+                                <TableHead className="text-right">Desconto</TableHead>
+                                <TableHead className="text-right">Valor Final</TableHead>
+                                <TableHead className="text-right">Ações</TableHead>
+                            </TableRow></TableHeader>
+                            <TableBody>
+                            {paginatedSales.length > 0 ? paginatedSales.map(sale => (
+                                <TableRow key={sale.id}>
+                                <TableCell>{format(new Date(sale.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                                <TableCell>{sale.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
+                                <TableCell><div className="flex flex-wrap gap-1">
+                                    {sale.payments.map(p => (
+                                        <Badge key={p.method} variant="outline" className="capitalize">
+                                            {PAYMENT_METHODS.find(pm => pm.value === p.method)?.name || p.method}
+                                        </Badge>
+                                    ))}
+                                </div></TableCell>
+                                <TableCell className="text-right text-destructive">{sale.discountAmount > 0 ? `- ${formatCurrency(sale.discountAmount)}` : formatCurrency(0)}</TableCell>
+                                <TableCell className="text-right font-semibold">{formatCurrency(sale.totalAmount)}</TableCell>
+                                <TableCell className="text-right">
+                                    <DropdownMenu>
+                                    <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Menu</span></Button></DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                        <DropdownMenuItem className="text-destructive" onClick={() => setSaleToDelete(sale)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow><TableCell colSpan={6} className="h-24 text-center">Nenhuma venda encontrada.</TableCell></TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                    <CardFooter>
+                       <DataTablePagination
+                            currentPage={salesPagination.currentPage}
+                            totalPages={totalSalesPages}
+                            onPageChange={handleSalesPageChange}
+                            itemsPerPage={salesPagination.itemsPerPage}
+                            onItemsPerPageChange={handleSalesItemsPerPageChange}
+                            totalItems={filteredSales.length}
+                            itemName="vendas"
+                        />
+                    </CardFooter>
+                </Card>
+            </TabsContent>
+            <TabsContent value="expenses">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Histórico de Despesas</CardTitle>
+                            <CardDescription>Visualize todas as suas saídas registradas.</CardDescription>
+                        </div>
+                        <Button onClick={() => { form.reset({ description: '', amount: 0, source: 'daily_cash' }); setIsExpenseDialogOpen(true); }}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Despesa
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader><TableRow>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Origem</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead><span className="sr-only">Ações</span></TableHead>
+                            </TableRow></TableHeader>
+                            <TableBody>
+                            {paginatedExpenses.length > 0 ? paginatedExpenses.map(entry => (
+                                <TableRow key={entry.id}>
+                                <TableCell className="font-medium">{entry.description}</TableCell>
+                                <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                                <TableCell>{SOURCE_MAP[entry.source]}</TableCell>
+                                <TableCell className="text-right text-destructive font-semibold">- {formatCurrency(entry.amount)}</TableCell>
+                                <TableCell className="text-right"><DropdownMenu>
+                                    <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                        <DropdownMenuItem className="text-destructive" onClick={() => setEntryToDelete(entry)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu></TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhum lançamento encontrado.</TableCell></TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                    <CardFooter>
+                        <DataTablePagination
+                            currentPage={expensesPagination.currentPage}
+                            totalPages={totalExpensePages}
+                            onPageChange={handleExpensesPageChange}
+                            itemsPerPage={expensesPagination.itemsPerPage}
+                            onItemsPerPageChange={handleExpensesItemsPerPageChange}
+                            totalItems={filteredEntries.length}
+                            itemName="despesas"
+                        />
+                    </CardFooter>
+                </Card>
+            </TabsContent>
+        </Tabs>
       </div>
       
       <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
@@ -717,6 +785,77 @@ export default function FinancialClient() {
         idPrefix="cash-drawer"
       />
     </>
+  );
+}
+
+function DataTablePagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+  itemsPerPage,
+  onItemsPerPageChange,
+  totalItems,
+  itemName = "itens",
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  itemsPerPage: number;
+  onItemsPerPageChange: (items: number) => void;
+  totalItems: number;
+  itemName?: string;
+}) {
+  return (
+    <div className="flex w-full items-center justify-between">
+      <div className="flex-1 text-sm text-muted-foreground">
+        Total de {totalItems} {itemName}.
+      </div>
+      <div className="flex items-center space-x-6 lg:space-x-8">
+        <div className="flex items-center space-x-2">
+          <p className="text-sm font-medium">Itens por página</p>
+          <Select
+            value={`${itemsPerPage}`}
+            onValueChange={(value) => {
+              onItemsPerPageChange(Number(value));
+            }}
+          >
+            <SelectTrigger className="h-8 w-[70px]">
+              <SelectValue placeholder={itemsPerPage} />
+            </SelectTrigger>
+            <SelectContent side="top">
+              {[10, 20, 30, 50].map((pageSize) => (
+                <SelectItem key={pageSize} value={`${pageSize}`}>
+                  {pageSize}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+          Página {currentPage} de {totalPages}
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            className="h-8 w-8 p-0"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            <span className="sr-only">Página Anterior</span>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            className="h-8 w-8 p-0"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            <span className="sr-only">Próxima Página</span>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
