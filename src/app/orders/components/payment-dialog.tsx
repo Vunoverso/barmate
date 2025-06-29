@@ -149,7 +149,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Processar Pagamento</DialogTitle>
           <DialogDescription>
@@ -157,8 +157,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-           <div className="space-y-2">
+        <div className="space-y-3 py-1">
+           <div className="space-y-1">
               <Label htmlFor="discount">Desconto (R$)</Label>
               <Input
                 id="discount"
@@ -166,10 +166,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                 placeholder="0,00"
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
+                className="h-9"
               />
             </div>
           
-          <div className="flex justify-between items-center text-lg font-bold">
+          <div className="flex justify-between items-center text-base font-bold">
             <span>Total a Pagar:</span>
             <span className="text-primary">{formatCurrency(amountToPay)}</span>
           </div>
@@ -178,16 +179,16 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           <p className="text-sm font-medium">Divisão do Pagamento</p>
 
           {amountToPay > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {PAYMENT_METHODS.map(method => {
                 const state = method.value === 'cash' ? cashAmount : (method.value === 'debit' ? debitAmount : (method.value === 'credit' ? creditAmount : pixAmount));
                 const setState = method.value === 'cash' ? setCashAmount : (method.value === 'debit' ? setDebitAmount : (method.value === 'credit' ? setCreditAmount : setPixAmount));
                 return (
                   <div key={method.value} className="flex items-center gap-2">
-                    <Label htmlFor={`pay-${method.value}`} className="w-24 flex items-center gap-2">
-                       <method.icon className="h-5 w-5 text-muted-foreground" /> {method.name}
+                    <Label htmlFor={`pay-${method.value}`} className="w-24 flex items-center gap-2 text-sm">
+                       <method.icon className="h-4 w-4 text-muted-foreground" /> {method.name}
                     </Label>
-                    <Input id={`pay-${method.value}`} type="text" placeholder="0,00" value={state} onChange={e => setState(e.target.value)} />
+                    <Input id={`pay-${method.value}`} type="text" placeholder="0,00" value={state} onChange={e => setState(e.target.value)} className="h-9" />
                     <Button variant="outline" size="sm" onClick={() => setPayFull(method.value)}>Total</Button>
                   </div>
                 );
@@ -201,7 +202,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
             </Alert>
           )}
 
-          <div className={`p-3 rounded-md font-semibold text-center transition-colors ${remainingToPay === 0 ? 'bg-green-100 text-green-800' : (remainingToPay > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800')}`}>
+          <div className={`p-2 rounded-md font-semibold text-center text-sm transition-colors ${remainingToPay === 0 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : (remainingToPay > 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300')}`}>
             {Math.abs(remainingToPay) < 0.01 ? `Total pago: ${formatCurrency(totalPaid)}` : 
              remainingToPay > 0 ? `Faltante: ${formatCurrency(remainingToPay)}` :
              `Troco/Crédito: ${formatCurrency(Math.abs(remainingToPay))}`
@@ -209,23 +210,23 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           </div>
           
           {numCashAmount > 0 && (
-            <div className="pt-2 space-y-4 p-3 bg-muted/50 rounded-md">
+            <div className="space-y-3 p-2 bg-muted/50 rounded-md">
                 <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
-                <div className="space-y-2">
+                <div className="space-y-1">
                     <Label htmlFor="cashTendered">Valor Entregue (Dinheiro)</Label>
-                    <Input id="cashTendered" type="text" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} />
+                    <Input id="cashTendered" type="text" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="h-9"/>
                 </div>
                 {calculatedCashChange > 0 && (
                     <div className="space-y-2">
                         <p className="text-sm font-medium">Troco Calculado: <span className="text-green-600 font-bold">{formatCurrency(calculatedCashChange)}</span></p>
                         {allowCredit ? (
                         <>
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             <Label htmlFor="changeReturned">Troco Devolvido Efetivamente</Label>
-                            <Input id="changeReturned" type="text" value={changeReturned} onChange={(e) => setChangeReturned(e.target.value)} />
+                            <Input id="changeReturned" type="text" value={changeReturned} onChange={(e) => setChangeReturned(e.target.value)} className="h-9"/>
                           </div>
                           {creditToLeave > 0 && (
-                            <p className="text-sm text-blue-600">
+                            <p className="text-xs text-blue-600">
                               Crédito a ser gerado para o cliente: <span className="font-bold">{formatCurrency(creditToLeave)}</span>
                             </p>
                           )}
@@ -239,10 +240,10 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           )}
 
           {error && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="p-2">
               <Terminal className="h-4 w-4" />
-              <AlertTitle>Erro</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertTitle className="text-sm">Erro</AlertTitle>
+              <AlertDescription className="text-xs">{error}</AlertDescription>
             </Alert>
           )}
         </div>
