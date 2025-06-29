@@ -188,7 +188,7 @@ export default function CounterSaleClient() {
           </CardHeader>
           <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
             <ScrollArea className="w-full shrink-0">
-                <TabsList>
+                <TabsList className="whitespace-nowrap">
                   <TabsTrigger value="Todos">Todos</TabsTrigger>
                   {displayCategories.map(categoryName => (
                     <TabsTrigger key={categoryName} value={categoryName}>{categoryName}</TabsTrigger>

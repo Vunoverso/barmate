@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
@@ -462,7 +461,7 @@ export default function OrdersClient() {
           </CardHeader>
            <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
             <ScrollArea className="w-full shrink-0">
-                <TabsList>
+                <TabsList className="whitespace-nowrap">
                     <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
                     {displayCategories.map(categoryName => (
                         <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId}>{categoryName}</TabsTrigger>
