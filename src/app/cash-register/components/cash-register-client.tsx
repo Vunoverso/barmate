@@ -375,7 +375,10 @@ export default function CashRegisterClient() {
 
   const sortedAdjustments = useMemo(() => {
     if (!cashStatus.adjustments) return [];
-    return [...cashStatus.adjustments].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    // Filter out manual corrections from being displayed
+    return [...cashStatus.adjustments]
+        .filter(adj => !adj.isCorrection) 
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [cashStatus.adjustments]);
 
 

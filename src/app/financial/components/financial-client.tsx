@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod } from '@/types';
+import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod, CashAdjustment } from '@/types';
 import { 
   getFinancialEntries, saveFinancialEntries, formatCurrency, 
   getSecondaryCashBox, saveSecondaryCashBox, 
@@ -280,25 +280,31 @@ export default function FinancialClient() {
   };
   
   const handleEditCashInDrawer = (newBalance: number) => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) {
+    if (cashStatus.status !== 'open') {
       toast({ title: "Ação Bloqueada", description: "O caixa principal está fechado. Não é possível editar o saldo.", variant: "destructive" });
       return;
     }
   
-    // To make the current balance match `newBalance`, we adjust the `openingBalance`.
-    const openingTime = new Date(cashStatus.openingTime);
-    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
-    const cashRevenue = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
-    
-    const adjustments = cashStatus.adjustments || [];
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
-    
-    const nonOpeningBalanceValue = cashRevenue + totalIn - totalOut;
-    const newOpeningBalance = newBalance - nonOpeningBalanceValue;
-  
-    const newState = { ...cashStatus, openingBalance: newOpeningBalance };
+    const currentBalance = expectedCashInDrawer;
+    const adjustmentAmount = newBalance - currentBalance;
+
+    if (Math.abs(adjustmentAmount) < 0.01) {
+        setIsEditCashInDrawerDialogOpen(false);
+        return;
+    }
+
+    const newAdjustment: CashAdjustment = {
+        id: `adj-corr-${Date.now()}`,
+        amount: Math.abs(adjustmentAmount),
+        type: adjustmentAmount > 0 ? 'in' : 'out',
+        description: 'Ajuste de saldo manual',
+        timestamp: new Date().toISOString(),
+        isCorrection: true, // Mark it as a correction so it's not displayed
+    };
+
+    const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), newAdjustment] };
     saveCashRegisterStatus(newState);
+
     toast({ title: "Saldo do Caixa Principal Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
     setIsEditCashInDrawerDialogOpen(false);
   }
@@ -700,7 +706,7 @@ export default function FinancialClient() {
         currentBalance={expectedCashInDrawer} 
         onSave={handleEditCashInDrawer} 
         title="Editar Saldo do Caixa Principal" 
-        description="Ajuste o valor total atual do caixa principal. Isso modificará o saldo de abertura para refletir a mudança, sem criar uma nova transação." 
+        description="Ajuste o valor total atual do caixa principal. O sistema criará um ajuste interno para corresponder ao novo saldo." 
         idPrefix="cash-drawer"
       />
     </>
