@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, Wallet } from "lucide-react";
+import { Terminal, Banknote } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
 
 interface PaymentDialogProps {
@@ -40,7 +40,8 @@ const parseLocaleFloat = (value: string) => parseFloat(value.replace(',', '.')) 
 export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit, allowCredit = false, allowPartialPayment = false }: PaymentDialogProps) {
   const [discount, setDiscount] = useState<string>('');
   const [cashAmount, setCashAmount] = useState<string>('');
-  const [cardAmount, setCardAmount] = useState<string>('');
+  const [debitAmount, setDebitAmount] = useState<string>('');
+  const [creditAmount, setCreditAmount] = useState<string>('');
   const [pixAmount, setPixAmount] = useState<string>('');
   const [cashTendered, setCashTendered] = useState<string>('');
   const [changeReturned, setChangeReturned] = useState<string>('');
@@ -48,12 +49,13 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
 
   const numDiscount = parseLocaleFloat(discount);
   const numCashAmount = parseLocaleFloat(cashAmount);
-  const numCardAmount = parseLocaleFloat(cardAmount);
+  const numDebitAmount = parseLocaleFloat(debitAmount);
+  const numCreditAmount = parseLocaleFloat(creditAmount);
   const numPixAmount = parseLocaleFloat(pixAmount);
   
   const finalBalance = useMemo(() => totalAmount - numDiscount, [totalAmount, numDiscount]);
   const amountToPay = useMemo(() => Math.max(0, finalBalance), [finalBalance]);
-  const totalPaid = useMemo(() => numCashAmount + numCardAmount + numPixAmount, [numCashAmount, numCardAmount, numPixAmount]);
+  const totalPaid = useMemo(() => numCashAmount + numDebitAmount + numCreditAmount + numPixAmount, [numCashAmount, numDebitAmount, numCreditAmount, numPixAmount]);
   const remainingToPay = useMemo(() => amountToPay - totalPaid, [amountToPay, totalPaid]);
 
   const numCashTendered = parseLocaleFloat(cashTendered);
@@ -74,7 +76,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     if (isOpen) {
       setDiscount('');
       setCashAmount('');
-      setCardAmount('');
+      setDebitAmount('');
+      setCreditAmount('');
       setPixAmount('');
       setCashTendered('');
       setChangeReturned('');
@@ -87,11 +90,17 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   }, [calculatedCashChange]);
 
   const setPayFull = (method: PaymentMethod) => {
-    const otherPaid = (method === 'cash' ? 0 : numCashAmount) + (method === 'card' ? 0 : numCardAmount) + (method === 'pix' ? 0 : numPixAmount);
+    const otherPaid = 
+      (method === 'cash' ? 0 : numCashAmount) + 
+      (method === 'debit' ? 0 : numDebitAmount) + 
+      (method === 'credit' ? 0 : numCreditAmount) + 
+      (method === 'pix' ? 0 : numPixAmount);
     const amount = Math.max(0, amountToPay - otherPaid);
     const value = amount > 0 ? amount.toFixed(2).replace('.', ',') : '';
+
     if (method === 'cash') setCashAmount(value);
-    if (method === 'card') setCardAmount(value);
+    if (method === 'debit') setDebitAmount(value);
+    if (method === 'credit') setCreditAmount(value);
     if (method === 'pix') setPixAmount(value);
   }
 
@@ -125,7 +134,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
 
     const payments: Payment[] = [];
     if (numCashAmount > 0) payments.push({ method: 'cash', amount: numCashAmount });
-    if (numCardAmount > 0) payments.push({ method: 'card', amount: numCardAmount });
+    if (numDebitAmount > 0) payments.push({ method: 'debit', amount: numDebitAmount });
+    if (numCreditAmount > 0) payments.push({ method: 'credit', amount: numCreditAmount });
     if (numPixAmount > 0) payments.push({ method: 'pix', amount: numPixAmount });
 
     onSubmit({
@@ -170,8 +180,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           {amountToPay > 0 ? (
             <div className="space-y-3">
               {PAYMENT_METHODS.map(method => {
-                const state = method.value === 'cash' ? cashAmount : (method.value === 'card' ? cardAmount : pixAmount);
-                const setState = method.value === 'cash' ? setCashAmount : (method.value === 'card' ? setCardAmount : setPixAmount);
+                const state = method.value === 'cash' ? cashAmount : (method.value === 'debit' ? debitAmount : (method.value === 'credit' ? creditAmount : pixAmount));
+                const setState = method.value === 'cash' ? setCashAmount : (method.value === 'debit' ? setDebitAmount : (method.value === 'credit' ? setCreditAmount : setPixAmount));
                 return (
                   <div key={method.value} className="flex items-center gap-2">
                     <Label htmlFor={`pay-${method.value}`} className="w-24 flex items-center gap-2">
@@ -185,7 +195,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
             </div>
           ) : (
              <Alert>
-              <Wallet className="h-4 w-4" />
+              <Banknote className="h-4 w-4" />
               <AlertTitle>Pagamento com Crédito</AlertTitle>
               <AlertDescription>O valor total será quitado com o crédito existente na comanda.</AlertDescription>
             </Alert>

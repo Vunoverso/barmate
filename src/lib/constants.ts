@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, CardFees } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
@@ -10,6 +10,8 @@ let financialEntriesCache: FinancialEntry[] | null = null;
 let secondaryCashBoxCache: SecondaryCashBox | null = null;
 let bankAccountCache: BankAccount | null = null;
 let cashRegisterStatusCache: CashRegisterStatus | null = null;
+let cardFeesCache: CardFees | null = null;
+
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer,
@@ -123,8 +125,9 @@ export const saveProducts = (products: Product[]): void => {
 };
 
 export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: LucideIcon }[] = [
-  { name: 'Dinheiro', value: 'cash', icon: CircleDollarSign },
-  { name: 'Cartão', value: 'card', icon: CreditCard },
+  { name: 'Dinheiro', value: 'cash', icon: Banknote },
+  { name: 'Débito', value: 'debit', icon: CreditCard },
+  { name: 'Crédito', value: 'credit', icon: CreditCard },
   { name: 'PIX', value: 'pix', icon: QrCode },
 ];
 
@@ -141,7 +144,7 @@ const INITIAL_SALES: Sale[] = [
     originalAmount: saleTotal1,
     discountAmount: 0,
     totalAmount: saleTotal1,
-    payments: [{ method: 'card', amount: saleTotal1 }],
+    payments: [{ method: 'credit', amount: saleTotal1 }],
     timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     status: 'completed',
   },
@@ -153,7 +156,7 @@ const INITIAL_SALES: Sale[] = [
     originalAmount: saleTotal2,
     discountAmount: 0,
     totalAmount: saleTotal2,
-    payments: [{ method: 'cash', amount: saleTotal2 }],
+    payments: [{ method: 'cash', amount: 25.00 }],
     changeGiven: 25.00 - saleTotal2,
     timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     status: 'completed',
@@ -214,23 +217,57 @@ export const getSales = (): Sale[] => {
 
 export const addSale = (newSale: Sale): void => {
   if (typeof window === 'undefined') return;
-  
-  // Update sales record
+
   const currentSales = getSales();
   const updatedSales = [...currentSales, newSale];
   saveSales(updatedSales);
 
-  // Update bank account for non-cash payments
   const bankAccount = getBankAccount();
-  const electronicPaymentsTotal = newSale.payments
-    .filter(p => p.method === 'card' || p.method === 'pix')
-    .reduce((sum, p) => sum + p.amount, 0);
+  let netAmountToBank = 0;
+  const newFinancialEntries: FinancialEntry[] = [];
+  const cardFees = getCardFees();
 
-  if (electronicPaymentsTotal > 0) {
-    const updatedBankAccount = {
-      balance: bankAccount.balance + electronicPaymentsTotal
-    };
-    saveBankAccount(updatedBankAccount);
+  newSale.payments.forEach(p => {
+    if (p.method === 'credit') {
+      const feeAmount = p.amount * (cardFees.creditRate / 100);
+      netAmountToBank += p.amount - feeAmount;
+      if (feeAmount > 0) {
+        newFinancialEntries.push({
+          id: `fee-${newSale.id}-credit`,
+          description: `Taxa Crédito (Venda #${newSale.id.slice(-6)})`,
+          amount: feeAmount,
+          type: 'expense',
+          source: 'bank_account',
+          timestamp: new Date(),
+          saleId: newSale.id,
+        });
+      }
+    } else if (p.method === 'debit') {
+      const feeAmount = p.amount * (cardFees.debitRate / 100);
+      netAmountToBank += p.amount - feeAmount;
+      if (feeAmount > 0) {
+        newFinancialEntries.push({
+          id: `fee-${newSale.id}-debit`,
+          description: `Taxa Débito (Venda #${newSale.id.slice(-6)})`,
+          amount: feeAmount,
+          type: 'expense',
+          source: 'bank_account',
+          timestamp: new Date(),
+          saleId: newSale.id,
+        });
+      }
+    } else if (p.method === 'pix') {
+      netAmountToBank += p.amount;
+    }
+  });
+
+  if (netAmountToBank > 0) {
+    saveBankAccount({ balance: bankAccount.balance + netAmountToBank });
+  }
+
+  if (newFinancialEntries.length > 0) {
+    const currentFinancialEntries = getFinancialEntries();
+    saveFinancialEntries([...currentFinancialEntries, ...newFinancialEntries]);
   }
 };
 
@@ -376,3 +413,40 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus): void => {
     window.dispatchEvent(new Event('cashRegisterStatusChanged'));
   }
 }
+
+// --- Card Fees ---
+export const CARD_FEES_KEY = 'barmate_cardFees';
+
+export const getCardFees = (): CardFees => {
+    if (typeof window === 'undefined') {
+        return { debitRate: 0, creditRate: 0 };
+    }
+    if (cardFeesCache !== null) {
+        return cardFeesCache;
+    }
+    const stored = localStorage.getItem(CARD_FEES_KEY);
+    if (stored) {
+        try {
+            const parsed = JSON.parse(stored);
+            if (typeof parsed.debitRate === 'number' && typeof parsed.creditRate === 'number') {
+                cardFeesCache = parsed;
+                return cardFeesCache;
+            }
+        } catch (e) {
+            console.error("Failed to parse card fees from localStorage", e);
+            localStorage.removeItem(CARD_FEES_KEY);
+        }
+    }
+    const initial = { debitRate: 0, creditRate: 0 };
+    localStorage.setItem(CARD_FEES_KEY, JSON.stringify(initial));
+    cardFeesCache = initial;
+    return cardFeesCache;
+};
+
+export const saveCardFees = (fees: CardFees): void => {
+    if (typeof window !== 'undefined') {
+        cardFeesCache = fees;
+        localStorage.setItem(CARD_FEES_KEY, JSON.stringify(fees));
+        window.dispatchEvent(new Event('cardFeesChanged'));
+    }
+};

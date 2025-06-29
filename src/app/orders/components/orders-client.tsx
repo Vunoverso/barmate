@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Wallet } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -262,7 +262,7 @@ export default function OrdersClient() {
                 quantity: 1,
                 categoryId: 'cat_outros',
                 categoryName: 'Pagamento',
-                categoryIconName: 'Wallet',
+                categoryIconName: 'Banknote',
             };
         });
 
@@ -274,7 +274,7 @@ export default function OrdersClient() {
                 quantity: 1,
                 categoryId: 'cat_outros',
                 categoryName: 'Pagamento',
-                categoryIconName: 'Wallet',
+                categoryIconName: 'Banknote',
             });
         }
         
@@ -330,7 +330,7 @@ export default function OrdersClient() {
             quantity: 1,
             categoryId: 'cat_outros',
             categoryName: 'Outros',
-            categoryIconName: 'Wallet',
+            categoryIconName: 'Banknote',
         };
         const newCreditOrderId = `order-credit-${Date.now()}`;
         const newCreditOrder: ActiveOrder = {

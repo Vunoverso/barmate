@@ -21,7 +21,7 @@ export interface OrderItem extends Product {
   categoryIconName?: string;
 }
 
-export type PaymentMethod = 'cash' | 'card' | 'pix';
+export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';
 
 export interface Payment {
   method: PaymentMethod;
@@ -80,4 +80,10 @@ export interface FinancialEntry {
   source: 'daily_cash' | 'secondary_cash' | 'bank_account';
   timestamp: Date;
   adjustmentId?: string;
+  saleId?: string;
+}
+
+export interface CardFees {
+  debitRate: number;
+  creditRate: number;
 }
