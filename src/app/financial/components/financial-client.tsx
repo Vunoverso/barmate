@@ -41,7 +41,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart } from 'lucide-react';
+import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart, Eye, EyeOff } from 'lucide-react';
 import { addDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { ptBR } from "date-fns/locale";
@@ -104,6 +104,7 @@ export default function FinancialClient() {
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
+  const [isBalanceVisible, setIsBalanceVisible] = useState(false);
 
   const { toast } = useToast();
   const form = useForm<ExpenseFormData>({
@@ -406,7 +407,13 @@ export default function FinancialClient() {
   return (
     <>
       <div className="space-y-6">
-        <h2 className="text-xl font-semibold tracking-tight">Situação Financeira Atual</h2>
+        <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Situação Financeira Atual</h2>
+            <Button variant="ghost" size="icon" onClick={() => setIsBalanceVisible(!isBalanceVisible)}>
+                {isBalanceVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                <span className="sr-only">{isBalanceVisible ? "Esconder saldos" : "Mostrar saldos"}</span>
+            </Button>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -414,7 +421,7 @@ export default function FinancialClient() {
                     <Scale className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(totalGlobalBalance)}</div>
+                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(totalGlobalBalance) : '******'}</div>
                     <p className="text-xs text-muted-foreground">Caixa Diário + Caixa 02 + Banco</p>
                 </CardContent>
             </Card>
@@ -426,7 +433,7 @@ export default function FinancialClient() {
                     </Button>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(expectedCashInDrawer)}</div>
+                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(expectedCashInDrawer) : '******'}</div>
                     <p className="text-xs text-muted-foreground">Status: <span className="capitalize">{cashStatus.status === 'open' ? 'Aberto' : 'Fechado'}</span></p>
                 </CardContent>
             </Card>
@@ -436,7 +443,7 @@ export default function FinancialClient() {
                     <Button variant="ghost" size="icon" className="h-7 w-7 -mr-4" onClick={() => setIsEditCaixa02DialogOpen(true)}><Edit className="h-4 w-4" /></Button>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(secondaryCashBox.balance)}</div>
+                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(secondaryCashBox.balance) : '******'}</div>
                 </CardContent>
             </Card>
             <Card>
@@ -445,7 +452,7 @@ export default function FinancialClient() {
                     <Button variant="ghost" size="icon" className="h-7 w-7 -mr-4" onClick={() => setIsEditBankAccountDialogOpen(true)}><Edit className="h-4 w-4" /></Button>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(bankAccount.balance)}</div>
+                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(bankAccount.balance) : '******'}</div>
                 </CardContent>
             </Card>
         </div>
