@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
@@ -628,18 +627,18 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {products.map(product => {
         const category = productCategories.find(c => c.id === product.categoryId);
         const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
         const categoryName = category ? category.name : "Desconhecida";
         return (
-          <Card key={product.id} className="flex items-center p-3 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted rounded-md flex items-center justify-center mr-3 group-hover:bg-muted/80 transition-colors">
-              <IconComponent className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground group-hover:text-primary transition-colors" />
+          <Card key={product.id} className="flex items-center p-2 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-muted rounded-md flex items-center justify-center mr-2 group-hover:bg-muted/80 transition-colors">
+              <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-grow">
-              <h3 className="font-medium text-sm sm:text-base">{product.name}</h3>
+              <h3 className="font-medium text-xs sm:text-sm">{product.name}</h3>
               <p className="text-xs text-muted-foreground">{categoryName}</p>
             </div>
             <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
