@@ -116,7 +116,7 @@ export default function ReportsClient() {
     const dateFiltered = filterByDate(sales) as Sale[];
     return dateFiltered.filter(sale => {
       if (paymentMethodFilter.length === 0) return true;
-      return paymentMethodFilter.includes(sale.paymentMethod);
+      return sale.payments.some(p => paymentMethodFilter.includes(p.method));
     }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [sales, dateRange, paymentMethodFilter]);
 
@@ -134,7 +134,7 @@ export default function ReportsClient() {
     const openingTime = new Date(cashStatus.openingTime);
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
-    const cashRevenue = sessionSales.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + s.totalAmount, 0);
+    const cashRevenue = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
     const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
@@ -205,16 +205,19 @@ export default function ReportsClient() {
       toast({ title: "Nenhuma venda para exportar", variant: "destructive" });
       return;
     }
-    const headers = ['ID Venda', 'Data', 'Itens Qtd', 'Método Pag.', 'Valor Original (R$)', 'Desconto (R$)', 'Valor Final (R$)'];
-    const data = filteredSales.map(s => [
-      s.id,
-      format(new Date(s.timestamp), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
-      s.items.reduce((sum, item) => sum + item.quantity, 0),
-      PAYMENT_METHODS.find(pm => pm.value === s.paymentMethod)?.name || s.paymentMethod,
-      s.originalAmount.toFixed(2).replace('.',','),
-      s.discountAmount.toFixed(2).replace('.',','),
-      s.totalAmount.toFixed(2).replace('.',','),
-    ]);
+    const headers = ['ID Venda', 'Data', 'Itens Qtd', 'Métodos Pag.', 'Valor Original (R$)', 'Desconto (R$)', 'Valor Final (R$)'];
+    const data = filteredSales.map(s => {
+      const paymentMethods = s.payments.map(p => PAYMENT_METHODS.find(pm => pm.value === p.method)?.name || p.method).join(' / ');
+      return [
+        s.id,
+        format(new Date(s.timestamp), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
+        s.items.reduce((sum, item) => sum + item.quantity, 0),
+        paymentMethods,
+        s.originalAmount.toFixed(2).replace('.',','),
+        s.discountAmount.toFixed(2).replace('.',','),
+        s.totalAmount.toFixed(2).replace('.',','),
+      ];
+    });
     downloadAsCSV(headers, data, `relatorio_vendas_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     toast({ title: "Relatório de Vendas Exportado" });
   };
@@ -223,12 +226,13 @@ export default function ReportsClient() {
     const combinedData = [
       ...filteredSales.map(sale => {
         const itemsDesc = sale.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
+        const paymentMethods = sale.payments.map(p => `${PAYMENT_METHODS.find(pm => pm.value === p.method)?.name || p.method}: ${formatCurrency(p.amount)}`).join('; ');
         return {
           timestamp: new Date(sale.timestamp),
           description: `Venda #${sale.id.slice(-6)} (${itemsDesc})`,
           type: 'Receita',
           amount: sale.totalAmount,
-          source: PAYMENT_METHODS.find(p => p.value === sale.paymentMethod)?.name || sale.paymentMethod
+          source: paymentMethods
         };
       }),
       ...filteredEntries.filter(e => e.type === 'expense').map(entry => ({
@@ -457,7 +461,15 @@ export default function ReportsClient() {
                 <TableRow key={sale.id}>
                   <TableCell>{format(new Date(sale.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
                   <TableCell>{sale.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
-                  <TableCell><Badge variant="outline" className="capitalize">{PAYMENT_METHODS.find(pm => pm.value === sale.paymentMethod)?.name || sale.paymentMethod}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                        {sale.payments.map(p => (
+                            <Badge key={p.method} variant="outline" className="capitalize">
+                                {PAYMENT_METHODS.find(pm => pm.value === p.method)?.name || p.method}
+                            </Badge>
+                        ))}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right text-destructive">{sale.discountAmount > 0 ? `- ${formatCurrency(sale.discountAmount)}` : formatCurrency(0)}</TableCell>
                   <TableCell className="text-right font-semibold">{formatCurrency(sale.totalAmount)}</TableCell>
                   <TableCell className="text-right">
