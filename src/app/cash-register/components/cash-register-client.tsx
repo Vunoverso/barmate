@@ -109,7 +109,7 @@ export default function CashRegisterClient() {
 
   useEffect(() => {
     if (isMounted) {
-      localStorage.setItem(CASH_REGISTER_STATUS_KEY, JSON.stringify(cashStatus));
+      saveCashRegisterStatus(cashStatus);
     }
   }, [cashStatus, isMounted]);
 
