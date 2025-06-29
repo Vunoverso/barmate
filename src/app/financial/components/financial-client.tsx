@@ -513,7 +513,7 @@ export default function FinancialClient() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
+                  <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(totalRevenue) : '******'}</div>
                   <p className="text-xs text-muted-foreground">Total de vendas no período</p>
               </CardContent>
               </Card>
@@ -523,7 +523,7 @@ export default function FinancialClient() {
                   <TrendingDown className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
+                  <div className="text-2xl font-bold text-destructive">{isBalanceVisible ? formatCurrency(totalExpenses) : '******'}</div>
                   <p className="text-xs text-muted-foreground">Total de saídas no período</p>
               </CardContent>
               </Card>
@@ -534,7 +534,7 @@ export default function FinancialClient() {
               </CardHeader>
               <CardContent>
                   <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                  {formatCurrency(netBalance)}
+                  {isBalanceVisible ? formatCurrency(netBalance) : '******'}
                   </div>
                   <p className="text-xs text-muted-foreground">Receita - Despesas</p>
               </CardContent>
@@ -557,13 +557,13 @@ export default function FinancialClient() {
               <AccordionTrigger className="p-6"><CardHeader className="p-0 text-left">
                   <CardTitle>Resumo Mensal</CardTitle><CardDescription>Balanço de receitas e despesas agrupadas por mês.</CardDescription>
               </CardHeader></AccordionTrigger>
-              <AccordionContent className="px-6 pb-6"><SummaryTable data={monthlySummary} /></AccordionContent>
+              <AccordionContent className="px-6 pb-6"><SummaryTable data={monthlySummary} isBalanceVisible={isBalanceVisible} /></AccordionContent>
           </AccordionItem></Card>
           <Card><AccordionItem value="weekly-summary" className="border-b-0">
             <AccordionTrigger className="p-6"><CardHeader className="p-0 text-left">
                 <CardTitle>Resumo Semanal</CardTitle><CardDescription>Balanço de receitas e despesas agrupadas por semana.</CardDescription>
             </CardHeader></AccordionTrigger>
-            <AccordionContent className="px-6 pb-6"><SummaryTable data={weeklySummary} /></AccordionContent>
+            <AccordionContent className="px-6 pb-6"><SummaryTable data={weeklySummary} isBalanceVisible={isBalanceVisible} /></AccordionContent>
           </AccordionItem></Card>
         </Accordion>
       
@@ -720,7 +720,7 @@ export default function FinancialClient() {
   );
 }
 
-const SummaryTable = ({ data }: { data: { period: string, income: number, expenses: number, balance: number }[]}) => (
+const SummaryTable = ({ data, isBalanceVisible }: { data: { period: string, income: number, expenses: number, balance: number }[], isBalanceVisible: boolean }) => (
     <Table>
         <TableHeader><TableRow>
             <TableHead>Período</TableHead>
@@ -732,9 +732,9 @@ const SummaryTable = ({ data }: { data: { period: string, income: number, expens
             {data.length > 0 ? data.map(row => (
                 <TableRow key={row.period}>
                     <TableCell className="font-medium capitalize">{row.period}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(row.income)}</TableCell>
-                    <TableCell className="text-right text-destructive">{formatCurrency(row.expenses)}</TableCell>
-                    <TableCell className={`text-right font-bold ${row.balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{formatCurrency(row.balance)}</TableCell>
+                    <TableCell className="text-right">{isBalanceVisible ? formatCurrency(row.income) : '******'}</TableCell>
+                    <TableCell className="text-right text-destructive">{isBalanceVisible ? formatCurrency(row.expenses) : '******'}</TableCell>
+                    <TableCell className={`text-right font-bold ${row.balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{isBalanceVisible ? formatCurrency(row.balance) : '******'}</TableCell>
                 </TableRow>
             )) : (
                 <TableRow><TableCell colSpan={4} className="h-24 text-center">Nenhum dado para este período.</TableCell></TableRow>
