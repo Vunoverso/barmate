@@ -82,7 +82,7 @@ const expenseSchema = z.object({
 type ExpenseFormData = z.infer<typeof expenseSchema>;
 
 const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
-  daily_cash: 'Caixa Principal',
+  daily_cash: 'Caixa Diário',
   secondary_cash: 'Caixa 02',
   bank_account: 'Conta Bancária',
 };
@@ -232,11 +232,11 @@ export default function FinancialClient() {
     // Check for sufficient funds
     if (data.source === 'daily_cash') {
       if (cashStatus.status !== 'open') {
-        toast({ title: "Ação Bloqueada", description: "O caixa principal está fechado. Não é possível registrar uma despesa dele.", variant: "destructive" });
+        toast({ title: "Ação Bloqueada", description: "O caixa diário está fechado. Não é possível registrar uma despesa dele.", variant: "destructive" });
         return;
       }
       if (expectedCashInDrawer < data.amount) {
-        toast({ title: "Saldo Insuficiente", description: "O caixa principal não tem saldo suficiente para esta despesa.", variant: "destructive" });
+        toast({ title: "Saldo Insuficiente", description: "O caixa diário não tem saldo suficiente para esta despesa.", variant: "destructive" });
         return;
       }
     } else if (data.source === 'secondary_cash' && secondaryCashBox.balance < data.amount) {
@@ -281,7 +281,7 @@ export default function FinancialClient() {
   
   const handleEditCashInDrawer = (newBalance: number) => {
     if (cashStatus.status !== 'open') {
-      toast({ title: "Ação Bloqueada", description: "O caixa principal está fechado. Não é possível editar o saldo.", variant: "destructive" });
+      toast({ title: "Ação Bloqueada", description: "O caixa diário está fechado. Não é possível editar o saldo.", variant: "destructive" });
       return;
     }
   
@@ -305,7 +305,7 @@ export default function FinancialClient() {
     const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), newAdjustment] };
     saveCashRegisterStatus(newState);
 
-    toast({ title: "Saldo do Caixa Principal Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
+    toast({ title: "Saldo do Caixa Diário Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
     setIsEditCashInDrawerDialogOpen(false);
   }
 
@@ -415,12 +415,12 @@ export default function FinancialClient() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{formatCurrency(totalGlobalBalance)}</div>
-                    <p className="text-xs text-muted-foreground">Caixa Principal + Caixa 02 + Banco</p>
+                    <p className="text-xs text-muted-foreground">Caixa Diário + Caixa 02 + Banco</p>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Caixa Principal (Aberto)</CardTitle>
+                    <CardTitle className="text-sm font-medium">Caixa Diário (Aberto)</CardTitle>
                     <Button variant="ghost" size="icon" className="h-7 w-7 -mr-4" onClick={() => setIsEditCashInDrawerDialogOpen(true)} disabled={cashStatus.status !== 'open'}>
                         <Edit className="h-4 w-4" />
                     </Button>
@@ -665,7 +665,7 @@ export default function FinancialClient() {
               <FormField control={form.control} name="source" render={({ field }) => (
                   <FormItem className="space-y-3"><FormLabel>Origem do Dinheiro</FormLabel><FormControl>
                       <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
-                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="daily_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Banknote className="h-4 w-4"/> Caixa Principal ({formatCurrency(expectedCashInDrawer)})</FormLabel></FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="daily_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Banknote className="h-4 w-4"/> Caixa Diário ({formatCurrency(expectedCashInDrawer)})</FormLabel></FormItem>
                         <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="secondary_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><PiggyBank className="h-4 w-4"/> Caixa 02 ({formatCurrency(secondaryCashBox.balance)})</FormLabel></FormItem>
                         <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="bank_account" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Landmark className="h-4 w-4"/> Conta Bancária ({formatCurrency(bankAccount.balance)})</FormLabel></FormItem>
                       </RadioGroup>
@@ -705,8 +705,8 @@ export default function FinancialClient() {
         onOpenChange={setIsEditCashInDrawerDialogOpen} 
         currentBalance={expectedCashInDrawer} 
         onSave={handleEditCashInDrawer} 
-        title="Editar Saldo do Caixa Principal" 
-        description="Ajuste o valor total atual do caixa principal. O sistema criará um ajuste interno para corresponder ao novo saldo." 
+        title="Editar Saldo do Caixa Diário" 
+        description="Ajuste o valor total atual do caixa diário. O sistema criará um ajuste interno para corresponder ao novo saldo." 
         idPrefix="cash-drawer"
       />
     </>

@@ -396,7 +396,7 @@ export const saveBankAccount = (account: BankAccount): void => {
   }
 };
 
-// --- Status do Caixa Principal ---
+// --- Status do Caixa Diário ---
 const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus';
 
 export const getCashRegisterStatus = (): CashRegisterStatus => {

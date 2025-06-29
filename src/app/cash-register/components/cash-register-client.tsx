@@ -114,6 +114,20 @@ export default function CashRegisterClient() {
   }, [cashStatus, isMounted]);
 
   const handleOpenCashRegister = (openingBalance: number) => {
+    const currentSecondaryBox = getSecondaryCashBox();
+
+    if (currentSecondaryBox.balance < openingBalance) {
+      toast({
+        title: "Saldo Insuficiente no Caixa 02",
+        description: `Não há saldo suficiente no Caixa 02 para abrir o caixa diário com ${formatCurrency(openingBalance)}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Deduct from Caixa 02
+    saveSecondaryCashBox({ balance: currentSecondaryBox.balance - openingBalance });
+
     const newStatus: CashRegisterStatus = {
       status: 'open',
       openingBalance: openingBalance,
@@ -124,8 +138,8 @@ export default function CashRegisterClient() {
     saveCashRegisterStatus(newStatus);
     setIsOpeningDialog(false);
     toast({
-      title: "Caixa Aberto!",
-      description: `Caixa iniciado com um saldo de ${formatCurrency(openingBalance)}.`,
+      title: "Caixa Diário Aberto!",
+      description: `${formatCurrency(openingBalance)} foram transferidos do Caixa 02 para o caixa diário.`,
     });
   };
 
@@ -287,7 +301,7 @@ export default function CashRegisterClient() {
     setCashStatus(newState);
     saveCashRegisterStatus(newState);
 
-    toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o caixa atual.` });
+    toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o caixa diário.` });
     setIsTransferDialogOpen(false);
   }
 
@@ -413,6 +427,7 @@ export default function CashRegisterClient() {
           isOpen={isOpeningDialog}
           onOpenChange={setIsOpeningDialog}
           onOpen={handleOpenCashRegister}
+          secondaryCashBalance={secondaryCashBox.balance}
         />
       </>
     );
@@ -424,7 +439,7 @@ export default function CashRegisterClient() {
         <div className="md:col-span-2 space-y-4">
             <Card>
                 <CardHeader>
-                <CardTitle>Resumo do Caixa Atual</CardTitle>
+                <CardTitle>Resumo do Caixa Diário</CardTitle>
                 <CardDescription>
                     Caixa aberto em {format(new Date(cashStatus.openingTime!), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </CardDescription>
@@ -544,8 +559,8 @@ export default function CashRegisterClient() {
         <div className="space-y-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Operações de Caixa</CardTitle>
-                    <CardDescription>Faça entradas ou retiradas de dinheiro do caixa principal.</CardDescription>
+                    <CardTitle>Operações do Caixa Diário</CardTitle>
+                    <CardDescription>Faça entradas ou retiradas de dinheiro do caixa diário.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">
                     <Button variant="outline" onClick={() => { setEditingAdjustment(null); setAdjustmentType('in'); setIsAdjustmentDialogOpen(true); }}>
@@ -576,7 +591,7 @@ export default function CashRegisterClient() {
                         <p className="text-3xl font-bold">{formatCurrency(secondaryCashBox.balance)}</p>
                     </div>
                     <Button className="w-full" onClick={() => setIsTransferDialogOpen(true)} disabled={secondaryCashBox.balance <= 0}>
-                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Transferir p/ Caixa Principal
+                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Transferir p/ Caixa Diário
                     </Button>
                 </CardContent>
              </Card>
@@ -666,7 +681,7 @@ export default function CashRegisterClient() {
   );
 }
 
-function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onOpen: (balance: number) => void }) {
+function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBalance }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onOpen: (balance: number) => void, secondaryCashBalance: number }) {
   const [balance, setBalance] = useState('');
   const { toast } = useToast();
 
@@ -688,9 +703,10 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen }: { isOpen: bool
      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) setBalance(''); onOpenChange(open); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Abrir Caixa</DialogTitle>
+          <DialogTitle>Abrir Caixa Diário</DialogTitle>
           <DialogDescription>
-            Insira o valor inicial em dinheiro no caixa (para troco).
+            Insira o valor a ser transferido do Caixa 02 para iniciar as operações. 
+            Saldo disponível no Caixa 02: <strong>{formatCurrency(secondaryCashBalance)}</strong>.
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-2">
@@ -858,7 +874,7 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { isOpe
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if(!open) setAmount(''); onOpenChange(open); }}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Transferir do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para o Caixa Principal. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Transferir do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para o Caixa Diário. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
         <div className="py-4 space-y-2">
           <Label htmlFor="transfer-amount">Valor a Transferir (R$)</Label>
           <Input id="transfer-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
