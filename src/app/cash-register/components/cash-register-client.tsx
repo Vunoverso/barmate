@@ -304,21 +304,31 @@ export default function CashRegisterClient() {
   }
 
   const handleCloseCashRegister = () => {
+    const finalCashAmount = sessionSummary.expectedCash;
+
+    // Transfer the final cash amount to the secondary cash box (Caixa 02)
+    if (finalCashAmount > 0) {
+        const currentSecondaryBox = getSecondaryCashBox();
+        saveSecondaryCashBox({ balance: currentSecondaryBox.balance + finalCashAmount });
+    }
+
     const closedSession = {
       ...sessionSummary,
       id: `session-${Date.now()}`,
       closingTime: new Date().toISOString(),
+      transferredToCaixa02: finalCashAmount, // Optional: log the transferred amount
     };
     
     const allClosedSessions = JSON.parse(localStorage.getItem(CLOSED_SESSIONS_KEY) || '[]');
     allClosedSessions.push(closedSession);
     localStorage.setItem(CLOSED_SESSIONS_KEY, JSON.stringify(allClosedSessions));
 
-    setCashStatus({ status: 'closed' });
+    // Reset the cash register status. The openingBalance for the next session will be set by the user.
+    setCashStatus({ status: 'closed', adjustments: [] });
     setIsClosingDialog(false);
     toast({
-      title: "Caixa Fechado",
-      description: "O resumo do caixa foi salvo. Pronto para começar um novo dia!",
+      title: "Caixa Fechado!",
+      description: `O valor de ${formatCurrency(finalCashAmount)} foi transferido para o Caixa 02.`,
       variant: 'default'
     });
   };
