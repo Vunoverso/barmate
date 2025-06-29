@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, CardFees } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
@@ -10,7 +10,7 @@ let financialEntriesCache: FinancialEntry[] | null = null;
 let secondaryCashBoxCache: SecondaryCashBox | null = null;
 let bankAccountCache: BankAccount | null = null;
 let cashRegisterStatusCache: CashRegisterStatus | null = null;
-let cardFeesCache: CardFees | null = null;
+let transactionFeesCache: TransactionFees | null = null;
 
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
@@ -225,11 +225,11 @@ export const addSale = (newSale: Sale): void => {
   const bankAccount = getBankAccount();
   let netAmountToBank = 0;
   const newFinancialEntries: FinancialEntry[] = [];
-  const cardFees = getCardFees();
+  const transactionFees = getTransactionFees();
 
   newSale.payments.forEach(p => {
     if (p.method === 'credit') {
-      const feeAmount = p.amount * (cardFees.creditRate / 100);
+      const feeAmount = p.amount * (transactionFees.creditRate / 100);
       netAmountToBank += p.amount - feeAmount;
       if (feeAmount > 0) {
         newFinancialEntries.push({
@@ -243,7 +243,7 @@ export const addSale = (newSale: Sale): void => {
         });
       }
     } else if (p.method === 'debit') {
-      const feeAmount = p.amount * (cardFees.debitRate / 100);
+      const feeAmount = p.amount * (transactionFees.debitRate / 100);
       netAmountToBank += p.amount - feeAmount;
       if (feeAmount > 0) {
         newFinancialEntries.push({
@@ -257,7 +257,19 @@ export const addSale = (newSale: Sale): void => {
         });
       }
     } else if (p.method === 'pix') {
-      netAmountToBank += p.amount;
+      const feeAmount = p.amount * (transactionFees.pixRate / 100);
+      netAmountToBank += p.amount - feeAmount;
+      if (feeAmount > 0) {
+        newFinancialEntries.push({
+          id: `fee-${newSale.id}-pix`,
+          description: `Taxa PIX (Venda #${newSale.id.slice(-6)})`,
+          amount: feeAmount,
+          type: 'expense',
+          source: 'bank_account',
+          timestamp: new Date(),
+          saleId: newSale.id,
+        });
+      }
     }
   });
 
@@ -414,39 +426,42 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus): void => {
   }
 }
 
-// --- Card Fees ---
-export const CARD_FEES_KEY = 'barmate_cardFees';
+// --- Transaction Fees ---
+export const TRANSACTION_FEES_KEY = 'barmate_transactionFees';
 
-export const getCardFees = (): CardFees => {
+export const getTransactionFees = (): TransactionFees => {
     if (typeof window === 'undefined') {
-        return { debitRate: 0, creditRate: 0 };
+        return { debitRate: 0, creditRate: 0, pixRate: 0 };
     }
-    if (cardFeesCache !== null) {
-        return cardFeesCache;
+    if (transactionFeesCache !== null) {
+        return transactionFeesCache;
     }
-    const stored = localStorage.getItem(CARD_FEES_KEY);
+    const stored = localStorage.getItem(TRANSACTION_FEES_KEY);
     if (stored) {
         try {
             const parsed = JSON.parse(stored);
             if (typeof parsed.debitRate === 'number' && typeof parsed.creditRate === 'number') {
-                cardFeesCache = parsed;
-                return cardFeesCache;
+                if (typeof parsed.pixRate !== 'number') {
+                  parsed.pixRate = 0;
+                }
+                transactionFeesCache = parsed;
+                return transactionFeesCache;
             }
         } catch (e) {
-            console.error("Failed to parse card fees from localStorage", e);
-            localStorage.removeItem(CARD_FEES_KEY);
+            console.error("Failed to parse transaction fees from localStorage", e);
+            localStorage.removeItem(TRANSACTION_FEES_KEY);
         }
     }
-    const initial = { debitRate: 0, creditRate: 0 };
-    localStorage.setItem(CARD_FEES_KEY, JSON.stringify(initial));
-    cardFeesCache = initial;
-    return cardFeesCache;
+    const initial = { debitRate: 0, creditRate: 0, pixRate: 0 };
+    localStorage.setItem(TRANSACTION_FEES_KEY, JSON.stringify(initial));
+    transactionFeesCache = initial;
+    return transactionFeesCache;
 };
 
-export const saveCardFees = (fees: CardFees): void => {
+export const saveTransactionFees = (fees: TransactionFees): void => {
     if (typeof window !== 'undefined') {
-        cardFeesCache = fees;
-        localStorage.setItem(CARD_FEES_KEY, JSON.stringify(fees));
-        window.dispatchEvent(new Event('cardFeesChanged'));
+        transactionFeesCache = fees;
+        localStorage.setItem(TRANSACTION_FEES_KEY, JSON.stringify(fees));
+        window.dispatchEvent(new Event('transactionFeesChanged'));
     }
 };

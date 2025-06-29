@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { ProductCategory, CardFees } from '@/types';
-import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, INITIAL_PRODUCT_CATEGORIES, getCardFees, saveCardFees } from '@/lib/constants';
+import type { ProductCategory, TransactionFees } from '@/types';
+import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, INITIAL_PRODUCT_CATEGORIES, getTransactionFees, saveTransactionFees } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,7 +98,7 @@ export default function SettingsClient() {
   const [barName, setBarName] = useState('');
   const [initialBarName, setInitialBarName] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
-  const [cardFees, setCardFees] = useState<CardFees>({ debitRate: 0, creditRate: 0 });
+  const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
   
   const { toast } = useToast();
 
@@ -107,7 +107,7 @@ export default function SettingsClient() {
     setBarName(storedName);
     setInitialBarName(storedName);
     setProductCategories(getProductCategories());
-    setCardFees(getCardFees());
+    setTransactionFees(getTransactionFees());
     setIsMounted(true);
 
     const handleCategoriesChange = () => {
@@ -116,13 +116,13 @@ export default function SettingsClient() {
     window.addEventListener('productCategoriesChanged', handleCategoriesChange);
 
     const handleFeesChange = () => {
-        setCardFees(getCardFees());
+        setTransactionFees(getTransactionFees());
     }
-    window.addEventListener('cardFeesChanged', handleFeesChange);
+    window.addEventListener('transactionFeesChanged', handleFeesChange);
 
     return () => {
       window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
-      window.removeEventListener('cardFeesChanged', handleFeesChange);
+      window.removeEventListener('transactionFeesChanged', handleFeesChange);
     };
 
   }, []);
@@ -146,11 +146,11 @@ export default function SettingsClient() {
     });
   };
 
-  const handleSaveCardFees = () => {
-    saveCardFees(cardFees);
+  const handleSaveTransactionFees = () => {
+    saveTransactionFees(transactionFees);
     toast({
         title: "Taxas Salvas!",
-        description: "As taxas de cartão foram atualizadas.",
+        description: "As taxas de transação foram atualizadas.",
         action: <Save className="text-green-500" />,
     });
   };
@@ -270,18 +270,18 @@ export default function SettingsClient() {
 
       <Card>
         <CardHeader>
-            <CardTitle>Taxas de Cartão</CardTitle>
-            <CardDescription>Defina as taxas percentuais para transações de débito e crédito. O sistema descontará esses valores das entradas no caixa bancário.</CardDescription>
+            <CardTitle>Taxas de Transação</CardTitle>
+            <CardDescription>Defina as taxas percentuais para transações de débito, crédito e PIX. O sistema descontará esses valores das entradas na conta bancária.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="debitRate">Taxa de Débito (%)</Label>
                     <Input
                         id="debitRate"
                         type="number"
-                        value={cardFees.debitRate}
-                        onChange={(e) => setCardFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))}
+                        value={transactionFees.debitRate}
+                        onChange={(e) => setTransactionFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))}
                         placeholder="Ex: 1.99"
                     />
                 </div>
@@ -290,13 +290,23 @@ export default function SettingsClient() {
                     <Input
                         id="creditRate"
                         type="number"
-                        value={cardFees.creditRate}
-                        onChange={(e) => setCardFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))}
+                        value={transactionFees.creditRate}
+                        onChange={(e) => setTransactionFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))}
                         placeholder="Ex: 4.99"
                     />
                 </div>
+                <div className="space-y-2">
+                    <Label htmlFor="pixRate">Taxa de PIX (%)</Label>
+                    <Input
+                        id="pixRate"
+                        type="number"
+                        value={transactionFees.pixRate}
+                        onChange={(e) => setTransactionFees(prev => ({ ...prev, pixRate: parseFloat(e.target.value) || 0 }))}
+                        placeholder="Ex: 0.99"
+                    />
+                </div>
             </div>
-            <Button onClick={handleSaveCardFees}>
+            <Button onClick={handleSaveTransactionFees}>
                 <Save className="mr-2 h-4 w-4" />
                 Salvar Taxas
             </Button>

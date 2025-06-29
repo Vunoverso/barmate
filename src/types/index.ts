@@ -84,7 +84,8 @@ export interface FinancialEntry {
   saleId?: string;
 }
 
-export interface CardFees {
+export interface TransactionFees {
   debitRate: number;
   creditRate: number;
+  pixRate: number;
 }
