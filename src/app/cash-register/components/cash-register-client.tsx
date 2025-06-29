@@ -99,11 +99,21 @@ export default function CashRegisterClient() {
     // Listen for bank account changes
     const handleBankAccountChange = () => setBankAccount(getBankAccount());
     window.addEventListener('bankAccountChanged', handleBankAccountChange);
+    // Listen for cash status changes from other components (like reports)
+    window.addEventListener('cashRegisterStatusChanged', () => {
+        const storedStatus = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
+        if (storedStatus) setCashStatus(JSON.parse(storedStatus));
+    });
+
 
     return () => {
       window.removeEventListener('salesChanged', handleSalesChange);
       window.removeEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
       window.removeEventListener('bankAccountChanged', handleBankAccountChange);
+      window.removeEventListener('cashRegisterStatusChanged', () => {
+          const storedStatus = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
+          if (storedStatus) setCashStatus(JSON.parse(storedStatus));
+      });
     }
   }, []);
 
@@ -365,8 +375,8 @@ export default function CashRegisterClient() {
     }, 0);
     
     const cardRevenue = sessionSales.reduce((total, sale) => {
-        const cardPayment = sale.payments.find(p => p.method === 'card')?.amount || 0;
-        return total + cardPayment;
+        const cardPaymentsAmount = sale.payments.filter(p => p.method === 'credit' || p.method === 'debit').reduce((sum, p) => sum + p.amount, 0);
+        return total + cardPaymentsAmount;
     }, 0);
 
     const pixRevenue = sessionSales.reduce((total, sale) => {
@@ -912,8 +922,8 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
         <div className="py-4 space-y-2">
-          <Label htmlFor={`${idPrefix}-balance`}>Novo Saldo Total (R$)</Label>
-          <Input id={`${idPrefix}-balance`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+          <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
+          <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
         </div>
         <DialogFooter>
           <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
