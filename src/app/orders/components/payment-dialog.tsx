@@ -157,7 +157,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6">
+        <ScrollArea className="flex-1 px-6 min-h-0">
           <div className="space-y-4 pb-4">
             <div className="space-y-1">
                 <Label htmlFor="discount">Desconto (R$)</Label>
