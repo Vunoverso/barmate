@@ -607,18 +607,18 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
   
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-2">
         {products.map(product => {
           const category = productCategories.find(c => c.id === product.categoryId);
           const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
           return (
             <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
               <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
-                <IconComponent className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground group-hover:text-primary transition-colors" />
+                <IconComponent className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
-              <CardContent className="p-2 sm:p-3">
-                <h3 className="font-medium truncate text-xs sm:text-sm">{product.name}</h3>
-                <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
+              <CardContent className="p-1.5 sm:p-2">
+                <h3 className="font-medium truncate text-xs">{product.name}</h3>
+                <p className="text-primary font-semibold text-sm">{formatCurrency(product.price)}</p>
               </CardContent>
             </Card>
           );
