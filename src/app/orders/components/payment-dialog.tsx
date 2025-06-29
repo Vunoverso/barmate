@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { PaymentMethod, Payment } from '@/types';
@@ -150,16 +149,16 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh] p-0">
+        <DialogHeader className="p-6 pb-4">
           <DialogTitle>Processar Pagamento</DialogTitle>
           <DialogDescription>
             Total Original da Comanda: <span className="font-bold">{formatCurrency(totalAmount)}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-grow my-1">
-          <div className="space-y-3 py-1 pr-4">
+        <ScrollArea className="flex-grow px-6">
+          <div className="space-y-4 pb-4">
             <div className="space-y-1">
                 <Label htmlFor="discount">Desconto (R$)</Label>
                 <Input
@@ -170,7 +169,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                   onChange={(e) => setDiscount(e.target.value)}
                   className="h-9"
                 />
-              </div>
+            </div>
             
             <div className="flex justify-between items-center text-base font-bold">
               <span>Total a Pagar:</span>
@@ -212,7 +211,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
             </div>
             
             {numCashAmount > 0 && (
-              <div className="space-y-3 p-2 bg-muted/50 rounded-md">
+              <div className="space-y-3 p-3 bg-muted/50 rounded-md">
                   <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
                   <div className="space-y-1">
                       <Label htmlFor="cashTendered">Valor Entregue (Dinheiro)</Label>
@@ -251,7 +250,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           </div>
         </ScrollArea>
 
-        <DialogFooter className="pt-4 border-t">
+        <DialogFooter className="p-6 pt-4 border-t">
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
