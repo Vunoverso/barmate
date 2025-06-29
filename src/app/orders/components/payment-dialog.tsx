@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, Banknote } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface PaymentDialogProps {
   isOpen: boolean;
@@ -149,7 +150,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Processar Pagamento</DialogTitle>
           <DialogDescription>
@@ -157,98 +158,100 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1">
-           <div className="space-y-1">
-              <Label htmlFor="discount">Desconto (R$)</Label>
-              <Input
-                id="discount"
-                type="text"
-                placeholder="0,00"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                className="h-9"
-              />
+        <ScrollArea className="flex-grow my-1">
+          <div className="space-y-3 py-1 pr-4">
+            <div className="space-y-1">
+                <Label htmlFor="discount">Desconto (R$)</Label>
+                <Input
+                  id="discount"
+                  type="text"
+                  placeholder="0,00"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            
+            <div className="flex justify-between items-center text-base font-bold">
+              <span>Total a Pagar:</span>
+              <span className="text-primary">{formatCurrency(amountToPay)}</span>
             </div>
-          
-          <div className="flex justify-between items-center text-base font-bold">
-            <span>Total a Pagar:</span>
-            <span className="text-primary">{formatCurrency(amountToPay)}</span>
-          </div>
 
-          <Separator />
-          <p className="text-sm font-medium">Divisão do Pagamento</p>
+            <Separator />
+            <p className="text-sm font-medium">Divisão do Pagamento</p>
 
-          {amountToPay > 0 ? (
-            <div className="space-y-2">
-              {PAYMENT_METHODS.map(method => {
-                const state = method.value === 'cash' ? cashAmount : (method.value === 'debit' ? debitAmount : (method.value === 'credit' ? creditAmount : pixAmount));
-                const setState = method.value === 'cash' ? setCashAmount : (method.value === 'debit' ? setDebitAmount : (method.value === 'credit' ? setCreditAmount : setPixAmount));
-                return (
-                  <div key={method.value} className="flex items-center gap-2">
-                    <Label htmlFor={`pay-${method.value}`} className="w-24 flex items-center gap-2 text-sm">
-                       <method.icon className="h-4 w-4 text-muted-foreground" /> {method.name}
-                    </Label>
-                    <Input id={`pay-${method.value}`} type="text" placeholder="0,00" value={state} onChange={e => setState(e.target.value)} className="h-9" />
-                    <Button variant="outline" size="sm" onClick={() => setPayFull(method.value)}>Total</Button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-             <Alert>
-              <Banknote className="h-4 w-4" />
-              <AlertTitle>Pagamento com Crédito</AlertTitle>
-              <AlertDescription>O valor total será quitado com o crédito existente na comanda.</AlertDescription>
-            </Alert>
-          )}
-
-          <div className={`p-2 rounded-md font-semibold text-center text-sm transition-colors ${remainingToPay === 0 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : (remainingToPay > 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300')}`}>
-            {Math.abs(remainingToPay) < 0.01 ? `Total pago: ${formatCurrency(totalPaid)}` : 
-             remainingToPay > 0 ? `Faltante: ${formatCurrency(remainingToPay)}` :
-             `Troco/Crédito: ${formatCurrency(Math.abs(remainingToPay))}`
-            }
-          </div>
-          
-          {numCashAmount > 0 && (
-            <div className="space-y-3 p-2 bg-muted/50 rounded-md">
-                <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
-                <div className="space-y-1">
-                    <Label htmlFor="cashTendered">Valor Entregue (Dinheiro)</Label>
-                    <Input id="cashTendered" type="text" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="h-9"/>
-                </div>
-                {calculatedCashChange > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-sm font-medium">Troco Calculado: <span className="text-green-600 font-bold">{formatCurrency(calculatedCashChange)}</span></p>
-                        {allowCredit ? (
-                        <>
-                          <div className="space-y-1">
-                            <Label htmlFor="changeReturned">Troco Devolvido Efetivamente</Label>
-                            <Input id="changeReturned" type="text" value={changeReturned} onChange={(e) => setChangeReturned(e.target.value)} className="h-9"/>
-                          </div>
-                          {creditToLeave > 0 && (
-                            <p className="text-xs text-blue-600">
-                              Crédito a ser gerado para o cliente: <span className="font-bold">{formatCurrency(creditToLeave)}</span>
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                         <p className="text-sm text-green-600"> Troco a ser devolvido: <span className="font-bold">{formatCurrency(calculatedCashChange)}</span> </p>
-                      )}
+            {amountToPay > 0 ? (
+              <div className="space-y-2">
+                {PAYMENT_METHODS.map(method => {
+                  const state = method.value === 'cash' ? cashAmount : (method.value === 'debit' ? debitAmount : (method.value === 'credit' ? creditAmount : pixAmount));
+                  const setState = method.value === 'cash' ? setCashAmount : (method.value === 'debit' ? setDebitAmount : (method.value === 'credit' ? setCreditAmount : setPixAmount));
+                  return (
+                    <div key={method.value} className="flex items-center gap-2">
+                      <Label htmlFor={`pay-${method.value}`} className="w-24 flex items-center gap-2 text-sm">
+                        <method.icon className="h-4 w-4 text-muted-foreground" /> {method.name}
+                      </Label>
+                      <Input id={`pay-${method.value}`} type="text" placeholder="0,00" value={state} onChange={e => setState(e.target.value)} className="h-9" />
+                      <Button variant="outline" size="sm" onClick={() => setPayFull(method.value)}>Total</Button>
                     </div>
-                )}
+                  );
+                })}
+              </div>
+            ) : (
+              <Alert>
+                <Banknote className="h-4 w-4" />
+                <AlertTitle>Pagamento com Crédito</AlertTitle>
+                <AlertDescription>O valor total será quitado com o crédito existente na comanda.</AlertDescription>
+              </Alert>
+            )}
+
+            <div className={`p-2 rounded-md font-semibold text-center text-sm transition-colors ${remainingToPay === 0 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : (remainingToPay > 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300')}`}>
+              {Math.abs(remainingToPay) < 0.01 ? `Total pago: ${formatCurrency(totalPaid)}` : 
+              remainingToPay > 0 ? `Faltante: ${formatCurrency(remainingToPay)}` :
+              `Troco/Crédito: ${formatCurrency(Math.abs(remainingToPay))}`
+              }
             </div>
-          )}
+            
+            {numCashAmount > 0 && (
+              <div className="space-y-3 p-2 bg-muted/50 rounded-md">
+                  <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
+                  <div className="space-y-1">
+                      <Label htmlFor="cashTendered">Valor Entregue (Dinheiro)</Label>
+                      <Input id="cashTendered" type="text" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="h-9"/>
+                  </div>
+                  {calculatedCashChange > 0 && (
+                      <div className="space-y-2">
+                          <p className="text-sm font-medium">Troco Calculado: <span className="text-green-600 font-bold">{formatCurrency(calculatedCashChange)}</span></p>
+                          {allowCredit ? (
+                          <>
+                            <div className="space-y-1">
+                              <Label htmlFor="changeReturned">Troco Devolvido Efetivamente</Label>
+                              <Input id="changeReturned" type="text" value={changeReturned} onChange={(e) => setChangeReturned(e.target.value)} className="h-9"/>
+                            </div>
+                            {creditToLeave > 0 && (
+                              <p className="text-xs text-blue-600">
+                                Crédito a ser gerado para o cliente: <span className="font-bold">{formatCurrency(creditToLeave)}</span>
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-green-600"> Troco a ser devolvido: <span className="font-bold">{formatCurrency(calculatedCashChange)}</span> </p>
+                        )}
+                      </div>
+                  )}
+              </div>
+            )}
 
-          {error && (
-            <Alert variant="destructive" className="p-2">
-              <Terminal className="h-4 w-4" />
-              <AlertTitle className="text-sm">Erro</AlertTitle>
-              <AlertDescription className="text-xs">{error}</AlertDescription>
-            </Alert>
-          )}
-        </div>
+            {error && (
+              <Alert variant="destructive" className="p-2">
+                <Terminal className="h-4 w-4" />
+                <AlertTitle className="text-sm">Erro</AlertTitle>
+                <AlertDescription className="text-xs">{error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+        </ScrollArea>
 
-        <DialogFooter>
+        <DialogFooter className="pt-4 border-t">
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
