@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Product, OrderItem, Sale, ProductCategory, Payment } from '@/types';
@@ -6,7 +7,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package } from 'lucide-react';
@@ -187,15 +188,14 @@ export default function CounterSaleClient() {
             </div>
           </CardHeader>
           <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
-            <ScrollArea className="w-full shrink-0">
+            <div className="w-full overflow-x-auto pb-2 px-4">
                 <TabsList className="whitespace-nowrap">
                   <TabsTrigger value="Todos">Todos</TabsTrigger>
                   {displayCategories.map(categoryName => (
                     <TabsTrigger key={categoryName} value={categoryName}>{categoryName}</TabsTrigger>
                   ))}
                 </TabsList>
-                <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            </div>
             <ScrollArea className="flex-grow p-4">
                 <>
                   <TabsContent value="Todos" className="mt-0">
@@ -303,18 +303,18 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
   
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2"> 
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
         {products.map(product => {
           const category = productCategories.find(c => c.id === product.categoryId);
           const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
           return (
             <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
               <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
-                <IconComponent className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
               <CardContent className="p-1.5">
-                <h3 className="font-medium truncate text-xs">{product.name}</h3>
-                <p className="text-primary font-semibold text-sm">{formatCurrency(product.price)}</p>
+                <h3 className="font-medium truncate text-[11px] leading-tight">{product.name}</h3>
+                <p className="text-primary font-semibold text-xs sm:text-sm">{formatCurrency(product.price)}</p>
               </CardContent>
             </Card>
           );
@@ -330,8 +330,8 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
          const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
          const categoryName = category ? category.name : "Desconhecida";
         return (
-          <Card key={product.id} className="flex items-center p-2 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-muted rounded-md flex items-center justify-center mr-2 group-hover:bg-muted/80 transition-colors">
+          <Card key={product.id} className="flex items-center p-1.5 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-muted rounded-md flex items-center justify-center mr-2 group-hover:bg-muted/80 transition-colors">
               <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-grow">
