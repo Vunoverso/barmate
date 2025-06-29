@@ -100,6 +100,7 @@ export default function FinancialClient() {
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [isEditCaixa02DialogOpen, setIsEditCaixa02DialogOpen] = useState(false);
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
+  const [isEditCashInDrawerDialogOpen, setIsEditCashInDrawerDialogOpen] = useState(false);
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
@@ -278,6 +279,30 @@ export default function FinancialClient() {
     form.reset({ description: '', amount: 0, source: 'daily_cash' });
   };
   
+  const handleEditCashInDrawer = (newBalance: number) => {
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) {
+      toast({ title: "Ação Bloqueada", description: "O caixa principal está fechado. Não é possível editar o saldo.", variant: "destructive" });
+      return;
+    }
+  
+    // To make the current balance match `newBalance`, we adjust the `openingBalance`.
+    const openingTime = new Date(cashStatus.openingTime);
+    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
+    const cashRevenue = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
+    
+    const adjustments = cashStatus.adjustments || [];
+    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
+    
+    const nonOpeningBalanceValue = cashRevenue + totalIn - totalOut;
+    const newOpeningBalance = newBalance - nonOpeningBalanceValue;
+  
+    const newState = { ...cashStatus, openingBalance: newOpeningBalance };
+    saveCashRegisterStatus(newState);
+    toast({ title: "Saldo do Caixa Principal Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
+    setIsEditCashInDrawerDialogOpen(false);
+  }
+
   const handleEditCaixa02 = (newBalance: number) => {
     saveSecondaryCashBox({ balance: newBalance });
     toast({ title: "Caixa 02 Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
@@ -390,7 +415,9 @@ export default function FinancialClient() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Caixa Principal (Aberto)</CardTitle>
-                    <Banknote className="h-4 w-4 text-muted-foreground" />
+                    <Button variant="ghost" size="icon" className="h-7 w-7 -mr-4" onClick={() => setIsEditCashInDrawerDialogOpen(true)} disabled={cashStatus.status !== 'open'}>
+                        <Edit className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{formatCurrency(expectedCashInDrawer)}</div>
@@ -667,6 +694,15 @@ export default function FinancialClient() {
 
       <EditBalanceDialog isOpen={isEditCaixa02DialogOpen} onOpenChange={setIsEditCaixa02DialogOpen} currentBalance={secondaryCashBox.balance} onSave={handleEditCaixa02} title="Editar Saldo do Caixa 02" description="Ajuste o valor total do seu caixa secundário." idPrefix="caixa02" />
       <EditBalanceDialog isOpen={isEditBankAccountDialogOpen} onOpenChange={setIsEditBankAccountDialogOpen} currentBalance={bankAccount.balance} onSave={handleEditBankAccount} title="Editar Saldo da Conta Bancária" description="Ajuste o saldo total da sua conta bancária." idPrefix="bank" />
+      <EditBalanceDialog 
+        isOpen={isEditCashInDrawerDialogOpen} 
+        onOpenChange={setIsEditCashInDrawerDialogOpen} 
+        currentBalance={expectedCashInDrawer} 
+        onSave={handleEditCashInDrawer} 
+        title="Editar Saldo do Caixa Principal" 
+        description="Ajuste o valor total atual do caixa principal. Isso modificará o saldo de abertura para refletir a mudança, sem criar uma nova transação." 
+        idPrefix="cash-drawer"
+      />
     </>
   );
 }
