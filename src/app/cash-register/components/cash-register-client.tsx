@@ -82,12 +82,9 @@ export default function CashRegisterClient() {
     const handleCashStatusChange = () => {
         const storedStatusRaw = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
         if (storedStatusRaw) {
-            // Using functional update to prevent re-renders if the state is the same
-            // This is the key to breaking the infinite loop.
             setCashStatus(currentState => {
                 try {
                     const newState = JSON.parse(storedStatusRaw);
-                    // Deep comparison is expensive, string comparison is a good-enough proxy here.
                     if (JSON.stringify(currentState) !== JSON.stringify(newState)) {
                         return { adjustments: [], ...newState };
                     }
@@ -292,29 +289,47 @@ export default function CashRegisterClient() {
   };
 
 
-  const handleTransfer = (amount: number) => {
+  const handleTransfer = (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
+    const { amount, destination } = details;
+
     if (secondaryCashBox.balance < amount) {
         toast({ title: "Saldo Insuficiente", description: "O Caixa 02 não possui saldo suficiente para esta transferência.", variant: "destructive" });
         return;
     }
     
+    // Deduct from Caixa 02
     const newSecondaryBalance = secondaryCashBox.balance - amount;
     saveSecondaryCashBox({ balance: newSecondaryBalance });
 
-    const transferAdjustment: CashAdjustment = {
-        id: `adj-transfer-${Date.now()}`,
-        amount,
-        type: 'in',
-        description: `Transferência do Caixa 02`,
-        timestamp: new Date().toISOString(),
-        source: 'secondary_cash'
-    };
+    if (destination === 'daily_cash') {
+      if (cashStatus.status !== 'open') {
+        toast({ title: "Caixa Fechado", description: "Não é possível transferir para o caixa diário pois ele está fechado.", variant: "destructive" });
+        // Rollback deduction from Caixa 02
+        saveSecondaryCashBox({ balance: secondaryCashBox.balance });
+        return;
+      }
+      const transferAdjustment: CashAdjustment = {
+          id: `adj-transfer-${Date.now()}`,
+          amount,
+          type: 'in',
+          description: `Transferência do Caixa 02`,
+          timestamp: new Date().toISOString(),
+          source: 'secondary_cash'
+      };
 
-    const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
-    setCashStatus(newState);
-    saveCashRegisterStatus(newState);
+      const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
+      setCashStatus(newState);
+      saveCashRegisterStatus(newState);
 
-    toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o caixa diário.` });
+      toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o Caixa Diário.` });
+
+    } else if (destination === 'bank_account') {
+      const currentAccount = getBankAccount();
+      saveBankAccount({ balance: currentAccount.balance + amount });
+      
+      toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para a Conta Bancária.` });
+    }
+
     setIsTransferDialogOpen(false);
   }
 
@@ -604,7 +619,7 @@ export default function CashRegisterClient() {
                         <p className="text-3xl font-bold">{formatCurrency(secondaryCashBox.balance)}</p>
                     </div>
                     <Button className="w-full" onClick={() => setIsTransferDialogOpen(true)} disabled={secondaryCashBox.balance <= 0}>
-                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Transferir p/ Caixa Diário
+                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Realizar Transferência
                     </Button>
                 </CardContent>
              </Card>
@@ -866,8 +881,14 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
 }
 
 // Dialog for Transfer
-function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { isOpen: boolean, onOpenChange: (open: boolean) => void, maxAmount: number, onTransfer: (amount: number) => void }) {
+function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { 
+  isOpen: boolean, 
+  onOpenChange: (open: boolean) => void, 
+  maxAmount: number, 
+  onTransfer: (details: { amount: number, destination: 'daily_cash' | 'bank_account' }) => void 
+}) {
   const [amount, setAmount] = useState('');
+  const [destination, setDestination] = useState<'daily_cash' | 'bank_account'>('daily_cash');
   const { toast } = useToast();
 
   const handleSubmit = () => {
@@ -880,17 +901,40 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { isOpe
       toast({ title: "Saldo Insuficiente", description: `O valor máximo para transferência é ${formatCurrency(maxAmount)}.`, variant: "destructive" });
       return;
     }
-    onTransfer(value);
+    onTransfer({ amount: value, destination });
     setAmount('');
+    setDestination('daily_cash');
+  };
+  
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setAmount('');
+      setDestination('daily_cash');
+    }
+    onOpenChange(open);
   };
   
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if(!open) setAmount(''); onOpenChange(open); }}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Transferir do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para o Caixa Diário. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
-        <div className="py-4 space-y-2">
-          <Label htmlFor="transfer-amount">Valor a Transferir (R$)</Label>
-          <Input id="transfer-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+        <DialogHeader><DialogTitle>Transferência do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para outro local. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
+        <div className="py-4 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="transfer-destination">Destino</Label>
+            <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
+              <SelectTrigger id="transfer-destination">
+                <SelectValue placeholder="Selecione um destino..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="daily_cash">Caixa Diário (Principal)</SelectItem>
+                <SelectItem value="bank_account">Conta Bancária</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="transfer-amount">Valor a Transferir (R$)</Label>
+            <Input id="transfer-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+          </div>
         </div>
         <DialogFooter>
           <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
