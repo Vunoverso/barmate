@@ -376,192 +376,194 @@ export default function OrdersClient() {
   }
 
   return (
-    <div className="grid md:grid-cols-10 gap-4 h-[calc(100vh-100px)]">
-      <div className="md:col-span-2 flex flex-col h-full">
-        <Card className="flex-grow flex flex-col">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Comandas Abertas
-              <Button size="sm" onClick={handleOpenCreateOrderDialog}>
-                <PlusSquare className="mr-2 h-4 w-4" /> Nova
-              </Button>
-            </CardTitle>
-            <CardDescription>
-              {openOrders.length} comanda(s) em aberto.
-              {openOrders.length > 0 && (
-                <span className="block font-semibold mt-1">
-                  Total: <span className="text-primary">{formatCurrency(totalOpenOrdersValue)}</span>
-                </span>
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex-grow overflow-hidden p-0">
-            <ScrollArea className="h-full p-2">
-              {openOrders.length === 0 ? (
-                <p className="text-muted-foreground text-center py-10">Nenhuma comanda aberta.</p>
-              ) : (
-                <div className="space-y-2">
-                  {openOrders.map(order => (
-                    <div
-                      key={order.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleSelectOrder(order.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          handleSelectOrder(order.id);
-                        }
-                      }}
-                      className={cn(
-                        buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }),
-                        "w-full justify-between h-auto py-2 px-3 cursor-pointer"
-                      )}
-                    >
-                      <div className="flex flex-col items-start text-left">
-                        <span className="font-semibold truncate block max-w-full">{order.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
-                        </span>
+    <>
+      <div className="grid md:grid-cols-10 gap-4 h-[calc(100vh-100px)]">
+        <div className="md:col-span-2 flex flex-col h-full">
+          <Card className="flex-grow flex flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                Comandas Abertas
+                <Button size="sm" onClick={handleOpenCreateOrderDialog}>
+                  <PlusSquare className="mr-2 h-4 w-4" /> Nova
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                {openOrders.length} comanda(s) em aberto.
+                {openOrders.length > 0 && (
+                  <span className="block font-semibold mt-1">
+                    Total: <span className="text-primary">{formatCurrency(totalOpenOrdersValue)}</span>
+                  </span>
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-grow overflow-hidden p-0">
+              <ScrollArea className="h-full p-2">
+                {openOrders.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-10">Nenhuma comanda aberta.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {openOrders.map(order => (
+                      <div
+                        key={order.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleSelectOrder(order.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            handleSelectOrder(order.id);
+                          }
+                        }}
+                        className={cn(
+                          buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }),
+                          "w-full justify-between h-auto py-2 px-3 cursor-pointer"
+                        )}
+                      >
+                        <div className="flex flex-col items-start text-left">
+                          <span className="font-semibold truncate block max-w-full">{order.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
+                          </span>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order);}}>
+                          <XCircle className="h-4 w-4" />
+                        </Button>
                       </div>
-                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order);}}>
-                        <XCircle className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="md:col-span-4 flex flex-col h-full">
-        <Card className="flex-grow flex flex-col">
-          <CardHeader>
-            <CardTitle>Selecionar Produtos</CardTitle>
-            <div className="flex items-center gap-2 pt-2">
-              <Search className="h-5 w-5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar produtos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-                disabled={!currentOrderId}
-              />
-              <div className="ml-auto flex items-center gap-2">
-                <Button variant={viewMode === 'grid' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('grid')} disabled={!currentOrderId}>
-                  <LayoutGrid className="h-5 w-5" />
-                </Button>
-                <Button variant={viewMode === 'list' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('list')} disabled={!currentOrderId}>
-                  <List className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
-             {!currentOrderId && openOrders.length > 0 && <CardDescription className="text-destructive pt-2">Selecione uma comanda para adicionar produtos.</CardDescription>}
-             {!currentOrderId && openOrders.length === 0 && <CardDescription className="text-destructive pt-2">Crie uma nova comanda para começar.</CardDescription>}
-          </CardHeader>
-           <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
-            <div className="w-full overflow-x-auto pb-2 px-4">
-                <TabsList className="whitespace-nowrap">
-                    <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
-                    {displayCategories.map(categoryName => (
-                        <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId}>{categoryName}</TabsTrigger>
                     ))}
-                </TabsList>
-            </div>
-            <ScrollArea className="flex-grow p-4">
-              {currentOrderId ? (
-                <>
-                  <TabsContent value="Todos" className="mt-0">
-                    <ProductDisplay products={filteredProducts} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
-                  </TabsContent>
-                  {displayCategories.map(categoryName => (
-                    <TabsContent key={categoryName} value={categoryName} className="mt-0">
-                      <ProductDisplay products={productsByCategoryDisplay[categoryName]} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
-                    </TabsContent>
-                  ))}
-                </>
-              ) : (
-                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <FileText className="h-16 w-16 mb-4" />
-                    <p>Selecione ou crie uma comanda</p>
-                    <p>para visualizar os produtos.</p>
-                </div>
-              )}
-            </ScrollArea>
-          </Tabs>
-        </Card>
-      </div>
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </div>
 
-      <div className="md:col-span-4 flex flex-col h-full">
-        <Card className="flex-grow flex flex-col">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-6 w-6 text-primary" />
-              {currentOrder ? currentOrder.name : "Comanda"}
-            </CardTitle>
-            <CardDescription>
-              {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex-grow overflow-hidden p-0">
-            <ScrollArea className="h-full p-4">
-              {!currentOrderId ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <ShoppingCart className="h-16 w-16 mb-4 opacity-50" />
-                    <p>Nenhuma comanda selecionada.</p>
-                 </div>
-              ) : currentOrderItems.length === 0 ? (
-                <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {currentOrderItems.map(item => {
-                    const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
-                    return (
-                      <li key={item.id} className="flex items-center gap-2 p-1.5 rounded-md border">
-                        <div className="flex-shrink-0">
-                          <IconComponent className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                        <div className="flex-grow">
-                          <p className="font-medium truncate text-xs">{item.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
-                        </div>
-                        <div className="flex items-center gap-0.5">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
-                            <MinusCircle className="h-4 w-4" />
-                          </Button>
-                          <span className="w-5 text-center text-sm">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
-                            <PlusCircle className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)} disabled={item.price < 0}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <p className="font-semibold w-20 text-right text-sm">{formatCurrency(item.price * item.quantity)}</p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </ScrollArea>
-          </CardContent>
-          <Separator />
-          <CardFooter className="flex flex-col gap-3 p-4">
-            <div className="w-full flex justify-between text-lg font-semibold">
-              <span>Total:</span>
-              <span>{formatCurrency(orderTotal)}</span>
-            </div>
-            <Button
-              size="lg"
-              className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-              disabled={orderTotal === 0 || !currentOrderId}
-              onClick={() => setIsPaymentDialogOpen(true)}
-            >
-              Realizar Pagamento
-            </Button>
-          </CardFooter>
-        </Card>
+        <div className="md:col-span-4 flex flex-col h-full">
+          <Card className="flex-grow flex flex-col">
+            <CardHeader>
+              <CardTitle>Selecionar Produtos</CardTitle>
+              <div className="flex items-center gap-2 pt-2">
+                <Search className="h-5 w-5 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar produtos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="max-w-sm"
+                  disabled={!currentOrderId}
+                />
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant={viewMode === 'grid' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('grid')} disabled={!currentOrderId}>
+                    <LayoutGrid className="h-5 w-5" />
+                  </Button>
+                  <Button variant={viewMode === 'list' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('list')} disabled={!currentOrderId}>
+                    <List className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+              {!currentOrderId && openOrders.length > 0 && <CardDescription className="text-destructive pt-2">Selecione uma comanda para adicionar produtos.</CardDescription>}
+              {!currentOrderId && openOrders.length === 0 && <CardDescription className="text-destructive pt-2">Crie uma nova comanda para começar.</CardDescription>}
+            </CardHeader>
+            <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
+              <div className="w-full overflow-x-auto pb-2 px-4">
+                  <TabsList className="whitespace-nowrap">
+                      <TabsTrigger value="Todos" disabled={!currentOrderId}>Todos</TabsTrigger>
+                      {displayCategories.map(categoryName => (
+                          <TabsTrigger key={categoryName} value={categoryName} disabled={!currentOrderId}>{categoryName}</TabsTrigger>
+                      ))}
+                  </TabsList>
+              </div>
+              <ScrollArea className="flex-grow p-4">
+                {currentOrderId ? (
+                  <>
+                    <TabsContent value="Todos" className="mt-0">
+                      <ProductDisplay products={filteredProducts} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
+                    </TabsContent>
+                    {displayCategories.map(categoryName => (
+                      <TabsContent key={categoryName} value={categoryName} className="mt-0">
+                        <ProductDisplay products={productsByCategoryDisplay[categoryName]} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
+                      </TabsContent>
+                    ))}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <FileText className="h-16 w-16 mb-4" />
+                      <p>Selecione ou crie uma comanda</p>
+                      <p>para visualizar os produtos.</p>
+                  </div>
+                )}
+              </ScrollArea>
+            </Tabs>
+          </Card>
+        </div>
+
+        <div className="md:col-span-4 flex flex-col h-full">
+          <Card className="flex-grow flex flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-6 w-6 text-primary" />
+                {currentOrder ? currentOrder.name : "Comanda"}
+              </CardTitle>
+              <CardDescription>
+                {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-grow overflow-hidden p-0">
+              <ScrollArea className="h-full p-4">
+                {!currentOrderId ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <ShoppingCart className="h-16 w-16 mb-4 opacity-50" />
+                      <p>Nenhuma comanda selecionada.</p>
+                  </div>
+                ) : currentOrderItems.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {currentOrderItems.map(item => {
+                      const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
+                      return (
+                        <li key={item.id} className="flex items-center gap-2 p-1.5 rounded-md border">
+                          <div className="flex-shrink-0">
+                            <IconComponent className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <div className="flex-grow">
+                            <p className="font-medium truncate text-xs">{item.name}</p>
+                            <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
+                              <MinusCircle className="h-4 w-4" />
+                            </Button>
+                            <span className="w-5 text-center text-sm">{item.quantity}</span>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
+                              <PlusCircle className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)} disabled={item.price < 0}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <p className="font-semibold w-20 text-right text-sm">{formatCurrency(item.price * item.quantity)}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </ScrollArea>
+            </CardContent>
+            <Separator />
+            <CardFooter className="flex flex-col gap-3 p-4">
+              <div className="w-full flex justify-between text-lg font-semibold">
+                <span>Total:</span>
+                <span>{formatCurrency(orderTotal)}</span>
+              </div>
+              <Button
+                size="lg"
+                className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+                disabled={orderTotal === 0 || !currentOrderId}
+                onClick={() => setIsPaymentDialogOpen(true)}
+              >
+                Realizar Pagamento
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
       </div>
 
       <CreateOrderDialog
@@ -600,7 +602,7 @@ export default function OrdersClient() {
           </AlertDialogContent>
         </AlertDialog>
       )}
-    </div>
+    </>
   );
 }
 
