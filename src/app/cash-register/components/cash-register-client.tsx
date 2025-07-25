@@ -378,14 +378,14 @@ export default function CashRegisterClient() {
   const sessionSummary = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) {
       return {
-        openingBalance: 0, sessionSales: [], totalRevenue: 0, cashRevenue: 0,
+        openingBalance: 0, sessionSales: [], totalSessionRevenue: 0, cashRevenue: 0,
         cardRevenue: 0, pixRevenue: 0, expectedCash: 0, totalIn: 0, totalOut: 0, adjustments: [],
       };
     }
     const openingTime = new Date(cashStatus.openingTime);
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
 
-    const totalRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+    const totalSessionRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
 
     const cashRevenue = sessionSales.reduce((total, sale) => {
         const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount || 0;
@@ -410,7 +410,7 @@ export default function CashRegisterClient() {
     const expectedCash = openingBalance + cashRevenue + totalIn - totalOut;
 
     return {
-      openingBalance, sessionSales, totalRevenue, cashRevenue, cardRevenue,
+      openingBalance, sessionSales, totalSessionRevenue, cashRevenue, cardRevenue,
       pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
     };
   }, [cashStatus, sales]);
@@ -511,7 +511,7 @@ export default function CashRegisterClient() {
                             <div className="space-y-2 text-sm p-4 bg-muted/50 rounded-lg">
                                 <div className="flex justify-between font-bold text-base">
                                     <span>Total Geral de Vendas</span> 
-                                    <strong className="text-primary">{formatCurrency(sessionSummary.cashRevenue + sessionSummary.cardRevenue + sessionSummary.pixRevenue)}</strong>
+                                    <strong className="text-primary">{formatCurrency(sessionSummary.totalSessionRevenue)}</strong>
                                 </div>
                                 <Separator className="my-2"/>
                                 <div className="flex justify-between font-bold text-base">
@@ -761,7 +761,7 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBal
 }
 
 function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onClose: () => void, summary: any }) {
-  const totalGeralVendas = summary.cashRevenue + summary.cardRevenue + summary.pixRevenue;
+  const totalGeralVendas = summary.totalSessionRevenue;
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent>
