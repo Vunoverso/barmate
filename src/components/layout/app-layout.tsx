@@ -36,6 +36,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
   const [isMounted, setIsMounted] = useState(false);
+  const version = "v1.1.0"; // Version number added here
 
   useEffect(() => {
     setIsMounted(true);
@@ -130,6 +131,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex-1">
             <SidebarNav items={allNavItems} className="px-2 text-sm font-medium lg:px-4" />
           </div>
+          <div className="mt-auto p-4">
+            <span className="text-xs text-muted-foreground">{version}</span>
+          </div>
         </div>
       </div>
       <div className="flex flex-col">
@@ -166,6 +170,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   </Link>
                 ))}
               </nav>
+              <div className="mt-auto">
+                <span className="text-xs text-muted-foreground p-4">{version}</span>
+              </div>
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1">
