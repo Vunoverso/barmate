@@ -132,7 +132,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <SidebarNav items={allNavItems} className="px-2 text-sm font-medium lg:px-4" />
           </div>
           <div className="mt-auto p-4">
-            <span className="text-xs text-muted-foreground">{version}</span>
+            
           </div>
         </div>
       </div>

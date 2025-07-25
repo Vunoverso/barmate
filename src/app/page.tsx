@@ -1,13 +1,14 @@
 
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from 'react';
 import { Package } from 'lucide-react'; // Using Package as a generic icon
 
 export default function HomePage() {
   const [barName, setBarName] = useState('BarMate');
   const [isMounted, setIsMounted] = useState(false);
+  const version = "v1.1.0"; // Version number
 
   useEffect(() => {
     setIsMounted(true);
@@ -71,6 +72,9 @@ export default function HomePage() {
             Utilize o menu lateral para navegar pelas funcionalidades do sistema.
           </p>
         </CardContent>
+        <CardFooter className="flex justify-center p-4">
+            <span className="text-xs text-muted-foreground">{version}</span>
+        </CardFooter>
       </Card>
     </div>
   );
