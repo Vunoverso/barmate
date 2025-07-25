@@ -511,7 +511,7 @@ export default function CashRegisterClient() {
                             <div className="space-y-2 text-sm p-4 bg-muted/50 rounded-lg">
                                 <div className="flex justify-between font-bold text-base">
                                     <span>Total Geral de Vendas</span> 
-                                    <strong className="text-primary">{formatCurrency(sessionSummary.totalRevenue)}</strong>
+                                    <strong className="text-primary">{formatCurrency(sessionSummary.cashRevenue + sessionSummary.cardRevenue + sessionSummary.pixRevenue)}</strong>
                                 </div>
                                 <Separator className="my-2"/>
                                 <div className="flex justify-between font-bold text-base">
@@ -761,6 +761,7 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBal
 }
 
 function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onClose: () => void, summary: any }) {
+  const totalGeralVendas = summary.cashRevenue + summary.cardRevenue + summary.pixRevenue;
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -781,7 +782,7 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
             <div className="flex justify-between"><span>Vendas em Cartão:</span> <span>{formatCurrency(summary.cardRevenue)}</span></div>
             <div className="flex justify-between"><span>Vendas em PIX:</span> <span>{formatCurrency(summary.pixRevenue)}</span></div>
             <Separator />
-            <div className="flex justify-between"><span>Total Geral de Vendas:</span> <strong>{formatCurrency(summary.totalRevenue)}</strong></div>
+            <div className="flex justify-between"><span>Total Geral de Vendas:</span> <strong>{formatCurrency(totalGeralVendas)}</strong></div>
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>

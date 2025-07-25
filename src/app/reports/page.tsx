@@ -1,5 +1,6 @@
 
-import FinancialClient from "@/app/financial/components/financial-client";
+
+import ReportsClient from "@/app/reports/components/reports-client";
 
 export default function ReportsPage() {
   return (
@@ -7,7 +8,7 @@ export default function ReportsPage() {
        <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Relatórios e Análises</h1>
       </div>
-      <FinancialClient />
+      <ReportsClient />
     </div>
   );
 }
