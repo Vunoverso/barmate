@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -25,7 +25,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { Label } from '@/components/ui/label';
 
 const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
@@ -54,6 +64,7 @@ export default function OrdersClient() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
+  const [orderToEdit, setOrderToEdit] = useState<ActiveOrder | null>(null);
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
@@ -163,6 +174,18 @@ export default function OrdersClient() {
 
   const handleSelectOrder = (orderId: string) => {
     setCurrentOrderId(orderId);
+  };
+
+  const handleEditOrder = (order: ActiveOrder) => {
+    setOrderToEdit(order);
+  };
+  
+  const handleSaveOrderName = (orderId: string, newName: string) => {
+      setOpenOrders(prevOrders => prevOrders.map(order => 
+          order.id === orderId ? { ...order, name: newName } : order
+      ));
+      toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
+      setOrderToEdit(null);
   };
 
   const confirmDeleteOrder = (order: ActiveOrder) => {
@@ -415,18 +438,23 @@ export default function OrdersClient() {
                         }}
                         className={cn(
                           buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }),
-                          "w-full justify-between h-auto py-2 px-3 cursor-pointer"
+                          "w-full justify-between h-auto py-2 px-3 cursor-pointer group"
                         )}
                       >
-                        <div className="flex flex-col items-start text-left">
+                        <div className="flex flex-col items-start text-left flex-grow overflow-hidden mr-2">
                           <span className="font-semibold truncate block max-w-full">{order.name}</span>
                           <span className="text-xs text-muted-foreground">
                             {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
                           </span>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order);}}>
-                          <XCircle className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center shrink-0">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted/80" onClick={(e) => { e.stopPropagation(); handleEditOrder(order); }}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order); }}>
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -571,6 +599,15 @@ export default function OrdersClient() {
         onOpenChange={setIsCreateOrderDialogOpen}
         onSubmit={handleCreateNewOrder}
       />
+      
+      {orderToEdit && (
+        <EditOrderNameDialog
+            isOpen={!!orderToEdit}
+            onOpenChange={() => setOrderToEdit(null)}
+            order={orderToEdit}
+            onSave={handleSaveOrderName}
+        />
+      )}
 
       <PaymentDialog
         isOpen={isPaymentDialogOpen}
@@ -661,4 +698,56 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
       })}
     </div>
   );
+}
+
+// --- Edit Order Name Dialog ---
+interface EditOrderNameDialogProps {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    order: ActiveOrder;
+    onSave: (orderId: string, newName: string) => void;
+}
+
+function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderNameDialogProps) {
+    const [name, setName] = useState('');
+    const { toast } = useToast();
+
+    useEffect(() => {
+        if (order) {
+            setName(order.name);
+        }
+    }, [order]);
+
+    const handleSubmit = () => {
+        if (!name.trim()) {
+            toast({ title: "Nome Inválido", description: "O nome da comanda não pode ser vazio.", variant: "destructive" });
+            return;
+        }
+        onSave(order.id, name.trim());
+        onOpenChange(false);
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Editar Nome da Comanda</DialogTitle>
+                    <DialogDescription>Altere o nome de identificação desta comanda.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label htmlFor="editOrderName">Novo Nome</Label>
+                    <Input
+                        id="editOrderName"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        autoFocus
+                    />
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                    <Button onClick={handleSubmit}>Salvar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }

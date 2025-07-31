@@ -8,7 +8,7 @@ import { Package } from 'lucide-react'; // Using Package as a generic icon
 export default function HomePage() {
   const [barName, setBarName] = useState('BarMate');
   const [isMounted, setIsMounted] = useState(false);
-  const version = "v1.1.0"; // Version number
+  const version = "v1.2.0"; // Version number
 
   useEffect(() => {
     setIsMounted(true);
