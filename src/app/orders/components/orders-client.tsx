@@ -201,6 +201,7 @@ export default function OrdersClient() {
     const oldOrders = [...openOrders];
     const updatedOrders = oldOrders.filter(order => order.id !== orderIdToDelete);
     
+    // Logic to select the next order if the current one is deleted
     if (currentOrderId === orderIdToDelete) {
         const deletedIndex = oldOrders.findIndex(o => o.id === orderIdToDelete);
         let nextSelectedId: string | null = null;
@@ -210,6 +211,7 @@ export default function OrdersClient() {
         }
         setCurrentOrderId(nextSelectedId);
     }
+    // If a different order was deleted, keep the current selection
     
     setOpenOrders(updatedOrders);
     setOrderToDelete(null);
@@ -460,9 +462,6 @@ export default function OrdersClient() {
                           <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted/80" onClick={(e) => { e.stopPropagation(); handleEditOrder(order); }}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order); }}>
-                            <XCircle className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
                     ))}
@@ -597,6 +596,16 @@ export default function OrdersClient() {
                 onClick={() => setIsPaymentDialogOpen(true)}
               >
                 Realizar Pagamento
+              </Button>
+              <Button
+                size="lg"
+                variant="destructive"
+                className="w-full"
+                disabled={!currentOrderId}
+                onClick={() => currentOrder && confirmDeleteOrder(currentOrder)}
+              >
+                <XCircle className="mr-2 h-5 w-5" />
+                Cancelar Comanda
               </Button>
             </CardFooter>
           </Card>
@@ -760,5 +769,3 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
         </Dialog>
     );
 }
-
-    
