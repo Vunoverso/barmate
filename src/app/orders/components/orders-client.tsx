@@ -451,7 +451,7 @@ export default function OrdersClient() {
                           <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted/80" onClick={(e) => { e.stopPropagation(); handleEditOrder(order); }}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order); }}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={(e) => { e.stopPropagation(); confirmDeleteOrder(order); }}>
                             <XCircle className="h-4 w-4" />
                           </Button>
                         </div>
