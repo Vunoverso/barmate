@@ -194,15 +194,24 @@ export default function OrdersClient() {
 
   const handleDeleteOrder = () => {
     if (!orderToDelete) return;
+    
     const orderIdToDelete = orderToDelete.id;
     const orderName = orderToDelete.name;
-    setOpenOrders(prevOrders => {
-      const updatedOrders = prevOrders.filter(order => order.id !== orderIdToDelete);
-      if (currentOrderId === orderIdToDelete) {
-        setCurrentOrderId(updatedOrders.length > 0 ? updatedOrders[0].id : null);
-      }
-      return updatedOrders;
-    });
+
+    const oldOrders = [...openOrders];
+    const updatedOrders = oldOrders.filter(order => order.id !== orderIdToDelete);
+    
+    if (currentOrderId === orderIdToDelete) {
+        const deletedIndex = oldOrders.findIndex(o => o.id === orderIdToDelete);
+        let nextSelectedId: string | null = null;
+        if (updatedOrders.length > 0) {
+            // Select the next order in the list, or the previous one if the last was deleted
+            nextSelectedId = updatedOrders[deletedIndex]?.id || updatedOrders[deletedIndex - 1]?.id || updatedOrders[0].id;
+        }
+        setCurrentOrderId(nextSelectedId);
+    }
+    
+    setOpenOrders(updatedOrders);
     setOrderToDelete(null);
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
   };
@@ -751,3 +760,5 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
         </Dialog>
     );
 }
+
+    
