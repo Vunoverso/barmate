@@ -106,14 +106,17 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   }
 
   const isSubmitDisabled = useMemo(() => {
+    const roundedRemaining = Math.round(remainingToPay * 100) / 100;
+
     if (totalPaid <= 0 && amountToPay > 0) {
-      return true; 
+      return true;
     }
-    if (!allowPartialPayment && Math.abs(remainingToPay) > 0.01) {
-      return true; 
+    if (!allowPartialPayment && roundedRemaining !== 0) {
+        // Allow for small floating point inaccuracies
+        return Math.abs(roundedRemaining) > 0.001;
     }
     if (allowCredit && numChangeReturned > calculatedCashChange) {
-      return true; 
+      return true;
     }
     return false;
   }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay, allowCredit, numChangeReturned, calculatedCashChange]);
