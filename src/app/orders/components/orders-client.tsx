@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -226,7 +226,20 @@ export default function OrdersClient() {
     setOpenOrders(prevOrders =>
       prevOrders.map(order => {
         if (order.id === currentOrderId) {
-          const existingItem = order.items.find(item => item.id === product.id);
+          if (product.isCombo) {
+             const category = productCategories.find(c => c.id === product.categoryId);
+             const newComboItem: OrderItem = {
+               ...product,
+               id: `combo-${product.id}-${Date.now()}`, // Unique ID for this combo instance
+               quantity: 1,
+               claimedQuantity: 0,
+               categoryName: category?.name,
+               categoryIconName: category?.iconName
+             };
+             return { ...order, items: [...order.items, newComboItem] };
+          }
+
+          const existingItem = order.items.find(item => item.id === product.id && !item.isCombo);
           if (existingItem) {
             return {
               ...order,
@@ -246,6 +259,37 @@ export default function OrdersClient() {
         return order;
       })
     );
+  };
+
+  const handleClaimComboItem = (comboItemId: string) => {
+    setOpenOrders(prevOrders => prevOrders.map(order => {
+      if (order.id !== currentOrderId) return order;
+
+      const comboItem = order.items.find(item => item.id === comboItemId);
+      if (!comboItem || !comboItem.isCombo || (comboItem.claimedQuantity ?? 0) >= (comboItem.comboItems ?? 0)) {
+        return order;
+      }
+
+      const updatedItems = order.items.map(item =>
+        item.id === comboItemId
+          ? { ...item, claimedQuantity: (item.claimedQuantity ?? 0) + 1 }
+          : item
+      );
+
+      const claimLogItem: OrderItem = {
+        ...comboItem,
+        id: `claim-${comboItemId}-${Date.now()}`,
+        name: `(Liberado) ${comboItem.name}`,
+        price: 0,
+        quantity: 1,
+        isClaim: true,
+        claimedFromId: comboItemId,
+        isCombo: false,
+      };
+
+      updatedItems.push(claimLogItem);
+      return { ...order, items: updatedItems };
+    }));
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -559,6 +603,39 @@ export default function OrdersClient() {
                   <ul className="space-y-2">
                     {currentOrderItems.map(item => {
                       const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
+                      if(item.isClaim) {
+                          return (
+                            <li key={item.id} className="flex items-center gap-2 p-1.5 rounded-md border-dashed border-green-500/50 bg-green-500/10">
+                              <Check className="h-6 w-6 text-green-600 flex-shrink-0" />
+                              <div className="flex-grow">
+                                <p className="font-medium truncate text-xs text-green-700">{item.name}</p>
+                              </div>
+                            </li>
+                          )
+                      }
+                      if (item.isCombo) {
+                        const remaining = (item.comboItems ?? 0) - (item.claimedQuantity ?? 0);
+                        return (
+                           <li key={item.id} className="flex flex-col gap-2 p-1.5 rounded-md border bg-muted/30">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-shrink-0"> <IconComponent className="h-6 w-6 text-muted-foreground" /> </div>
+                              <div className="flex-grow">
+                                <p className="font-medium truncate text-xs">{item.name}</p>
+                                <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                              </div>
+                               <p className="font-semibold w-20 text-right text-sm">{formatCurrency(item.price * item.quantity)}</p>
+                            </div>
+                            <div className="flex items-center justify-between pl-1 pr-2 pb-1">
+                                <Badge variant={remaining > 0 ? "secondary" : "default"}>
+                                  {remaining > 0 ? `${remaining} restante(s)` : 'Completo'}
+                                </Badge>
+                                <Button size="sm" className="h-7" onClick={() => handleClaimComboItem(item.id)} disabled={remaining <= 0}>
+                                  Liberar 1
+                                </Button>
+                            </div>
+                          </li>
+                        )
+                      }
                       return (
                         <li key={item.id} className="flex items-center gap-2 p-1.5 rounded-md border">
                           <div className="flex-shrink-0">
@@ -686,8 +763,9 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
           const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
           return (
             <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
-              <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
+              <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors relative">
                 <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
+                {product.isCombo && <Badge className="absolute top-1 right-1 text-xs px-1.5 py-0.5" variant="secondary">Combo</Badge>}
               </div>
               <CardContent className="p-1.5 sm:p-2">
                 <h3 className="font-medium truncate text-[11px] leading-tight">{product.name}</h3>
@@ -712,7 +790,10 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
               <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-grow">
-              <h3 className="font-medium text-xs sm:text-sm">{product.name}</h3>
+              <h3 className="font-medium text-xs sm:text-sm flex items-center gap-2">
+                {product.name}
+                {product.isCombo && <Badge variant="secondary" className="text-xs px-1.5 py-0">Combo</Badge>}
+              </h3>
               <p className="text-xs text-muted-foreground">{categoryName}</p>
             </div>
             <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>

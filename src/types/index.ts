@@ -13,12 +13,17 @@ export interface Product {
   price: number;
   categoryId: string; // Referencia ProductCategory.id
   stock?: number; // Optional: for inventory management
+  isCombo?: boolean;
+  comboItems?: number;
 }
 
 export interface OrderItem extends Product {
   quantity: number;
   categoryName?: string; 
   categoryIconName?: string;
+  claimedQuantity?: number; // Para controlar itens de combo entregues
+  isClaim?: boolean; // Para marcar um item como uma liberação de combo
+  claimedFromId?: string; // ID do item do combo original
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';
@@ -42,7 +47,7 @@ export interface Sale {
 
 export interface ActiveOrder {
   id: string;
-  name: string;
+  name:string;
   items: OrderItem[];
   createdAt: Date;
 }
