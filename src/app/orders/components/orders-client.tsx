@@ -59,7 +59,8 @@ export default function OrdersClient() {
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
-  const [searchTerm, setSearchTerm] = useState('');
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
@@ -122,6 +123,10 @@ export default function OrdersClient() {
   }, [openOrders, isMounted]);
 
 
+  const filteredOpenOrders = useMemo(() => {
+    return openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase()));
+  }, [openOrders, orderSearchTerm]);
+
   const currentOrder = useMemo(() => {
     return openOrders.find(o => o.id === currentOrderId);
   }, [openOrders, currentOrderId]);
@@ -138,8 +143,8 @@ export default function OrdersClient() {
   }, [currentOrder]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [products, searchTerm]);
+    return products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
+  }, [products, productSearchTerm]);
   
   const productsByCategoryDisplay = useMemo(() => groupProductsByCategoryId(filteredProducts, productCategories), [filteredProducts, productCategories]);
   const displayCategories = useMemo(() => {
@@ -432,7 +437,7 @@ export default function OrdersClient() {
             price: -finalTotal,
             quantity: 1,
             categoryId: 'cat_outros',
-            categoryIconName: 'Banknote'
+            categoryName: 'Banknote'
         }],
         status: 'paid'
       };
@@ -506,22 +511,23 @@ export default function OrdersClient() {
                   <PlusSquare className="mr-2 h-4 w-4" /> Nova
                 </Button>
               </CardTitle>
-              <CardDescription>
-                {openOrders.length} comanda(s) em aberto.
-                {openOrders.length > 0 && (
-                  <span className="block font-semibold mt-1">
-                    Total: <span className="text-primary">{formatCurrency(totalOpenOrdersValue)}</span>
-                  </span>
-                )}
-              </CardDescription>
+              <div className="relative pt-2">
+                <Search className="absolute left-2.5 top-4 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar comanda..."
+                  value={orderSearchTerm}
+                  onChange={(e) => setOrderSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">
-                {openOrders.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-10">Nenhuma comanda aberta.</p>
+                {filteredOpenOrders.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-10">Nenhuma comanda encontrada.</p>
                 ) : (
                   <div className="space-y-2">
-                    {openOrders.map(order => (
+                    {filteredOpenOrders.map(order => (
                       <div
                         key={order.id}
                         role="button"
@@ -557,6 +563,11 @@ export default function OrdersClient() {
                 )}
               </ScrollArea>
             </CardContent>
+            <CardFooter className="p-2 border-t">
+                 <div className="text-xs text-muted-foreground w-full">
+                    {filteredOpenOrders.length} de {openOrders.length} comanda(s). Total: <span className="font-semibold text-primary">{formatCurrency(totalOpenOrdersValue)}</span>
+                 </div>
+            </CardFooter>
           </Card>
         </div>
 
@@ -568,8 +579,8 @@ export default function OrdersClient() {
                 <Search className="h-5 w-5 text-muted-foreground" />
                 <Input
                   placeholder="Buscar produtos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={productSearchTerm}
+                  onChange={(e) => setProductSearchTerm(e.target.value)}
                   className="max-w-sm"
                   disabled={!currentOrderId}
                 />
