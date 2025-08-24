@@ -533,9 +533,14 @@ export default function OrdersClient() {
         <div className="md:col-span-4 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-6 w-6 text-primary" />
-                {currentOrder ? currentOrder.name : "Comanda"}
+              <CardTitle className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-6 w-6 text-primary" />
+                  {currentOrder ? currentOrder.name : "Comanda"}
+                </div>
+                {currentOrder && (
+                  <span className="text-primary font-bold">{formatCurrency(orderTotal)}</span>
+                )}
               </CardTitle>
               <CardDescription>
                 {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
