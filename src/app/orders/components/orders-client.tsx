@@ -630,10 +630,10 @@ export default function OrdersClient() {
                   <span className="text-primary font-bold">{formatCurrency(orderTotal)}</span>
                 )}
               </CardTitle>
-              <CardDescription>
+              <div className="text-sm text-muted-foreground">
                 {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
                 {currentOrder?.status === 'paid' && <Badge variant="default" className="ml-2 bg-green-600">PAGA</Badge>}
-              </CardDescription>
+              </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-4">
