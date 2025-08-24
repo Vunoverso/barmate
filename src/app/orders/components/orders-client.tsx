@@ -264,30 +264,19 @@ export default function OrdersClient() {
   const handleClaimComboItem = (comboItemId: string) => {
     setOpenOrders(prevOrders => prevOrders.map(order => {
       if (order.id !== currentOrderId) return order;
-
+  
       const comboItem = order.items.find(item => item.id === comboItemId);
       if (!comboItem || !comboItem.isCombo || (comboItem.claimedQuantity ?? 0) >= (comboItem.comboItems ?? 0)) {
         return order;
       }
-
+  
+      // Instead of adding a new item, just update the claimed quantity
       const updatedItems = order.items.map(item =>
         item.id === comboItemId
           ? { ...item, claimedQuantity: (item.claimedQuantity ?? 0) + 1 }
           : item
       );
-
-      const claimLogItem: OrderItem = {
-        ...comboItem,
-        id: `claim-${comboItemId}-${Date.now()}`,
-        name: `(Liberado) ${comboItem.name}`,
-        price: 0,
-        quantity: 1,
-        isClaim: true,
-        claimedFromId: comboItemId,
-        isCombo: false,
-      };
-
-      updatedItems.push(claimLogItem);
+  
       return { ...order, items: updatedItems };
     }));
   };
@@ -601,18 +590,8 @@ export default function OrdersClient() {
                   <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {currentOrderItems.map(item => {
+                  {currentOrderItems.filter(item => !item.isClaim).map(item => {
                       const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
-                      if(item.isClaim) {
-                          return (
-                            <li key={item.id} className="flex items-center gap-2 p-1.5 rounded-md border-dashed border-green-500/50 bg-green-500/10">
-                              <Check className="h-6 w-6 text-green-600 flex-shrink-0" />
-                              <div className="flex-grow">
-                                <p className="font-medium truncate text-xs text-green-700">{item.name}</p>
-                              </div>
-                            </li>
-                          )
-                      }
                       if (item.isCombo) {
                         const remaining = (item.comboItems ?? 0) - (item.claimedQuantity ?? 0);
                         return (
@@ -629,9 +608,14 @@ export default function OrdersClient() {
                                 <Badge variant={remaining > 0 ? "secondary" : "default"}>
                                   {remaining > 0 ? `${remaining} restante(s)` : 'Completo'}
                                 </Badge>
-                                <Button size="sm" className="h-7" onClick={() => handleClaimComboItem(item.id)} disabled={remaining <= 0}>
-                                  Liberar 1
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Button size="sm" className="h-7" onClick={() => handleClaimComboItem(item.id)} disabled={remaining <= 0}>
+                                        Liberar 1
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
                           </li>
                         )
@@ -855,3 +839,5 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
         </Dialog>
     );
 }
+
+    
