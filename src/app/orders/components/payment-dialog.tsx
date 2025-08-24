@@ -112,8 +112,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       return true;
     }
     if (!allowPartialPayment && roundedRemaining !== 0) {
-        // Allow for small floating point inaccuracies
-        return Math.abs(roundedRemaining) > 0.001;
+        // Allow for small floating point inaccuracies by checking against a small epsilon
+        return Math.abs(roundedRemaining) > 0.01;
     }
     if (allowCredit && numChangeReturned > calculatedCashChange) {
       return true;
@@ -145,7 +145,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     onSubmit({
       payments,
       discountAmount: numDiscount,
-      changeGiven: creditToLeave,
+      changeGiven: calculatedCashChange, // Send the total change
       status: 'completed',
       leaveChangeAsCredit: creditToLeave > 0
     });
@@ -207,7 +207,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
               </Alert>
             )}
 
-            <div className={`p-2 rounded-md font-semibold text-center text-sm transition-colors ${remainingToPay === 0 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : (remainingToPay > 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300')}`}>
+            <div className={`p-2 rounded-md font-semibold text-center text-sm transition-colors ${Math.abs(remainingToPay) < 0.01 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : (remainingToPay > 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300')}`}>
               {Math.abs(remainingToPay) < 0.01 ? `Total pago: ${formatCurrency(totalPaid)}` : 
               remainingToPay > 0 ? `Faltante: ${formatCurrency(remainingToPay)}` :
               `Troco/Crédito: ${formatCurrency(Math.abs(remainingToPay))}`
