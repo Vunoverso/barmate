@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check, CreditCard } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -262,23 +262,51 @@ export default function OrdersClient() {
   };
 
   const handleClaimComboItem = (comboItemId: string) => {
-    setOpenOrders(prevOrders => prevOrders.map(order => {
-      if (order.id !== currentOrderId) return order;
-  
-      const comboItem = order.items.find(item => item.id === comboItemId);
-      if (!comboItem || !comboItem.isCombo || (comboItem.claimedQuantity ?? 0) >= (comboItem.comboItems ?? 0)) {
-        return order;
-      }
-  
-      // Instead of adding a new item, just update the claimed quantity
-      const updatedItems = order.items.map(item =>
-        item.id === comboItemId
-          ? { ...item, claimedQuantity: (item.claimedQuantity ?? 0) + 1 }
-          : item
-      );
-  
-      return { ...order, items: updatedItems };
-    }));
+    setOpenOrders(prevOrders => {
+        const newOrders = [...prevOrders];
+        const orderIndex = newOrders.findIndex(o => o.id === currentOrderId);
+        if (orderIndex === -1) return prevOrders;
+
+        const order = newOrders[orderIndex];
+        const comboItemIndex = order.items.findIndex(item => item.id === comboItemId);
+        if (comboItemIndex === -1) return prevOrders;
+
+        const comboItem = order.items[comboItemIndex];
+        if (!comboItem.isCombo || (comboItem.claimedQuantity ?? 0) >= (comboItem.comboItems ?? 0)) {
+            return prevOrders;
+        }
+
+        const newClaimedQuantity = (comboItem.claimedQuantity ?? 0) + 1;
+        const updatedComboItem = { ...comboItem, claimedQuantity: newClaimedQuantity };
+        
+        const updatedItems = [...order.items];
+        updatedItems[comboItemIndex] = updatedComboItem;
+        
+        const updatedOrder = { ...order, items: updatedItems };
+
+        // Check if the order is paid and all combos are now claimed
+        const allCombosClaimed = updatedOrder.items
+            .filter(item => item.isCombo)
+            .every(item => (item.claimedQuantity ?? 0) >= (item.comboItems ?? 1));
+
+        if (updatedOrder.status === 'paid' && allCombosClaimed) {
+            // Close the order now
+            newOrders.splice(orderIndex, 1); // Remove the order
+            toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${order.name}" foram entregues.` });
+
+            // Select next order
+            if (newOrders.length > 0) {
+              const nextIndex = orderIndex < newOrders.length ? orderIndex : newOrders.length - 1;
+              setCurrentOrderId(newOrders[nextIndex].id);
+            } else {
+              setCurrentOrderId(null);
+            }
+        } else {
+            newOrders[orderIndex] = updatedOrder;
+        }
+        
+        return newOrders;
+    });
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -375,7 +403,7 @@ export default function OrdersClient() {
         return;
     }
     
-    // Full Payment Logic (totalPaid >= effectiveOrderTotal)
+    // --- Full Payment Logic ---
     const finalTotal = effectiveOrderTotal;
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
@@ -390,7 +418,31 @@ export default function OrdersClient() {
     };
     addSale(newSale);
 
-    // Handle order state after full payment
+    // Check for pending combos
+    const hasUnclaimedCombos = currentOrder.items.some(item => 
+      item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1)
+    );
+
+    if (hasUnclaimedCombos) {
+      const paidOrder: ActiveOrder = {
+        ...currentOrder,
+        items: [...currentOrder.items, { // Add a payment item to balance the total
+            id: `payment-full-${Date.now()}`,
+            name: 'Pagamento Integral',
+            price: -finalTotal,
+            quantity: 1,
+            categoryId: 'cat_outros',
+            categoryIconName: 'Banknote'
+        }],
+        status: 'paid'
+      };
+      setOpenOrders(openOrders.map(o => o.id === currentOrderId ? paidOrder : o));
+      toast({ title: "Comanda Paga!", description: `A comanda "${currentOrder.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
+      setIsPaymentDialogOpen(false);
+      return;
+    }
+
+    // Handle order state after full payment (NO pending combos)
     let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
     let nextSelectedOrderId: string | null = null;
     
@@ -486,7 +538,10 @@ export default function OrdersClient() {
                         )}
                       >
                         <div className="flex flex-col items-start text-left flex-grow overflow-hidden mr-2">
-                          <span className="font-semibold truncate block max-w-full">{order.name}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="font-semibold truncate block max-w-full">{order.name}</span>
+                                {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
+                            </div>
                           <span className="text-xs text-muted-foreground">
                             {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
                           </span>
@@ -577,6 +632,7 @@ export default function OrdersClient() {
               </CardTitle>
               <CardDescription>
                 {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
+                {currentOrder?.status === 'paid' && <Badge variant="default" className="ml-2 bg-green-600">PAGA</Badge>}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
@@ -590,7 +646,7 @@ export default function OrdersClient() {
                   <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
                 ) : (
                   <ul className="space-y-2">
-                  {currentOrderItems.filter(item => !item.isClaim).map(item => {
+                  {currentOrderItems.map(item => {
                       const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
                       if (item.isCombo) {
                         const remaining = (item.comboItems ?? 0) - (item.claimedQuantity ?? 0);
@@ -658,7 +714,7 @@ export default function OrdersClient() {
               <Button
                 size="lg"
                 className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-                disabled={orderTotal === 0 || !currentOrderId}
+                disabled={orderTotal === 0 || !currentOrderId || currentOrder?.status === 'paid'}
                 onClick={() => setIsPaymentDialogOpen(true)}
               >
                 Realizar Pagamento

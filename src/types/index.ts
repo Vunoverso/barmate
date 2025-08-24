@@ -50,6 +50,7 @@ export interface ActiveOrder {
   name:string;
   items: OrderItem[];
   createdAt: Date;
+  status?: 'paid';
 }
 
 export interface CashAdjustment {
