@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check, CreditCard } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check, CreditCard, Merge } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
@@ -66,6 +67,7 @@ export default function OrdersClient() {
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<ActiveOrder | null>(null);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
@@ -215,12 +217,42 @@ export default function OrdersClient() {
             nextSelectedId = updatedOrders[deletedIndex]?.id || updatedOrders[deletedIndex - 1]?.id || updatedOrders[0].id;
         }
         setCurrentOrderId(nextSelectedId);
+    } else {
+      // If a different order was deleted, keep the current selection
+      // No change to currentOrderId needed
     }
-    // If a different order was deleted, keep the current selection
     
     setOpenOrders(updatedOrders);
     setOrderToDelete(null);
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
+  };
+  
+  const handleMergeOrders = (sourceOrderIds: string[]) => {
+    if (!currentOrderId || sourceOrderIds.length === 0) return;
+
+    let destinationOrder = openOrders.find(o => o.id === currentOrderId);
+    if (!destinationOrder) return;
+    
+    const itemsToMerge: OrderItem[] = [];
+    const sourceOrders = openOrders.filter(o => sourceOrderIds.includes(o.id));
+    sourceOrders.forEach(sourceOrder => {
+      itemsToMerge.push(...sourceOrder.items);
+    });
+
+    setOpenOrders(prevOrders => {
+      // Add items to destination order
+      const updatedOrders = prevOrders.map(order => {
+        if (order.id === currentOrderId) {
+          return { ...order, items: [...order.items, ...itemsToMerge] };
+        }
+        return order;
+      });
+      // Remove source orders
+      return updatedOrders.filter(o => !sourceOrderIds.includes(o.id));
+    });
+
+    toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
+    setIsMergeDialogOpen(false);
   };
 
   const addToOrder = (product: Product) => {
@@ -507,9 +539,14 @@ export default function OrdersClient() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 Comandas Abertas
-                <Button size="sm" onClick={handleOpenCreateOrderDialog}>
-                  <PlusSquare className="mr-2 h-4 w-4" /> Nova
-                </Button>
+                 <div className="flex items-center gap-1">
+                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setIsMergeDialogOpen(true)} disabled={!currentOrderId}>
+                    <Merge className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" className="h-8 w-8" onClick={handleOpenCreateOrderDialog}>
+                    <PlusSquare className="h-4 w-4" />
+                  </Button>
+                 </div>
               </CardTitle>
               <div className="relative pt-2">
                 <Search className="absolute left-2.5 top-4 h-4 w-4 text-muted-foreground" />
@@ -632,16 +669,16 @@ export default function OrdersClient() {
         <div className="md:col-span-4 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
             <CardHeader>
-              <CardTitle className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-6 w-6 text-primary" />
-                  {currentOrder ? currentOrder.name : "Comanda"}
-                </div>
-                {currentOrder && (
-                  <span className="text-primary font-bold">{formatCurrency(orderTotal)}</span>
-                )}
-              </CardTitle>
-              <div className="text-sm text-muted-foreground">
+              <div className="flex justify-between items-start">
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingCart className="h-6 w-6 text-primary" />
+                    {currentOrder ? currentOrder.name : "Comanda"}
+                  </CardTitle>
+                  {currentOrder && (
+                    <span className="text-primary font-bold text-lg">{formatCurrency(orderTotal)}</span>
+                  )}
+              </div>
+              <div className="text-sm text-muted-foreground pt-1">
                 {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
                 {currentOrder?.status === 'paid' && <Badge variant="default" className="ml-2 bg-green-600">PAGA</Badge>}
               </div>
@@ -718,10 +755,6 @@ export default function OrdersClient() {
             </CardContent>
             <Separator />
             <CardFooter className="flex flex-col gap-3 p-4">
-              <div className="w-full flex justify-between text-lg font-semibold">
-                <span>Total:</span>
-                <span>{formatCurrency(orderTotal)}</span>
-              </div>
               <Button
                 size="lg"
                 className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
@@ -759,6 +792,16 @@ export default function OrdersClient() {
             onSave={handleSaveOrderName}
         />
       )}
+
+       {currentOrder && (
+          <MergeOrdersDialog
+              isOpen={isMergeDialogOpen}
+              onOpenChange={setIsMergeDialogOpen}
+              currentOrder={currentOrder}
+              allOrders={openOrders}
+              onMerge={handleMergeOrders}
+          />
+       )}
 
       <PaymentDialog
         isOpen={isPaymentDialogOpen}
@@ -907,4 +950,78 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
     );
 }
 
+// --- Merge Orders Dialog ---
+interface MergeOrdersDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentOrder: ActiveOrder;
+  allOrders: ActiveOrder[];
+  onMerge: (sourceOrderIds: string[]) => void;
+}
+
+function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMerge }: MergeOrdersDialogProps) {
+    const [selectedOrders, setSelectedOrders] = useState<Record<string, boolean>>({});
+
+    const otherOrders = allOrders.filter(o => o.id !== currentOrder.id);
+    const orderIdsToMerge = Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedOrders({});
+        }
+    }, [isOpen]);
+
+    const handleToggleOrder = (orderId: string) => {
+        setSelectedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+    };
+
+    const handleSubmit = () => {
+        onMerge(orderIdsToMerge);
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Juntar Comandas</DialogTitle>
+                    <DialogDescription>
+                        Selecione as comandas para juntar na comanda <strong>{currentOrder.name}</strong>. Os itens serão movidos e as comandas de origem serão removidas.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    {otherOrders.length > 0 ? (
+                        <ScrollArea className="h-64 border rounded-md p-2">
+                            <div className="space-y-2">
+                                {otherOrders.map(order => (
+                                    <div key={order.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50">
+                                        <Checkbox
+                                            id={`merge-${order.id}`}
+                                            checked={selectedOrders[order.id] || false}
+                                            onCheckedChange={() => handleToggleOrder(order.id)}
+                                        />
+                                        <Label htmlFor={`merge-${order.id}`} className="font-normal flex-grow cursor-pointer">
+                                            <div className="flex justify-between items-center">
+                                                <span>{order.name}</span>
+                                                <span className="text-muted-foreground text-xs">{formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}</span>
+                                            </div>
+                                        </Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-10">Nenhuma outra comanda aberta para juntar.</p>
+                    )}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                    <Button onClick={handleSubmit} disabled={orderIdsToMerge.length === 0}>
+                        <Merge className="mr-2 h-4 w-4" />
+                        Juntar {orderIdsToMerge.length > 0 ? `(${orderIdsToMerge.length})` : ''} Comandas
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
     
