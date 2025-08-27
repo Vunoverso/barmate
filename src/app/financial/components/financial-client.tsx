@@ -111,6 +111,8 @@ export default function FinancialClient() {
   
   const [salesPagination, setSalesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
   const [expensesPagination, setExpensesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
+  const [feesPagination, setFeesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
+
 
   const { toast } = useToast();
   const form = useForm<ExpenseFormData>({
@@ -189,6 +191,10 @@ export default function FinancialClient() {
   const filteredEntries = useMemo(() => {
     return (filterByDate(entries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries, dateRange]);
+  
+  const generalExpenses = useMemo(() => filteredEntries.filter(e => !e.saleId), [filteredEntries]);
+  const feeExpenses = useMemo(() => filteredEntries.filter(e => !!e.saleId), [filteredEntries]);
+
 
   // Pagination Logic
   const paginatedSales = useMemo(() => {
@@ -203,14 +209,23 @@ export default function FinancialClient() {
 
   const paginatedExpenses = useMemo(() => {
     const startIndex = (expensesPagination.currentPage - 1) * expensesPagination.itemsPerPage;
-    return filteredEntries.slice(startIndex, startIndex + expensesPagination.itemsPerPage);
-  }, [filteredEntries, expensesPagination]);
+    return generalExpenses.slice(startIndex, startIndex + expensesPagination.itemsPerPage);
+  }, [generalExpenses, expensesPagination]);
 
   const totalExpensePages = useMemo(() => {
-    if (filteredEntries.length === 0) return 1;
-    return Math.ceil(filteredEntries.length / expensesPagination.itemsPerPage);
-  }, [filteredEntries, expensesPagination.itemsPerPage]);
+    if (generalExpenses.length === 0) return 1;
+    return Math.ceil(generalExpenses.length / expensesPagination.itemsPerPage);
+  }, [generalExpenses, expensesPagination.itemsPerPage]);
 
+  const paginatedFees = useMemo(() => {
+    const startIndex = (feesPagination.currentPage - 1) * feesPagination.itemsPerPage;
+    return feeExpenses.slice(startIndex, startIndex + feesPagination.itemsPerPage);
+  }, [feeExpenses, feesPagination]);
+
+  const totalFeePages = useMemo(() => {
+      if (feeExpenses.length === 0) return 1;
+      return Math.ceil(feeExpenses.length / feesPagination.itemsPerPage);
+  }, [feeExpenses, feesPagination.itemsPerPage]);
 
   const totalRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
   const totalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0), [filteredEntries]);
@@ -256,19 +271,13 @@ export default function FinancialClient() {
     };
   }, [filteredSales, filteredEntries]);
 
-    // Pagination Handlers
-  const handleSalesPageChange = (page: number) => {
-    setSalesPagination(prev => ({ ...prev, currentPage: page }));
-  };
-  const handleSalesItemsPerPageChange = (items: number) => {
-    setSalesPagination({ currentPage: 1, itemsPerPage: items });
-  };
-  const handleExpensesPageChange = (page: number) => {
-    setExpensesPagination(prev => ({ ...prev, currentPage: page }));
-  };
-  const handleExpensesItemsPerPageChange = (items: number) => {
-    setExpensesPagination({ currentPage: 1, itemsPerPage: items });
-  };
+  // Pagination Handlers
+  const handleSalesPageChange = (page: number) => setSalesPagination(prev => ({ ...prev, currentPage: page }));
+  const handleSalesItemsPerPageChange = (items: number) => setSalesPagination({ currentPage: 1, itemsPerPage: items });
+  const handleExpensesPageChange = (page: number) => setExpensesPagination(prev => ({ ...prev, currentPage: page }));
+  const handleExpensesItemsPerPageChange = (items: number) => setExpensesPagination({ currentPage: 1, itemsPerPage: items });
+  const handleFeesPageChange = (page: number) => setFeesPagination(prev => ({ ...prev, currentPage: page }));
+  const handleFeesItemsPerPageChange = (items: number) => setFeesPagination({ currentPage: 1, itemsPerPage: items });
 
 
   const handleAddExpense = (data: ExpenseFormData) => {
@@ -632,9 +641,10 @@ export default function FinancialClient() {
         </Accordion>
       
         <Tabs defaultValue="sales" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="sales">Detalhes das Vendas</TabsTrigger>
-                <TabsTrigger value="expenses">Histórico de Despesas</TabsTrigger>
+                <TabsTrigger value="expenses">Despesas Gerais</TabsTrigger>
+                <TabsTrigger value="fees">Taxas de Transação</TabsTrigger>
             </TabsList>
             <TabsContent value="sales">
                 <Card>
@@ -695,8 +705,8 @@ export default function FinancialClient() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
-                            <CardTitle>Histórico de Despesas</CardTitle>
-                            <CardDescription>Visualize todas as suas saídas registradas.</CardDescription>
+                            <CardTitle>Histórico de Despesas Gerais</CardTitle>
+                            <CardDescription>Visualize todas as saídas manuais registradas.</CardDescription>
                         </div>
                         <Button onClick={() => { form.reset({ description: '', amount: 0, source: 'daily_cash' }); setIsExpenseDialogOpen(true); }}>
                             <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Despesa
@@ -727,7 +737,7 @@ export default function FinancialClient() {
                                 </DropdownMenu></TableCell>
                                 </TableRow>
                             )) : (
-                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhum lançamento encontrado.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma despesa geral encontrada.</TableCell></TableRow>
                             )}
                             </TableBody>
                         </Table>
@@ -739,8 +749,57 @@ export default function FinancialClient() {
                             onPageChange={handleExpensesPageChange}
                             itemsPerPage={expensesPagination.itemsPerPage}
                             onItemsPerPageChange={handleExpensesItemsPerPageChange}
-                            totalItems={filteredEntries.length}
+                            totalItems={generalExpenses.length}
                             itemName="despesas"
+                        />
+                    </CardFooter>
+                </Card>
+            </TabsContent>
+            <TabsContent value="fees">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Taxas de Transação</CardTitle>
+                        <CardDescription>Taxas descontadas de vendas por cartão e PIX.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader><TableRow>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Origem</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead><span className="sr-only">Ações</span></TableHead>
+                            </TableRow></TableHeader>
+                            <TableBody>
+                            {paginatedFees.length > 0 ? paginatedFees.map(entry => (
+                                <TableRow key={entry.id}>
+                                <TableCell className="font-medium">{entry.description}</TableCell>
+                                <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                                <TableCell>{SOURCE_MAP[entry.source]}</TableCell>
+                                <TableCell className="text-right text-destructive font-semibold">- {formatCurrency(entry.amount)}</TableCell>
+                                <TableCell className="text-right"><DropdownMenu>
+                                    <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                        <DropdownMenuItem className="text-destructive" onClick={() => setEntryToDelete(entry)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu></TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma taxa de transação encontrada.</TableCell></TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                    <CardFooter>
+                       <DataTablePagination
+                            currentPage={feesPagination.currentPage}
+                            totalPages={totalFeePages}
+                            onPageChange={handleFeesPageChange}
+                            itemsPerPage={feesPagination.itemsPerPage}
+                            onItemsPerPageChange={handleFeesItemsPerPageChange}
+                            totalItems={feeExpenses.length}
+                            itemName="taxas"
                         />
                     </CardFooter>
                 </Card>
@@ -940,3 +999,6 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
   );
 }
 
+
+
+    
