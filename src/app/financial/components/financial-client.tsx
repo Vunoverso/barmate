@@ -366,6 +366,28 @@ export default function FinancialClient() {
 
   const handleDeleteEntry = () => {
     if (!entryToDelete) return;
+    
+    // Prevent refunding for fee entries, as the bank account balance is handled by addSale
+    if (!entryToDelete.saleId) {
+        // Refund the amount to the source
+        if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
+            const refundAdjustment: CashAdjustment = {
+                id: `adj-refund-${Date.now()}`,
+                amount: entryToDelete.amount,
+                type: 'in',
+                description: `Estorno despesa: ${entryToDelete.description}`,
+                timestamp: new Date().toISOString(),
+                isCorrection: true,
+            };
+            const updatedStatus = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), refundAdjustment] };
+            saveCashRegisterStatus(updatedStatus);
+        } else if (entryToDelete.source === 'secondary_cash') {
+            saveSecondaryCashBox({ balance: secondaryCashBox.balance + entryToDelete.amount });
+        } else if (entryToDelete.source === 'bank_account') {
+            saveBankAccount({ balance: bankAccount.balance + entryToDelete.amount });
+        }
+    }
+
     const updatedEntries = entries.filter(e => e.id !== entryToDelete.id);
     saveFinancialEntries(updatedEntries);
     toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
@@ -758,7 +780,7 @@ export default function FinancialClient() {
       {entryToDelete && (
         <AlertDialog open={!!entryToDelete} onOpenChange={() => setEntryToDelete(null)}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover o lançamento "{entryToDelete.description}"? A remoção não estornará o valor do caixa de origem. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover o lançamento "{entryToDelete.description}"? A remoção estornará o valor do caixa de origem (exceto taxas de vendas). Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteEntry} className="bg-destructive hover:bg-destructive/90">Remover</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -917,3 +939,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+

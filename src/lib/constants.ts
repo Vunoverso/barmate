@@ -228,48 +228,25 @@ export const addSale = (newSale: Sale): void => {
   const transactionFees = getTransactionFees();
 
   newSale.payments.forEach(p => {
-    if (p.method === 'credit') {
-      const feeAmount = p.amount * (transactionFees.creditRate / 100);
+    let feeAmount = 0;
+    let feeRate = 0;
+    
+    if (p.method === 'credit') feeRate = transactionFees.creditRate;
+    else if (p.method === 'debit') feeRate = transactionFees.debitRate;
+    else if (p.method === 'pix') feeRate = transactionFees.pixRate;
+
+    if (feeRate > 0) {
+      feeAmount = p.amount * (feeRate / 100);
       netAmountToBank += p.amount - feeAmount;
-      if (feeAmount > 0) {
-        newFinancialEntries.push({
-          id: `fee-${newSale.id}-credit`,
-          description: `Taxa Crédito (Venda #${newSale.id.slice(-6)})`,
-          amount: feeAmount,
-          type: 'expense',
-          source: 'bank_account',
-          timestamp: new Date(),
-          saleId: newSale.id,
-        });
-      }
-    } else if (p.method === 'debit') {
-      const feeAmount = p.amount * (transactionFees.debitRate / 100);
-      netAmountToBank += p.amount - feeAmount;
-      if (feeAmount > 0) {
-        newFinancialEntries.push({
-          id: `fee-${newSale.id}-debit`,
-          description: `Taxa Débito (Venda #${newSale.id.slice(-6)})`,
-          amount: feeAmount,
-          type: 'expense',
-          source: 'bank_account',
-          timestamp: new Date(),
-          saleId: newSale.id,
-        });
-      }
-    } else if (p.method === 'pix') {
-      const feeAmount = p.amount * (transactionFees.pixRate / 100);
-      netAmountToBank += p.amount - feeAmount;
-      if (feeAmount > 0) {
-        newFinancialEntries.push({
-          id: `fee-${newSale.id}-pix`,
-          description: `Taxa PIX (Venda #${newSale.id.slice(-6)})`,
-          amount: feeAmount,
-          type: 'expense',
-          source: 'bank_account',
-          timestamp: new Date(),
-          saleId: newSale.id,
-        });
-      }
+      newFinancialEntries.push({
+        id: `fee-${newSale.id}-${p.method}`,
+        description: `Taxa ${p.method.charAt(0).toUpperCase() + p.method.slice(1)} (Venda #${newSale.id.slice(-6)})`,
+        amount: feeAmount,
+        type: 'expense',
+        source: 'bank_account', // The fee is conceptually paid from the bank
+        timestamp: new Date(),
+        saleId: newSale.id,
+      });
     }
   });
 
@@ -465,3 +442,4 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
         window.dispatchEvent(new Event('transactionFeesChanged'));
     }
 };
+
