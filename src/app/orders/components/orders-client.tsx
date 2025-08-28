@@ -694,12 +694,12 @@ export default function OrdersClient() {
                   <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
                 ) : (
                   <ul className="space-y-2">
-                  {currentOrderItems.map(item => {
+                  {currentOrderItems.map((item, index) => {
                       const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
                       if (item.isCombo) {
                         const remaining = (item.comboItems ?? 0) - (item.claimedQuantity ?? 0);
                         return (
-                           <li key={item.id} className="flex flex-col gap-2 p-1.5 rounded-md border bg-muted/30">
+                           <li key={`${item.id}-${index}`} className="flex flex-col gap-2 p-1.5 rounded-md border bg-muted/30">
                             <div className="flex items-center gap-2">
                               <div className="flex-shrink-0"> <IconComponent className="h-6 w-6 text-muted-foreground" /> </div>
                               <div className="flex-grow">
@@ -725,7 +725,7 @@ export default function OrdersClient() {
                         )
                       }
                       return (
-                        <li key={item.id} className="flex items-center gap-2 p-1.5 rounded-md border">
+                        <li key={`${item.id}-${index}`} className="flex items-center gap-2 p-1.5 rounded-md border">
                           <div className="flex-shrink-0">
                             <IconComponent className="h-6 w-6 text-muted-foreground" />
                           </div>
@@ -1024,4 +1024,6 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
         </Dialog>
     );
 }
+    
+
     
