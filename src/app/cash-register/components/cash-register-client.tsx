@@ -162,27 +162,31 @@ export default function CashRegisterClient() {
             if (!originalAdjustment) return prev;
 
             const amountDifference = details.amount - originalAdjustment.amount;
+            const currentEntries = getFinancialEntries();
+            let updatedEntries = [...currentEntries];
 
-            // Handle balance changes for transfers
-            if (originalAdjustment.type === 'out' && originalAdjustment.destination) {
+            if (originalAdjustment.type === 'out') {
                 if (originalAdjustment.destination === 'secondary_cash') {
                     const currentSecondaryBox = getSecondaryCashBox();
                     saveSecondaryCashBox({ balance: currentSecondaryBox.balance + amountDifference });
                 } else if (originalAdjustment.destination === 'bank_account') {
                     const currentBankAccount = getBankAccount();
                     saveBankAccount({ balance: currentBankAccount.balance + amountDifference });
+                } else { // It's an expense
+                    updatedEntries = currentEntries.map(entry => 
+                        entry.adjustmentId === idToUpdate 
+                        ? { ...entry, amount: details.amount, description: `Sangria: ${details.description}` }
+                        : entry
+                    );
                 }
-            } else if (originalAdjustment.type === 'out') {
-                // Handle financial entry for expenses (if it was an expense)
-                const currentEntries = getFinancialEntries();
-                const updatedEntries = currentEntries.map(entry => {
-                    if (entry.adjustmentId === idToUpdate) {
-                        return { ...entry, amount: details.amount, description: `Sangria: ${details.description}` };
-                    }
-                    return entry;
-                });
-                saveFinancialEntries(updatedEntries);
+            } else if (originalAdjustment.type === 'in') { // It's an income (suprimento)
+                 updatedEntries = currentEntries.map(entry => 
+                    entry.adjustmentId === idToUpdate 
+                    ? { ...entry, amount: details.amount, description: `Suprimento: ${details.description}` }
+                    : entry
+                );
             }
+            saveFinancialEntries(updatedEntries);
             
             const updatedAdjustments = prev.adjustments?.map(adj => 
                 adj.id === idToUpdate 
@@ -205,6 +209,9 @@ export default function CashRegisterClient() {
             destination: details.destination && details.destination !== 'none' ? details.destination : undefined
         };
         
+        const currentEntries = getFinancialEntries();
+        let newFinancialEntry: FinancialEntry | null = null;
+        
         if (adjustmentType === 'out') { // Sangria
             if (details.destination === 'secondary_cash') {
                 const currentBox = getSecondaryCashBox();
@@ -213,8 +220,7 @@ export default function CashRegisterClient() {
                 const currentAccount = getBankAccount();
                 saveBankAccount({ balance: currentAccount.balance + details.amount });
             } else { // It's an expense
-                const currentEntries = getFinancialEntries();
-                const newExpenseEntry: FinancialEntry = {
+                newFinancialEntry = {
                     id: `exp-sangria-${newAdjustment.id}`,
                     description: `Sangria: ${details.description}`,
                     amount: details.amount,
@@ -223,10 +229,21 @@ export default function CashRegisterClient() {
                     timestamp: new Date(),
                     adjustmentId: newAdjustment.id
                 };
-                saveFinancialEntries([...currentEntries, newExpenseEntry]);
             }
         } else { // Suprimento (in)
-           // No special logic for 'in' currently, just adds to cash register
+           newFinancialEntry = {
+                id: `inc-suprimento-${newAdjustment.id}`,
+                description: `Suprimento: ${details.description}`,
+                amount: details.amount,
+                type: 'income',
+                source: 'daily_cash',
+                timestamp: new Date(),
+                adjustmentId: newAdjustment.id
+           };
+        }
+
+        if (newFinancialEntry) {
+            saveFinancialEntries([...currentEntries, newFinancialEntry]);
         }
 
         const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), newAdjustment] };
@@ -246,8 +263,12 @@ export default function CashRegisterClient() {
   const handleDeleteAdjustment = () => {
     if (!adjustmentToDelete || cashStatus.status !== 'open') return;
     const { id, type, amount, destination, source } = adjustmentToDelete;
+    
+    const currentEntries = getFinancialEntries();
+    const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
+    saveFinancialEntries(updatedEntries);
 
-    // Revert 'out' transfers (main cash -> destination) or expenses
+    // Revert 'out' transfers (main cash -> destination)
     if (type === 'out') {
       if (destination === 'secondary_cash') {
         const currentBox = getSecondaryCashBox();
@@ -255,10 +276,6 @@ export default function CashRegisterClient() {
       } else if (destination === 'bank_account') {
         const currentAccount = getBankAccount();
         saveBankAccount({ balance: currentAccount.balance - amount });
-      } else { // It was an expense, remove the financial entry
-        const currentEntries = getFinancialEntries();
-        const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
-        saveFinancialEntries(updatedEntries);
       }
     } 
     // Revert 'in' transfers (source -> main cash)
@@ -981,3 +998,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+

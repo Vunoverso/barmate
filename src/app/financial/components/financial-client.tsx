@@ -41,7 +41,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart, Eye, EyeOff, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
 import { addDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { ptBR } from "date-fns/locale";
@@ -112,6 +112,7 @@ export default function FinancialClient() {
   const [salesPagination, setSalesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
   const [expensesPagination, setExpensesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
   const [feesPagination, setFeesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
+  const [incomePagination, setIncomePagination] = useState({ currentPage: 1, itemsPerPage: 10 });
 
 
   const { toast } = useToast();
@@ -192,8 +193,9 @@ export default function FinancialClient() {
     return (filterByDate(entries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries, dateRange]);
   
-  const generalExpenses = useMemo(() => filteredEntries.filter(e => !e.saleId), [filteredEntries]);
-  const feeExpenses = useMemo(() => filteredEntries.filter(e => !!e.saleId), [filteredEntries]);
+  const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId), [filteredEntries]);
+  const feeExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !!e.saleId), [filteredEntries]);
+  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income'), [filteredEntries]);
 
 
   // Pagination Logic
@@ -226,6 +228,17 @@ export default function FinancialClient() {
       if (feeExpenses.length === 0) return 1;
       return Math.ceil(feeExpenses.length / feesPagination.itemsPerPage);
   }, [feeExpenses, feesPagination.itemsPerPage]);
+
+  const paginatedIncome = useMemo(() => {
+    const startIndex = (incomePagination.currentPage - 1) * incomePagination.itemsPerPage;
+    return incomeEntries.slice(startIndex, startIndex + incomePagination.itemsPerPage);
+  }, [incomeEntries, incomePagination]);
+
+  const totalIncomePages = useMemo(() => {
+    if (incomeEntries.length === 0) return 1;
+    return Math.ceil(incomeEntries.length / incomePagination.itemsPerPage);
+  }, [incomeEntries, incomePagination.itemsPerPage]);
+
 
   const totalRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
   const totalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0), [filteredEntries]);
@@ -278,6 +291,8 @@ export default function FinancialClient() {
   const handleExpensesItemsPerPageChange = (items: number) => setExpensesPagination({ currentPage: 1, itemsPerPage: items });
   const handleFeesPageChange = (page: number) => setFeesPagination(prev => ({ ...prev, currentPage: page }));
   const handleFeesItemsPerPageChange = (items: number) => setFeesPagination({ currentPage: 1, itemsPerPage: items });
+  const handleIncomePageChange = (page: number) => setIncomePagination(prev => ({ ...prev, currentPage: page }));
+  const handleIncomeItemsPerPageChange = (items: number) => setIncomePagination({ currentPage: 1, itemsPerPage: items });
 
 
   const handleAddExpense = (data: ExpenseFormData) => {
@@ -376,9 +391,8 @@ export default function FinancialClient() {
   const handleDeleteEntry = () => {
     if (!entryToDelete) return;
     
-    // Prevent refunding for fee entries, as the bank account balance is handled by addSale
-    if (!entryToDelete.saleId) {
-        // Refund the amount to the source
+    if (entryToDelete.type === 'expense' && !entryToDelete.saleId) {
+        // Refund the amount to the source for general expenses
         if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
             const refundAdjustment: CashAdjustment = {
                 id: `adj-refund-${Date.now()}`,
@@ -395,6 +409,20 @@ export default function FinancialClient() {
         } else if (entryToDelete.source === 'bank_account') {
             saveBankAccount({ balance: bankAccount.balance + entryToDelete.amount });
         }
+    } else if (entryToDelete.type === 'income') {
+      // Revert income entry from the source
+       if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
+         const debitAdjustment: CashAdjustment = {
+            id: `adj-debit-${Date.now()}`,
+            amount: entryToDelete.amount,
+            type: 'out',
+            description: `Estorno entrada: ${entryToDelete.description}`,
+            timestamp: new Date().toISOString(),
+            isCorrection: true,
+         };
+         const updatedStatus = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), debitAdjustment] };
+         saveCashRegisterStatus(updatedStatus);
+       }
     }
 
     const updatedEntries = entries.filter(e => e.id !== entryToDelete.id);
@@ -454,6 +482,13 @@ export default function FinancialClient() {
         amount: entry.amount,
         source: SOURCE_MAP[entry.source]
       })),
+       ...filteredEntries.filter(e => e.type === 'income').map(entry => ({
+        timestamp: new Date(entry.timestamp),
+        description: entry.description,
+        type: 'Entrada',
+        amount: entry.amount,
+        source: SOURCE_MAP[entry.source]
+      })),
     ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
     if (combinedData.length === 0) {
@@ -469,7 +504,7 @@ export default function FinancialClient() {
       item.description,
       item.type,
       item.source,
-      (item.type === 'Receita' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
+      (item.type === 'Receita' || item.type === 'Entrada' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
     ]);
     downloadAsCSV(headers, csvData, `${filename}.csv`);
     toast({ title: "Relatório Geral CSV Exportado" });
@@ -641,14 +676,19 @@ export default function FinancialClient() {
         </Accordion>
       
         <Tabs defaultValue="sales" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="sales">Detalhes das Vendas</TabsTrigger>
-                <TabsTrigger value="expenses">Despesas Gerais</TabsTrigger>
-                <TabsTrigger value="fees">Taxas de Transação</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="sales">Vendas</TabsTrigger>
+                <TabsTrigger value="income">Entradas</TabsTrigger>
+                <TabsTrigger value="expenses">Despesas</TabsTrigger>
+                <TabsTrigger value="fees">Taxas</TabsTrigger>
             </TabsList>
             <TabsContent value="sales">
                 <Card>
-                    <CardContent className="pt-6">
+                    <CardHeader>
+                        <CardTitle>Detalhes das Vendas</CardTitle>
+                        <CardDescription>Lista de todas as vendas realizadas no período selecionado.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
                         <Table>
                             <TableHeader><TableRow>
                                 <TableHead>Data</TableHead>
@@ -697,6 +737,55 @@ export default function FinancialClient() {
                             onItemsPerPageChange={handleSalesItemsPerPageChange}
                             totalItems={filteredSales.length}
                             itemName="vendas"
+                        />
+                    </CardFooter>
+                </Card>
+            </TabsContent>
+            <TabsContent value="income">
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Histórico de Entradas (Suprimentos)</CardTitle>
+                        <CardDescription>Visualize todas as entradas de dinheiro manuais (suprimentos) no caixa.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader><TableRow>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Origem</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead><span className="sr-only">Ações</span></TableHead>
+                            </TableRow></TableHeader>
+                            <TableBody>
+                            {paginatedIncome.length > 0 ? paginatedIncome.map(entry => (
+                                <TableRow key={entry.id}>
+                                <TableCell className="font-medium">{entry.description}</TableCell>
+                                <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                                <TableCell>{SOURCE_MAP[entry.source]}</TableCell>
+                                <TableCell className="text-right text-green-600 font-semibold">+ {formatCurrency(entry.amount)}</TableCell>
+                                <TableCell className="text-right"><DropdownMenu>
+                                    <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                        <DropdownMenuItem className="text-destructive" onClick={() => setEntryToDelete(entry)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu></TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma entrada (suprimento) encontrada.</TableCell></TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                    <CardFooter>
+                       <DataTablePagination
+                            currentPage={incomePagination.currentPage}
+                            totalPages={totalIncomePages}
+                            onPageChange={handleIncomePageChange}
+                            itemsPerPage={incomePagination.itemsPerPage}
+                            onItemsPerPageChange={handleIncomeItemsPerPageChange}
+                            totalItems={incomeEntries.length}
+                            itemName="entradas"
                         />
                     </CardFooter>
                 </Card>

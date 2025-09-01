@@ -36,7 +36,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
   const [isMounted, setIsMounted] = useState(false);
-  const version = "v1.1.0"; // Version number added here
+  const version = "v1.2.1"; // Version number
 
   useEffect(() => {
     setIsMounted(true);
