@@ -247,6 +247,8 @@ export const addSale = (newSale: Sale): void => {
         timestamp: new Date(),
         saleId: newSale.id,
       });
+    } else if (p.method !== 'cash') {
+       netAmountToBank += p.amount;
     }
   });
 
@@ -442,4 +444,3 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
         window.dispatchEvent(new Event('transactionFeesChanged'));
     }
 };
-

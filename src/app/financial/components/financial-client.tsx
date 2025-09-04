@@ -72,6 +72,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
 const expenseSchema = z.object({
@@ -436,6 +437,29 @@ export default function FinancialClient() {
     const currentSales = getSales();
     const updatedSales = currentSales.filter(s => s.id !== saleToDelete!.id);
     saveSales(updatedSales);
+
+    // Also remove associated financial entries (fees)
+    const updatedEntries = getFinancialEntries().filter(e => e.saleId !== saleToDelete!.id);
+    saveFinancialEntries(updatedEntries);
+    
+    // Revert balance changes from the deleted sale
+    let bankBalanceChange = 0;
+    
+    saleToDelete.payments.forEach(p => {
+        if (p.method !== 'cash') {
+            bankBalanceChange -= p.amount;
+        }
+    });
+    
+    const feesForThisSale = entries.filter(e => e.saleId === saleToDelete!.id);
+    const totalFees = feesForThisSale.reduce((sum, fee) => sum + fee.amount, 0);
+    bankBalanceChange += totalFees;
+
+    if (bankBalanceChange !== 0) {
+      const currentAccount = getBankAccount();
+      saveBankAccount({ balance: currentAccount.balance + bankBalanceChange });
+    }
+
     toast({ title: "Venda Removida", variant: "destructive" });
     setSaleToDelete(null);
   };
@@ -866,13 +890,23 @@ export default function FinancialClient() {
                                 <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
                                 <TableCell>{SOURCE_MAP[entry.source]}</TableCell>
                                 <TableCell className="text-right text-destructive font-semibold">- {formatCurrency(entry.amount)}</TableCell>
-                                <TableCell className="text-right"><DropdownMenu>
-                                    <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                        <DropdownMenuItem className="text-destructive" onClick={() => setEntryToDelete(entry)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu></TableCell>
+                                <TableCell className="text-right">
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                           <span tabIndex={0}>
+                                            <Button aria-haspopup="true" size="icon" variant="ghost" disabled>
+                                                <MoreHorizontal className="h-4 w-4" />
+                                                <span className="sr-only">Menu</span>
+                                            </Button>
+                                           </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Remova a venda associada para estornar a taxa.</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                </TableCell>
                                 </TableRow>
                             )) : (
                                 <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma taxa de transação encontrada.</TableCell></TableRow>
@@ -937,7 +971,7 @@ export default function FinancialClient() {
       {saleToDelete && (
         <AlertDialog open={!!saleToDelete} onOpenChange={() => setSaleToDelete(null)}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover esta venda do relatório? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover esta venda do relatório? Esta ação não pode ser desfeita e irá estornar os valores da conta bancária, incluindo as taxas.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSale} className="bg-destructive hover:bg-destructive/90">Remover Venda</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -1087,7 +1121,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
-
-
-
-    
