@@ -434,33 +434,56 @@ export default function FinancialClient() {
   
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
+
+    // 1. Revert financial impact
+    const feesForThisSale = getFinancialEntries().filter(e => e.saleId === saleToDelete!.id);
+    const totalFees = feesForThisSale.reduce((sum, fee) => sum + fee.amount, 0);
+    
+    let bankBalanceChange = 0;
+    let cashBalanceChange = 0;
+
+    saleToDelete.payments.forEach(p => {
+        if (p.method === 'cash') {
+            cashBalanceChange -= p.amount;
+        } else {
+            bankBalanceChange -= p.amount;
+        }
+    });
+
+    // The fees were already a deduction, so we add them back to reverse the effect
+    bankBalanceChange += totalFees;
+
+    // Apply reversions
+    if (bankBalanceChange !== 0) {
+        const currentAccount = getBankAccount();
+        saveBankAccount({ balance: currentAccount.balance + bankBalanceChange });
+    }
+
+    if (cashBalanceChange !== 0 && cashStatus.status === 'open') {
+        const reversalAdjustment: CashAdjustment = {
+            id: `adj-reversal-${saleToDelete.id}`,
+            amount: Math.abs(cashBalanceChange),
+            type: 'out', // Reverting a cash payment means taking money out
+            description: `Estorno da Venda #${saleToDelete.id.slice(-6)}`,
+            timestamp: new Date().toISOString(),
+            isCorrection: true,
+        };
+        saveCashRegisterStatus({
+            ...cashStatus,
+            adjustments: [...(cashStatus.adjustments || []), reversalAdjustment],
+        });
+    }
+    
+    // 2. Remove sale record
     const currentSales = getSales();
     const updatedSales = currentSales.filter(s => s.id !== saleToDelete!.id);
     saveSales(updatedSales);
 
-    // Also remove associated financial entries (fees)
+    // 3. Remove associated financial entries (fees)
     const updatedEntries = getFinancialEntries().filter(e => e.saleId !== saleToDelete!.id);
     saveFinancialEntries(updatedEntries);
     
-    // Revert balance changes from the deleted sale
-    let bankBalanceChange = 0;
-    
-    saleToDelete.payments.forEach(p => {
-        if (p.method !== 'cash') {
-            bankBalanceChange -= p.amount;
-        }
-    });
-    
-    const feesForThisSale = entries.filter(e => e.saleId === saleToDelete!.id);
-    const totalFees = feesForThisSale.reduce((sum, fee) => sum + fee.amount, 0);
-    bankBalanceChange += totalFees;
-
-    if (bankBalanceChange !== 0) {
-      const currentAccount = getBankAccount();
-      saveBankAccount({ balance: currentAccount.balance + bankBalanceChange });
-    }
-
-    toast({ title: "Venda Removida", variant: "destructive" });
+    toast({ title: "Venda Removida", description: "A venda e seu impacto financeiro foram revertidos.", variant: "destructive" });
     setSaleToDelete(null);
   };
 
@@ -896,7 +919,7 @@ export default function FinancialClient() {
                                         <TooltipTrigger asChild>
                                            <span tabIndex={0}>
                                             <Button aria-haspopup="true" size="icon" variant="ghost" disabled>
-                                                <MoreHorizontal className="h-4 w-4" />
+                                                <Trash2 className="h-4 w-4" />
                                                 <span className="sr-only">Menu</span>
                                             </Button>
                                            </span>
@@ -1121,3 +1144,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
