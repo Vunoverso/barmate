@@ -577,19 +577,19 @@ export default function OrdersClient() {
                         }}
                         className={cn(
                           buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }),
-                          "w-full justify-start h-auto py-2 px-3 cursor-pointer group"
+                          "w-full h-auto py-2 px-3 cursor-pointer group flex items-center justify-between"
                         )}
                       >
-                        <div className="flex flex-col items-start text-left flex-grow overflow-hidden mr-2">
-                            <div className="flex items-center gap-2">
-                                <span className="font-semibold truncate block max-w-full">{order.name}</span>
-                                {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
-                            </div>
-                          <span className="text-xs text-muted-foreground">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                              <span className="font-semibold truncate block max-w-full">{order.name}</span>
+                              {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
+                          </div>
+                          <div className="text-xs text-muted-foreground text-left">
                             {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
-                          </span>
+                          </div>
                         </div>
-                        <div className="flex items-center shrink-0">
+                        <div className="flex-shrink-0 ml-2">
                           <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted/80" onClick={(e) => { e.stopPropagation(); handleEditOrder(order); }}>
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -675,9 +675,9 @@ export default function OrdersClient() {
                       <ShoppingCart className="h-6 w-6 text-primary shrink-0" />
                       <span className="truncate">{currentOrder ? currentOrder.name : "Comanda"}</span>
                     </CardTitle>
-                    <div className="text-sm text-muted-foreground pt-1">
-                      {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
-                      {currentOrder?.status === 'paid' && <Badge variant="default" className="ml-2 bg-green-600">PAGA</Badge>}
+                    <div className="text-sm text-muted-foreground pt-1 flex items-center gap-2">
+                      <span>{currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.</span>
+                      {currentOrder?.status === 'paid' && <Badge variant="default" className="bg-green-600">PAGA</Badge>}
                     </div>
                   </div>
                   {currentOrder && (
