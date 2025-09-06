@@ -37,6 +37,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
@@ -183,8 +184,11 @@ export default function OrdersClient() {
     setCurrentOrderId(orderId);
   };
 
-  const handleEditOrder = (order: ActiveOrder) => {
-    setOrderToEdit(order);
+  const handleEditOrder = () => {
+    const order = openOrders.find(o => o.id === currentOrderId);
+    if (order) {
+      setOrderToEdit(order);
+    }
   };
   
   const handleSaveOrderName = (orderId: string, newName: string) => {
@@ -532,7 +536,7 @@ export default function OrdersClient() {
   }
 
   return (
-    <>
+    <TooltipProvider>
       <div className="grid md:grid-cols-10 gap-4 h-[calc(100vh-100px)]">
         <div className="md:col-span-2 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
@@ -540,12 +544,30 @@ export default function OrdersClient() {
               <CardTitle className="flex items-center justify-between">
                 Comandas Abertas
                  <div className="flex items-center gap-1">
-                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setIsMergeDialogOpen(true)} disabled={!currentOrderId}>
-                    <Merge className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" className="h-8 w-8" onClick={handleOpenCreateOrderDialog}>
-                    <PlusSquare className="h-4 w-4" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setIsMergeDialogOpen(true)} disabled={!currentOrderId || openOrders.length < 2}>
+                        <Merge className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Juntar Comandas</p></TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon" variant="outline" className="h-8 w-8" onClick={handleEditOrder} disabled={!currentOrderId}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Editar Comanda</p></TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                       <Button size="icon" className="h-8 w-8" onClick={handleOpenCreateOrderDialog}>
+                        <PlusSquare className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Nova Comanda</p></TooltipContent>
+                  </Tooltip>
                  </div>
               </CardTitle>
               <div className="relative pt-2">
@@ -588,11 +610,6 @@ export default function OrdersClient() {
                           <div className="text-xs text-muted-foreground text-left">
                             {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
                           </div>
-                        </div>
-                        <div className="flex-shrink-0 ml-2">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted/80" onClick={(e) => { e.stopPropagation(); handleEditOrder(order); }}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
                     ))}
@@ -835,7 +852,7 @@ export default function OrdersClient() {
           </AlertDialogContent>
         </AlertDialog>
       )}
-    </>
+    </TooltipProvider>
   );
 }
 
