@@ -577,7 +577,7 @@ export default function OrdersClient() {
                         }}
                         className={cn(
                           buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }),
-                          "w-full justify-between h-auto py-2 px-3 cursor-pointer group"
+                          "w-full justify-start h-auto py-2 px-3 cursor-pointer group"
                         )}
                       >
                         <div className="flex flex-col items-start text-left flex-grow overflow-hidden mr-2">
@@ -670,17 +670,19 @@ export default function OrdersClient() {
           <Card className="flex-grow flex flex-col">
             <CardHeader>
               <div className="flex justify-between items-start">
-                  <CardTitle className="flex items-center gap-2">
-                    <ShoppingCart className="h-6 w-6 text-primary" />
-                    {currentOrder ? currentOrder.name : "Comanda"}
-                  </CardTitle>
+                  <div className="flex-grow min-w-0">
+                    <CardTitle className="flex items-center gap-2 truncate">
+                      <ShoppingCart className="h-6 w-6 text-primary shrink-0" />
+                      <span className="truncate">{currentOrder ? currentOrder.name : "Comanda"}</span>
+                    </CardTitle>
+                    <div className="text-sm text-muted-foreground pt-1">
+                      {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
+                      {currentOrder?.status === 'paid' && <Badge variant="default" className="ml-2 bg-green-600">PAGA</Badge>}
+                    </div>
+                  </div>
                   {currentOrder && (
-                    <span className="text-primary font-bold text-lg">{formatCurrency(orderTotal)}</span>
+                    <span className="text-primary font-bold text-lg shrink-0 ml-2">{formatCurrency(orderTotal)}</span>
                   )}
-              </div>
-              <div className="text-sm text-muted-foreground pt-1">
-                {currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.
-                {currentOrder?.status === 'paid' && <Badge variant="default" className="ml-2 bg-green-600">PAGA</Badge>}
               </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">

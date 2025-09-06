@@ -145,7 +145,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     onSubmit({
       payments,
       discountAmount: numDiscount,
-      changeGiven: calculatedCashChange, // Send the total change
+      changeGiven: creditToLeave, // Send the credit amount as change given
       status: 'completed',
       leaveChangeAsCredit: creditToLeave > 0
     });
