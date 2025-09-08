@@ -17,9 +17,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, Banknote } from "lucide-react";
+import { Terminal, Banknote, HelpCircle } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 interface PaymentDialogProps {
   isOpen: boolean;
@@ -45,7 +47,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   const [creditAmount, setCreditAmount] = useState<string>('');
   const [pixAmount, setPixAmount] = useState<string>('');
   const [cashTendered, setCashTendered] = useState<string>('');
-  const [changeReturned, setChangeReturned] = useState<string>('');
+  const [leaveChangeAsCredit, setLeaveChangeAsCredit] = useState(false);
   const [error, setError] = useState<string>('');
 
   const numDiscount = parseLocaleFloat(discount);
@@ -65,12 +67,16 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     const tendered = numCashTendered > 0 ? numCashTendered : numCashAmount;
     return Math.max(0, tendered - numCashAmount);
   }, [numCashAmount, numCashTendered]);
+  
+  const changeToReturn = useMemo(() => {
+    if (leaveChangeAsCredit) return 0;
+    return calculatedCashChange;
+  }, [calculatedCashChange, leaveChangeAsCredit]);
 
-  const numChangeReturned = parseLocaleFloat(changeReturned);
   const creditToLeave = useMemo(() => {
-      if (!allowCredit || calculatedCashChange <= 0) return 0;
-      return Math.max(0, calculatedCashChange - numChangeReturned);
-  }, [allowCredit, calculatedCashChange, numChangeReturned]);
+    if (!leaveChangeAsCredit) return 0;
+    return calculatedCashChange;
+  }, [calculatedCashChange, leaveChangeAsCredit]);
 
 
   useEffect(() => {
@@ -81,14 +87,10 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       setCreditAmount('');
       setPixAmount('');
       setCashTendered('');
-      setChangeReturned('');
+      setLeaveChangeAsCredit(false);
       setError('');
     }
   }, [isOpen]);
-  
-  useEffect(() => {
-    setChangeReturned(calculatedCashChange > 0 ? calculatedCashChange.toFixed(2).replace('.', ',') : '');
-  }, [calculatedCashChange]);
 
   const setPayFull = (method: PaymentMethod) => {
     const otherPaid = 
@@ -115,11 +117,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
         // Allow for small floating point inaccuracies by checking against a small epsilon
         return Math.abs(roundedRemaining) > 0.01;
     }
-    if (allowCredit && numChangeReturned > calculatedCashChange) {
-      return true;
-    }
     return false;
-  }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay, allowCredit, numChangeReturned, calculatedCashChange]);
+  }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay]);
 
 
   const handleSubmit = () => {
@@ -130,8 +129,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
         setError('Nenhum valor de pagamento foi inserido.');
       } else if (!allowPartialPayment && Math.abs(remainingToPay) > 0.01) {
         setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
-      } else if (allowCredit && numChangeReturned > calculatedCashChange) {
-        setError('O troco devolvido não pode ser maior que o troco calculado.');
       }
       return;
     }
@@ -147,7 +144,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       discountAmount: numDiscount,
       changeGiven: creditToLeave, // Send the credit amount as change given
       status: 'completed',
-      leaveChangeAsCredit: creditToLeave > 0
+      leaveChangeAsCredit: leaveChangeAsCredit && creditToLeave > 0,
     });
   };
   
@@ -162,6 +159,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
         </DialogHeader>
 
         <ScrollArea className="px-6">
+         <TooltipProvider>
           <div className="space-y-4 pb-4">
             <div className="space-y-1">
                 <Label htmlFor="discount">Desconto (R$)</Label>
@@ -222,24 +220,33 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
                       <Input id="cashTendered" type="text" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="h-9"/>
                   </div>
                   {calculatedCashChange > 0 && (
-                      <div className="space-y-2">
-                          <p className="text-sm font-medium">Troco Calculado: <span className="text-green-600 font-bold">{formatCurrency(calculatedCashChange)}</span></p>
-                          {allowCredit ? (
+                     <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <p className="text-sm font-medium">Troco Calculado:</p>
+                            <p className="text-green-600 font-bold">{formatCurrency(calculatedCashChange)}</p>
+                        </div>
+                        {allowCredit && (
                           <>
-                            <div className="space-y-1">
-                              <Label htmlFor="changeReturned">Troco Devolvido Efetivamente</Label>
-                              <Input id="changeReturned" type="text" value={changeReturned} onChange={(e) => setChangeReturned(e.target.value)} className="h-9"/>
-                            </div>
-                            {creditToLeave > 0 && (
-                              <p className="text-xs text-blue-600">
-                                Crédito a ser gerado para o cliente: <span className="font-bold">{formatCurrency(creditToLeave)}</span>
+                           <div className="items-top flex space-x-2">
+                            <Checkbox id="leaveCredit" checked={leaveChangeAsCredit} onCheckedChange={(checked) => setLeaveChangeAsCredit(checked as boolean)} />
+                            <div className="grid gap-1.5 leading-none">
+                              <label
+                                htmlFor="leaveCredit"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                              >
+                                Deixar troco como crédito
+                              </label>
+                              <p className="text-xs text-muted-foreground">
+                                Uma nova comanda será aberta com o valor do troco como crédito.
                               </p>
-                            )}
+                            </div>
+                           </div>
+                           <div className="text-sm text-blue-600 text-center font-medium pt-1">
+                            {creditToLeave > 0 ? `Crédito a gerar: ${formatCurrency(creditToLeave)}` : `Troco a devolver: ${formatCurrency(changeToReturn)}`}
+                           </div>
                           </>
-                        ) : (
-                          <p className="text-sm text-green-600"> Troco a ser devolvido: <span className="font-bold">{formatCurrency(calculatedCashChange)}</span> </p>
                         )}
-                      </div>
+                     </div>
                   )}
               </div>
             )}
@@ -252,6 +259,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
               </Alert>
             )}
           </div>
+         </TooltipProvider>
         </ScrollArea>
 
         <DialogFooter className="p-6 pt-4 border-t">

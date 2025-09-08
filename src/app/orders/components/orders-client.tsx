@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check, CreditCard, Merge } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check, CreditCard, Merge, Wallet } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -69,6 +69,7 @@ export default function OrdersClient() {
   const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<ActiveOrder | null>(null);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
@@ -258,6 +259,33 @@ export default function OrdersClient() {
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
     setIsMergeDialogOpen(false);
   };
+
+  const handleAddCredit = ({ amount, description }: { amount: number; description: string }) => {
+    if (!currentOrderId) {
+        toast({ title: "Nenhuma comanda selecionada", description: "Selecione uma comanda para adicionar o crédito.", variant: "destructive" });
+        return;
+    }
+
+    const creditItem: OrderItem = {
+        id: `credit-${Date.now()}`,
+        name: `Crédito: ${description}`,
+        price: -amount, // Negative price for credit
+        quantity: 1,
+        categoryId: 'cat_outros', // Assign to a generic category
+        categoryName: 'Outros',
+        categoryIconName: 'Wallet',
+    };
+
+    setOpenOrders(prevOrders =>
+        prevOrders.map(order =>
+            order.id === currentOrderId ? { ...order, items: [...order.items, creditItem] } : order
+        )
+    );
+
+    toast({ title: "Crédito Adicionado", description: `${formatCurrency(amount)} adicionado à comanda.` });
+    setIsCreditDialogOpen(false);
+  };
+
 
   const addToOrder = (product: Product) => {
     if (!currentOrderId) {
@@ -558,7 +586,7 @@ export default function OrdersClient() {
                         <Edit className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent><p>Editar Comanda</p></TooltipContent>
+                    <TooltipContent><p>Editar Nome</p></TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -570,14 +598,24 @@ export default function OrdersClient() {
                   </Tooltip>
                  </div>
               </CardTitle>
-              <div className="relative pt-2">
-                <Search className="absolute left-2.5 top-4 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar comanda..."
-                  value={orderSearchTerm}
-                  onChange={(e) => setOrderSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+              <div className="flex items-center gap-2 pt-2">
+                 <div className="relative flex-grow">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar..."
+                      value={orderSearchTerm}
+                      onChange={(e) => setOrderSearchTerm(e.target.value)}
+                      className="pl-8 h-9"
+                    />
+                 </div>
+                 <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={() => setIsCreditDialogOpen(true)} disabled={!currentOrderId}>
+                            <Wallet className="h-4 w-4"/>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Adicionar Crédito</p></TooltipContent>
+                 </Tooltip>
               </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
@@ -760,7 +798,7 @@ export default function OrdersClient() {
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
                               <PlusCircle className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)} disabled={item.price < 0}>
+                            <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -821,6 +859,13 @@ export default function OrdersClient() {
               onMerge={handleMergeOrders}
           />
        )}
+
+        <AddCreditDialog
+            isOpen={isCreditDialogOpen}
+            onOpenChange={setIsCreditDialogOpen}
+            onSave={handleAddCredit}
+        />
+
 
       <PaymentDialog
         isOpen={isPaymentDialogOpen}
@@ -1043,6 +1088,77 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
         </Dialog>
     );
 }
-    
 
+// --- Add Credit Dialog ---
+interface AddCreditDialogProps {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave: (details: { amount: number; description: string }) => void;
+}
+
+function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps) {
+    const [amount, setAmount] = useState('');
+    const [description, setDescription] = useState('');
+    const { toast } = useToast();
+
+    useEffect(() => {
+        if (isOpen) {
+            setAmount('');
+            setDescription('');
+        }
+    }, [isOpen]);
+
+    const handleSubmit = () => {
+        const value = parseFloat(amount.replace(',', '.'));
+        if (isNaN(value) || value <= 0) {
+            toast({ title: "Valor Inválido", description: "O valor do crédito deve ser positivo.", variant: "destructive" });
+            return;
+        }
+        if (!description.trim()) {
+            toast({ title: "Descrição Obrigatória", description: "Forneça um motivo para o crédito.", variant: "destructive" });
+            return;
+        }
+        onSave({ amount: value, description: description.trim() });
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Adicionar Crédito à Comanda</DialogTitle>
+                    <DialogDescription>
+                        Insira um valor que será usado para abater futuras compras nesta comanda.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="credit-amount">Valor do Crédito (R$)</Label>
+                        <Input
+                            id="credit-amount"
+                            type="number"
+                            step="0.01"
+                            placeholder="50,00"
+                            value={amount}
+                            onChange={e => setAmount(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="credit-description">Descrição/Motivo</Label>
+                        <Input
+                            id="credit-description"
+                            placeholder="Ex: Troca de produto"
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                    <Button onClick={handleSubmit}>Adicionar Crédito</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
     
