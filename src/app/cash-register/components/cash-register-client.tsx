@@ -157,48 +157,28 @@ export default function CashRegisterClient() {
     if (cashStatus.status !== 'open') return;
 
     if (idToUpdate) { // Editing existing adjustment
-        setCashStatus(prev => {
-            const originalAdjustment = prev.adjustments?.find(adj => adj.id === idToUpdate);
-            if (!originalAdjustment) return prev;
+        const originalAdjustment = cashStatus.adjustments?.find(adj => adj.id === idToUpdate);
+        if (!originalAdjustment) return;
 
-            const amountDifference = details.amount - originalAdjustment.amount;
-            const currentEntries = getFinancialEntries();
-            let updatedEntries = [...currentEntries];
+        // Revert the original adjustment first
+        revertAdjustment(originalAdjustment);
+        
+        // Then, apply the new one. Keep the same ID for traceability.
+        const updatedAdjustment: CashAdjustment = {
+            ...originalAdjustment,
+            amount: details.amount,
+            description: details.description,
+            // Keep original destination/source if it's a transfer type. The new dialog doesn't allow changing this.
+        };
+        applyAdjustment(updatedAdjustment);
 
-            if (originalAdjustment.type === 'out') {
-                if (originalAdjustment.destination === 'secondary_cash') {
-                    const currentSecondaryBox = getSecondaryCashBox();
-                    saveSecondaryCashBox({ balance: currentSecondaryBox.balance + amountDifference });
-                } else if (originalAdjustment.destination === 'bank_account') {
-                    const currentBankAccount = getBankAccount();
-                    saveBankAccount({ balance: currentBankAccount.balance + amountDifference });
-                } else { // It's an expense
-                    updatedEntries = currentEntries.map(entry => 
-                        entry.adjustmentId === idToUpdate 
-                        ? { ...entry, amount: details.amount, description: `Sangria: ${details.description}` }
-                        : entry
-                    );
-                }
-            } else if (originalAdjustment.type === 'in') { // It's an income (suprimento)
-                 updatedEntries = currentEntries.map(entry => 
-                    entry.adjustmentId === idToUpdate 
-                    ? { ...entry, amount: details.amount, description: `Suprimento: ${details.description}` }
-                    : entry
-                );
-            }
-            saveFinancialEntries(updatedEntries);
-            
-            const updatedAdjustments = prev.adjustments?.map(adj => 
-                adj.id === idToUpdate 
-                    ? { ...adj, amount: details.amount, description: details.description } 
-                    : adj
-            );
+        const updatedAdjustments = cashStatus.adjustments?.map(adj => 
+            adj.id === idToUpdate ? updatedAdjustment : adj
+        );
 
-            const newState = { ...prev, adjustments: updatedAdjustments };
-            saveCashRegisterStatus(newState);
-            return newState;
-        });
+        setCashStatus(prev => ({...prev, adjustments: updatedAdjustments}));
         toast({ title: "Movimentação Atualizada!" });
+
     } else { // Creating new adjustment
         const newAdjustment: CashAdjustment = {
             id: `adj-${Date.now()}`,
@@ -209,46 +189,8 @@ export default function CashRegisterClient() {
             destination: details.destination && details.destination !== 'none' ? details.destination : undefined
         };
         
-        const currentEntries = getFinancialEntries();
-        let newFinancialEntry: FinancialEntry | null = null;
-        
-        if (adjustmentType === 'out') { // Sangria
-            if (details.destination === 'secondary_cash') {
-                const currentBox = getSecondaryCashBox();
-                saveSecondaryCashBox({ balance: currentBox.balance + details.amount });
-            } else if (details.destination === 'bank_account') {
-                const currentAccount = getBankAccount();
-                saveBankAccount({ balance: currentAccount.balance + details.amount });
-            } else { // It's an expense
-                newFinancialEntry = {
-                    id: `exp-sangria-${newAdjustment.id}`,
-                    description: `Sangria: ${details.description}`,
-                    amount: details.amount,
-                    type: 'expense',
-                    source: 'daily_cash',
-                    timestamp: new Date(),
-                    adjustmentId: newAdjustment.id
-                };
-            }
-        } else { // Suprimento (in)
-           newFinancialEntry = {
-                id: `inc-suprimento-${newAdjustment.id}`,
-                description: `Suprimento: ${details.description}`,
-                amount: details.amount,
-                type: 'income',
-                source: 'daily_cash',
-                timestamp: new Date(),
-                adjustmentId: newAdjustment.id
-           };
-        }
-
-        if (newFinancialEntry) {
-            saveFinancialEntries([...currentEntries, newFinancialEntry]);
-        }
-
-        const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), newAdjustment] };
-        setCashStatus(newState);
-        saveCashRegisterStatus(newState);
+        applyAdjustment(newAdjustment);
+        setCashStatus(prev => ({...prev, adjustments: [...(prev.adjustments || []), newAdjustment]}));
         
         toast({
             title: `Movimentação Registrada!`,
@@ -260,9 +202,47 @@ export default function CashRegisterClient() {
     setEditingAdjustment(null);
   };
   
-  const handleDeleteAdjustment = () => {
-    if (!adjustmentToDelete || cashStatus.status !== 'open') return;
-    const { id, type, amount, destination, source } = adjustmentToDelete;
+  const applyAdjustment = (adjustment: CashAdjustment) => {
+        const currentEntries = getFinancialEntries();
+        let newFinancialEntry: FinancialEntry | null = null;
+        
+        if (adjustment.type === 'out') { // Sangria
+            if (adjustment.destination === 'secondary_cash') {
+                const currentBox = getSecondaryCashBox();
+                saveSecondaryCashBox({ balance: currentBox.balance + adjustment.amount });
+            } else if (adjustment.destination === 'bank_account') {
+                const currentAccount = getBankAccount();
+                saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
+            } else { // It's an expense
+                newFinancialEntry = {
+                    id: `exp-sangria-${adjustment.id}`,
+                    description: `Sangria: ${adjustment.description}`,
+                    amount: adjustment.amount,
+                    type: 'expense',
+                    source: 'daily_cash',
+                    timestamp: new Date(),
+                    adjustmentId: adjustment.id
+                };
+            }
+        } else { // Suprimento (in)
+           newFinancialEntry = {
+                id: `inc-suprimento-${adjustment.id}`,
+                description: `Suprimento: ${adjustment.description}`,
+                amount: adjustment.amount,
+                type: 'income',
+                source: 'daily_cash',
+                timestamp: new Date(),
+                adjustmentId: adjustment.id
+           };
+        }
+
+        if (newFinancialEntry) {
+            saveFinancialEntries([...currentEntries, newFinancialEntry]);
+        }
+  }
+  
+  const revertAdjustment = (adjustment: CashAdjustment) => {
+    const { id, type, amount, destination, source } = adjustment;
     
     const currentEntries = getFinancialEntries();
     const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
@@ -284,10 +264,16 @@ export default function CashRegisterClient() {
         const currentBox = getSecondaryCashBox();
         saveSecondaryCashBox({ balance: currentBox.balance + amount }); // Return money
       }
-      // Note: No logic for reverting bank transfers yet, but can be added here
     }
+  }
+
+
+  const handleDeleteAdjustment = () => {
+    if (!adjustmentToDelete || cashStatus.status !== 'open') return;
     
-    const newState = { ...cashStatus, adjustments: cashStatus.adjustments?.filter(adj => adj.id !== id) };
+    revertAdjustment(adjustmentToDelete);
+    
+    const newState = { ...cashStatus, adjustments: cashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) };
     setCashStatus(newState);
     saveCashRegisterStatus(newState);
 
@@ -998,4 +984,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
 
