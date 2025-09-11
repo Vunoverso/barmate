@@ -980,7 +980,8 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
         }
     }, [order]);
 
-    const handleSubmit = () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
         if (!name.trim()) {
             toast({ title: "Nome Inválido", description: "O nome da comanda não pode ser vazio.", variant: "destructive" });
             return;
@@ -992,6 +993,7 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
+              <form onSubmit={handleSubmit}>
                 <DialogHeader>
                     <DialogTitle>Editar Nome da Comanda</DialogTitle>
                     <DialogDescription>Altere o nome de identificação desta comanda.</DialogDescription>
@@ -1006,9 +1008,10 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
                     />
                 </div>
                 <DialogFooter>
-                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSubmit}>Salvar</Button>
+                    <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                    <Button type="submit">Salvar</Button>
                 </DialogFooter>
+              </form>
             </DialogContent>
         </Dialog>
     );
@@ -1108,7 +1111,8 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         }
     }, [isOpen]);
 
-    const handleSubmit = () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
         const value = parseFloat(amount.replace(',', '.'));
         if (isNaN(value) || value <= 0) {
             toast({ title: "Valor Inválido", description: "O valor do crédito deve ser positivo.", variant: "destructive" });
@@ -1124,6 +1128,7 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
+              <form onSubmit={handleSubmit}>
                 <DialogHeader>
                     <DialogTitle>Adicionar Crédito à Comanda</DialogTitle>
                     <DialogDescription>
@@ -1154,9 +1159,10 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
                     </div>
                 </div>
                 <DialogFooter>
-                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSubmit}>Adicionar Crédito</Button>
+                    <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                    <Button type="submit">Adicionar Crédito</Button>
                 </DialogFooter>
+              </form>
             </DialogContent>
         </Dialog>
     );

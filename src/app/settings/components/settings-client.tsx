@@ -57,7 +57,8 @@ function EditCategoryDialog({ isOpen, onOpenChange, category, onSave }: EditCate
     }
   }, [category]);
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!name.trim()) {
       toast({ title: "Erro", description: "O nome da categoria não pode ser vazio.", variant: "destructive" });
       return;
@@ -71,23 +72,26 @@ function EditCategoryDialog({ isOpen, onOpenChange, category, onSave }: EditCate
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Editar Nome da Categoria</DialogTitle>
-          <DialogDescription>Altere o nome de exibição da categoria "{category?.name}". O ID interno não será alterado.</DialogDescription>
-        </DialogHeader>
-        <div className="py-4 space-y-2">
-          <Label htmlFor="categoryName">Novo Nome da Categoria</Label>
-          <Input
-            id="categoryName"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Digite o novo nome"
-          />
-        </div>
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-          <Button onClick={handleSubmit}>Salvar Alterações</Button>
-        </DialogFooter>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Editar Nome da Categoria</DialogTitle>
+            <DialogDescription>Altere o nome de exibição da categoria "{category?.name}". O ID interno não será alterado.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="categoryName">Novo Nome da Categoria</Label>
+            <Input
+              id="categoryName"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Digite o novo nome"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <Button type="submit">Salvar Alterações</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -106,7 +110,8 @@ function AddCategoryDialog({ isOpen, onOpenChange, onSave }: { isOpen: boolean; 
     }
   }, [isOpen]);
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!name.trim()) {
       toast({ title: "Erro", description: "O nome da categoria não pode ser vazio.", variant: "destructive" });
       return;
@@ -122,47 +127,49 @@ function AddCategoryDialog({ isOpen, onOpenChange, onSave }: { isOpen: boolean; 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Adicionar Nova Categoria</DialogTitle>
-          <DialogDescription>Crie uma nova categoria para organizar seus produtos.</DialogDescription>
-        </DialogHeader>
-        <div className="py-4 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="newCategoryName">Nome da Categoria</Label>
-            <Input
-              id="newCategoryName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Porções"
-              autoFocus
-            />
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Adicionar Nova Categoria</DialogTitle>
+            <DialogDescription>Crie uma nova categoria para organizar seus produtos.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newCategoryName">Nome da Categoria</Label>
+              <Input
+                id="newCategoryName"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: Porções"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newCategoryIcon">Ícone</Label>
+              <Select onValueChange={setIconName} value={iconName}>
+                  <SelectTrigger id="newCategoryIcon">
+                      <SelectValue placeholder="Selecione um ícone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableIcons.map(iconKey => {
+                        const IconComponent = LUCIDE_ICON_MAP[iconKey];
+                        return (
+                          <SelectItem key={iconKey} value={iconKey}>
+                              <div className="flex items-center gap-2">
+                                  <IconComponent className="h-4 w-4 text-muted-foreground" />
+                                  {iconKey}
+                              </div>
+                          </SelectItem>
+                        )
+                    })}
+                  </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="newCategoryIcon">Ícone</Label>
-            <Select onValueChange={setIconName} value={iconName}>
-                <SelectTrigger id="newCategoryIcon">
-                    <SelectValue placeholder="Selecione um ícone" />
-                </SelectTrigger>
-                <SelectContent>
-                   {availableIcons.map(iconKey => {
-                       const IconComponent = LUCIDE_ICON_MAP[iconKey];
-                       return (
-                        <SelectItem key={iconKey} value={iconKey}>
-                            <div className="flex items-center gap-2">
-                                <IconComponent className="h-4 w-4 text-muted-foreground" />
-                                {iconKey}
-                            </div>
-                        </SelectItem>
-                       )
-                   })}
-                </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-          <Button onClick={handleSubmit}>Salvar Categoria</Button>
-        </DialogFooter>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <Button type="submit">Salvar Categoria</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -202,7 +209,8 @@ export default function SettingsClient() {
 
   }, []);
 
-  const handleSaveBarName = () => {
+  const handleSaveBarName = (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (barName.trim() === '') {
       toast({
         title: "Erro",
@@ -221,7 +229,8 @@ export default function SettingsClient() {
     });
   };
 
-  const handleSaveTransactionFees = () => {
+  const handleSaveTransactionFees = (e?: React.FormEvent) => {
+    e?.preventDefault();
     saveTransactionFees(transactionFees);
     toast({
         title: "Taxas Salvas!",
@@ -337,70 +346,74 @@ export default function SettingsClient() {
     <>
       <div className="space-y-8">
         <Card>
-          <CardHeader>
-            <CardTitle>Nome do Estabelecimento</CardTitle>
-            <CardDescription>Altere o nome do seu bar que será exibido no sistema.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="barName">Nome do Bar</Label>
-              <Input
-                id="barName"
-                value={barName}
-                onChange={(e) => setBarName(e.target.value)}
-                placeholder="Digite o nome do bar"
-              />
-            </div>
-            <Button onClick={handleSaveBarName} disabled={!isBarNameChanged || barName.trim() === ''}>
-              <Save className="mr-2 h-4 w-4" />
-              Salvar Nome do Bar
-            </Button>
-          </CardContent>
+          <form onSubmit={handleSaveBarName}>
+            <CardHeader>
+              <CardTitle>Nome do Estabelecimento</CardTitle>
+              <CardDescription>Altere o nome do seu bar que será exibido no sistema.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="barName">Nome do Bar</Label>
+                <Input
+                  id="barName"
+                  value={barName}
+                  onChange={(e) => setBarName(e.target.value)}
+                  placeholder="Digite o nome do bar"
+                />
+              </div>
+              <Button type="submit" disabled={!isBarNameChanged || barName.trim() === ''}>
+                <Save className="mr-2 h-4 w-4" />
+                Salvar Nome do Bar
+              </Button>
+            </CardContent>
+          </form>
         </Card>
 
         <Card>
-          <CardHeader>
-              <CardTitle>Taxas de Transação</CardTitle>
-              <CardDescription>Defina as taxas percentuais para transações de débito, crédito e PIX. O sistema descontará esses valores das entradas na conta bancária.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                      <Label htmlFor="debitRate">Taxa de Débito (%)</Label>
-                      <Input
-                          id="debitRate"
-                          type="number"
-                          value={transactionFees.debitRate}
-                          onChange={(e) => setTransactionFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))}
-                          placeholder="Ex: 1.99"
-                      />
-                  </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="creditRate">Taxa de Crédito (%)</Label>
-                      <Input
-                          id="creditRate"
-                          type="number"
-                          value={transactionFees.creditRate}
-                          onChange={(e) => setTransactionFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))}
-                          placeholder="Ex: 4.99"
-                      />
-                  </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="pixRate">Taxa de PIX (%)</Label>
-                      <Input
-                          id="pixRate"
-                          type="number"
-                          value={transactionFees.pixRate}
-                          onChange={(e) => setTransactionFees(prev => ({ ...prev, pixRate: parseFloat(e.target.value) || 0 }))}
-                          placeholder="Ex: 0.99"
-                      />
-                  </div>
-              </div>
-              <Button onClick={handleSaveTransactionFees}>
-                  <Save className="mr-2 h-4 w-4" />
-                  Salvar Taxas
-              </Button>
-          </CardContent>
+          <form onSubmit={handleSaveTransactionFees}>
+            <CardHeader>
+                <CardTitle>Taxas de Transação</CardTitle>
+                <CardDescription>Defina as taxas percentuais para transações de débito, crédito e PIX. O sistema descontará esses valores das entradas na conta bancária.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="debitRate">Taxa de Débito (%)</Label>
+                        <Input
+                            id="debitRate"
+                            type="number"
+                            value={transactionFees.debitRate}
+                            onChange={(e) => setTransactionFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))}
+                            placeholder="Ex: 1.99"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="creditRate">Taxa de Crédito (%)</Label>
+                        <Input
+                            id="creditRate"
+                            type="number"
+                            value={transactionFees.creditRate}
+                            onChange={(e) => setTransactionFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))}
+                            placeholder="Ex: 4.99"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="pixRate">Taxa de PIX (%)</Label>
+                        <Input
+                            id="pixRate"
+                            type="number"
+                            value={transactionFees.pixRate}
+                            onChange={(e) => setTransactionFees(prev => ({ ...prev, pixRate: parseFloat(e.target.value) || 0 }))}
+                            placeholder="Ex: 0.99"
+                        />
+                    </div>
+                </div>
+                <Button type="submit">
+                    <Save className="mr-2 h-4 w-4" />
+                    Salvar Taxas
+                </Button>
+            </CardContent>
+          </form>
         </Card>
 
         <Card>

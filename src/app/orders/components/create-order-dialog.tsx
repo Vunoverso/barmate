@@ -26,7 +26,8 @@ export default function CreateOrderDialog({ isOpen, onOpenChange, onSubmit }: Cr
   const [orderName, setOrderName] = useState('');
   const { toast } = useToast();
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (orderName.trim() === '') {
       toast({
         title: 'Nome Inválido',
@@ -43,28 +44,30 @@ export default function CreateOrderDialog({ isOpen, onOpenChange, onSubmit }: Cr
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Abrir Nova Comanda</DialogTitle>
-          <DialogDescription>
-            Digite um identificador para a nova comanda (ex: número da mesa, nome do cliente).
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4 space-y-2">
-          <Label htmlFor="orderName">Nome da Comanda</Label>
-          <Input
-            id="orderName"
-            value={orderName}
-            onChange={(e) => setOrderName(e.target.value)}
-            placeholder="Ex: Mesa 12, João Silva"
-            autoFocus
-          />
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" onClick={() => setOrderName('')}>Cancelar</Button>
-          </DialogClose>
-          <Button onClick={handleSubmit}>Confirmar e Abrir</Button>
-        </DialogFooter>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Abrir Nova Comanda</DialogTitle>
+            <DialogDescription>
+              Digite um identificador para a nova comanda (ex: número da mesa, nome do cliente).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="orderName">Nome da Comanda</Label>
+            <Input
+              id="orderName"
+              value={orderName}
+              onChange={(e) => setOrderName(e.target.value)}
+              placeholder="Ex: Mesa 12, João Silva"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" onClick={() => setOrderName('')}>Cancelar</Button>
+            </DialogClose>
+            <Button type="submit">Confirmar e Abrir</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

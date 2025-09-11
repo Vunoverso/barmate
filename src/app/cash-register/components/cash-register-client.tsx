@@ -716,7 +716,8 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBal
   const [balance, setBalance] = useState('');
   const { toast } = useToast();
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     const balanceValue = parseFloat(balance.replace(',', '.'));
     if (isNaN(balanceValue) || balanceValue < 0) {
       toast({
@@ -733,31 +734,33 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBal
   return (
      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) setBalance(''); onOpenChange(open); }}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Abrir Caixa Diário</DialogTitle>
-          <DialogDescription>
-            Insira o valor a ser transferido do Caixa 02 para iniciar as operações. 
-            Saldo disponível no Caixa 02: <strong>{formatCurrency(secondaryCashBalance)}</strong>.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4 space-y-2">
-          <Label htmlFor="openingBalance">Saldo Inicial (R$)</Label>
-          <Input
-            id="openingBalance"
-            value={balance}
-            onChange={(e) => setBalance(e.target.value)}
-            placeholder="Ex: 100,00"
-            type="number"
-            step="0.01"
-            autoFocus
-          />
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancelar</Button>
-          </DialogClose>
-          <Button onClick={handleSubmit}>Confirmar e Abrir</Button>
-        </DialogFooter>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Abrir Caixa Diário</DialogTitle>
+            <DialogDescription>
+              Insira o valor a ser transferido do Caixa 02 para iniciar as operações. 
+              Saldo disponível no Caixa 02: <strong>{formatCurrency(secondaryCashBalance)}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="openingBalance">Saldo Inicial (R$)</Label>
+            <Input
+              id="openingBalance"
+              value={balance}
+              onChange={(e) => setBalance(e.target.value)}
+              placeholder="Ex: 100,00"
+              type="number"
+              step="0.01"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button type="submit">Confirmar e Abrir</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )
@@ -822,7 +825,8 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
   const dialogDesc = isEditing ? 'Altere os detalhes da movimentação.' : (type === 'in' ? 'Registre uma entrada de dinheiro no caixa (ex: reforço de troco).' : 'Registre uma retirada de dinheiro do caixa (ex: guardar em local seguro).');
   const label = type === 'in' ? 'Valor de Entrada (R$)' : 'Valor de Retirada (R$)'
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     const value = parseFloat(amount.replace(',', '.'));
     if (isNaN(value) || value <= 0) {
       toast({ title: "Valor Inválido", description: "Insira um valor positivo.", variant: "destructive" });
@@ -849,36 +853,38 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{dialogDesc}</DialogDescription></DialogHeader>
-        <div className="py-4 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="adjustment-amount">{label}</Label>
-            <Input id="adjustment-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="adjustment-desc">Descrição</Label>
-            <Input id="adjustment-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Troco inicial" />
-          </div>
-          {type === 'out' && !isEditing && (
+        <form onSubmit={handleSubmit}>
+          <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{dialogDesc}</DialogDescription></DialogHeader>
+          <div className="py-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="adjustment-destination">Destino da Retirada</Label>
-              <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
-                <SelectTrigger id="adjustment-destination">
-                  <SelectValue placeholder="Selecione um destino..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum (Registrar como Despesa)</SelectItem>
-                  <SelectItem value="secondary_cash">Transferir para Caixa 02</SelectItem>
-                  <SelectItem value="bank_account">Transferir para Conta Bancária</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="adjustment-amount">{label}</Label>
+              <Input id="adjustment-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
             </div>
-          )}
-        </div>
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-          <Button onClick={handleSubmit}>Salvar</Button>
-        </DialogFooter>
+            <div className="space-y-2">
+              <Label htmlFor="adjustment-desc">Descrição</Label>
+              <Input id="adjustment-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Troco inicial" />
+            </div>
+            {type === 'out' && !isEditing && (
+              <div className="space-y-2">
+                <Label htmlFor="adjustment-destination">Destino da Retirada</Label>
+                <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
+                  <SelectTrigger id="adjustment-destination">
+                    <SelectValue placeholder="Selecione um destino..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum (Registrar como Despesa)</SelectItem>
+                    <SelectItem value="secondary_cash">Transferir para Caixa 02</SelectItem>
+                    <SelectItem value="bank_account">Transferir para Conta Bancária</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <Button type="submit">Salvar</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -895,7 +901,8 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
   const [destination, setDestination] = useState<'daily_cash' | 'bank_account'>('daily_cash');
   const { toast } = useToast();
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     const value = parseFloat(amount.replace(',', '.'));
     if (isNaN(value) || value <= 0) {
       toast({ title: "Valor Inválido", description: "Insira um valor positivo.", variant: "destructive" });
@@ -921,29 +928,31 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Transferência do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para outro local. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
-        <div className="py-4 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="transfer-destination">Destino</Label>
-            <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
-              <SelectTrigger id="transfer-destination">
-                <SelectValue placeholder="Selecione um destino..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="daily_cash">Caixa Diário (Principal)</SelectItem>
-                <SelectItem value="bank_account">Conta Bancária</SelectItem>
-              </SelectContent>
-            </Select>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader><DialogTitle>Transferência do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para outro local. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="transfer-destination">Destino</Label>
+              <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
+                <SelectTrigger id="transfer-destination">
+                  <SelectValue placeholder="Selecione um destino..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily_cash">Caixa Diário (Principal)</SelectItem>
+                  <SelectItem value="bank_account">Conta Bancária</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="transfer-amount">Valor a Transferir (R$)</Label>
+              <Input id="transfer-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="transfer-amount">Valor a Transferir (R$)</Label>
-            <Input id="transfer-amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-          <Button onClick={handleSubmit}>Confirmar Transferência</Button>
-        </DialogFooter>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <Button type="submit">Confirmar Transferência</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -959,7 +968,8 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     }
   }, [isOpen, currentBalance])
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     const balanceValue = parseFloat(balance.replace(',', '.'));
     if (isNaN(balanceValue) || balanceValue < 0) {
       toast({ title: "Valor Inválido", description: "Por favor, insira um saldo válido.", variant: 'destructive' });
@@ -971,18 +981,21 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
-        <div className="py-4 space-y-2">
-          <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
-          <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
-        </div>
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-          <Button onClick={handleSubmit}>Salvar</Button>
-        </DialogFooter>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
+            <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <Button type="submit">Salvar</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
+
 
 
