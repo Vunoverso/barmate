@@ -272,25 +272,11 @@ export const removeSale = (saleId: string): void => {
 
   // Load current states
   const currentAccount = getBankAccount();
-  const currentCashStatus = getCashRegisterStatus();
   const currentEntries = getFinancialEntries();
   
   // Revert financial impact
   saleToDelete.payments.forEach(payment => {
-    if (payment.method === 'cash') {
-      // Revert from Daily Cash
-      if (currentCashStatus.status === 'open') {
-        const reversalAdjustment: CashAdjustment = {
-          id: `adj-reversal-${saleToDelete.id}`,
-          amount: payment.amount,
-          type: 'out', // It's an output to reverse an income
-          description: `Estorno Venda #${saleToDelete.id.slice(-6)}`,
-          timestamp: new Date().toISOString(),
-          isCorrection: true,
-        };
-        currentCashStatus.adjustments = [...(currentCashStatus.adjustments || []), reversalAdjustment];
-      }
-    } else {
+    if (payment.method !== 'cash') {
       // Revert from Bank Account
       const feeEntry = currentEntries.find(e => e.saleId === saleId && e.description.toLowerCase().includes(payment.method));
       const feeAmount = feeEntry ? feeEntry.amount : 0;
@@ -298,12 +284,11 @@ export const removeSale = (saleId: string): void => {
       currentAccount.balance -= netAmountToReverse;
     }
   });
-
-  // Save updated states
-  saveBankAccount(currentAccount);
-  saveCashRegisterStatus(currentCashStatus);
   
-  // Remove the sale itself
+  // Save updated bank account
+  saveBankAccount(currentAccount);
+  
+  // Remove the sale itself, which will cause the cash drawer balance to be recalculated correctly.
   const updatedSales = allSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
