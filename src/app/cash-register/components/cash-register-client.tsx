@@ -85,6 +85,7 @@ export default function CashRegisterClient() {
             setCashStatus(currentState => {
                 try {
                     const newState = JSON.parse(storedStatusRaw);
+                    // Prevent infinite loops by checking if state actually changed
                     if (JSON.stringify(currentState) !== JSON.stringify(newState)) {
                         return { adjustments: [], ...newState };
                     }
@@ -145,7 +146,6 @@ export default function CashRegisterClient() {
       adjustments: [],
     };
     setCashStatus(newStatus);
-    saveCashRegisterStatus(newStatus);
     setIsOpeningDialog(false);
     toast({
       title: "Caixa Diário Aberto!",
@@ -160,16 +160,18 @@ export default function CashRegisterClient() {
         const originalAdjustment = cashStatus.adjustments?.find(adj => adj.id === idToUpdate);
         if (!originalAdjustment) return;
 
-        // Revert the original adjustment first
+        // Revert the original adjustment financial impact
         revertAdjustment(originalAdjustment);
         
-        // Then, apply the new one. Keep the same ID for traceability.
+        // Create the updated adjustment
         const updatedAdjustment: CashAdjustment = {
             ...originalAdjustment,
             amount: details.amount,
             description: details.description,
             // Keep original destination/source if it's a transfer type. The new dialog doesn't allow changing this.
         };
+        
+        // Apply the new financial impact
         applyAdjustment(updatedAdjustment);
 
         const updatedAdjustments = cashStatus.adjustments?.map(adj => 
@@ -222,7 +224,7 @@ export default function CashRegisterClient() {
                 amount: adjustment.amount,
                 type: 'expense',
                 source: 'daily_cash',
-                timestamp: new Date(),
+                timestamp: new Date(adjustment.timestamp),
                 adjustmentId: adjustment.id
             };
             
@@ -233,7 +235,7 @@ export default function CashRegisterClient() {
                 amount: adjustment.amount,
                 type: 'income',
                 source: 'daily_cash',
-                timestamp: new Date(),
+                timestamp: new Date(adjustment.timestamp),
                 adjustmentId: adjustment.id
            };
         }
@@ -252,19 +254,19 @@ export default function CashRegisterClient() {
     saveFinancialEntries(updatedEntries);
 
     // Revert transfers that happened during the adjustment
-    if (type === 'out') {
+    if (type === 'out') { // Sangria reversal
       if (destination === 'secondary_cash') {
         const currentBox = getSecondaryCashBox();
-        saveSecondaryCashBox({ balance: currentBox.balance - amount });
+        saveSecondaryCashBox({ balance: currentBox.balance - amount }); // Take money back from Caixa 02
       } else if (destination === 'bank_account') {
         const currentAccount = getBankAccount();
-        saveBankAccount({ balance: currentAccount.balance - amount });
+        saveBankAccount({ balance: currentAccount.balance - amount }); // Take money back from Bank
       }
     } 
-    else if (type === 'in') {
+    else if (type === 'in') { // Suprimento reversal
       if (source === 'secondary_cash') {
         const currentBox = getSecondaryCashBox();
-        saveSecondaryCashBox({ balance: currentBox.balance + amount }); // Return money
+        saveSecondaryCashBox({ balance: currentBox.balance + amount }); // Return money to Caixa 02
       }
     }
   }
@@ -277,7 +279,6 @@ export default function CashRegisterClient() {
     
     const newState = { ...cashStatus, adjustments: cashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) };
     setCashStatus(newState);
-    saveCashRegisterStatus(newState);
 
     toast({ title: "Movimentação Removida", variant: "destructive" });
     setAdjustmentToDelete(null);
@@ -288,7 +289,6 @@ export default function CashRegisterClient() {
     if (cashStatus.status !== 'open') return;
     const newState = { ...cashStatus, openingBalance: newBalance };
     setCashStatus(newState);
-    saveCashRegisterStatus(newState);
     toast({ title: "Saldo Inicial Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditInitialBalanceDialogOpen(false);
   };
@@ -327,7 +327,6 @@ export default function CashRegisterClient() {
 
       const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
       setCashStatus(newState);
-      saveCashRegisterStatus(newState);
 
       toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o Caixa Diário.` });
 
@@ -997,6 +996,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
 
 
 

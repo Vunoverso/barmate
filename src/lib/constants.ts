@@ -266,20 +266,24 @@ export const addSale = (newSale: Sale): void => {
 export const removeSale = (saleId: string): void => {
   if (typeof window === 'undefined') return;
 
-  const saleToDelete = getSales().find(s => s.id === saleId);
+  const allSales = getSales();
+  const saleToDelete = allSales.find(s => s.id === saleId);
   if (!saleToDelete) return;
 
+  // Load current states
   const currentAccount = getBankAccount();
   const currentCashStatus = getCashRegisterStatus();
   const currentEntries = getFinancialEntries();
   
+  // Revert financial impact
   saleToDelete.payments.forEach(payment => {
     if (payment.method === 'cash') {
+      // Revert from Daily Cash
       if (currentCashStatus.status === 'open') {
         const reversalAdjustment: CashAdjustment = {
           id: `adj-reversal-${saleToDelete.id}`,
           amount: payment.amount,
-          type: 'out',
+          type: 'out', // It's an output to reverse an income
           description: `Estorno Venda #${saleToDelete.id.slice(-6)}`,
           timestamp: new Date().toISOString(),
           isCorrection: true,
@@ -287,6 +291,7 @@ export const removeSale = (saleId: string): void => {
         currentCashStatus.adjustments = [...(currentCashStatus.adjustments || []), reversalAdjustment];
       }
     } else {
+      // Revert from Bank Account
       const feeEntry = currentEntries.find(e => e.saleId === saleId && e.description.toLowerCase().includes(payment.method));
       const feeAmount = feeEntry ? feeEntry.amount : 0;
       const netAmountToReverse = payment.amount - feeAmount;
@@ -294,12 +299,15 @@ export const removeSale = (saleId: string): void => {
     }
   });
 
+  // Save updated states
   saveBankAccount(currentAccount);
   saveCashRegisterStatus(currentCashStatus);
   
-  const updatedSales = getSales().filter(s => s.id !== saleId);
+  // Remove the sale itself
+  const updatedSales = allSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
+  // Remove associated financial entries (like fees)
   const updatedEntries = currentEntries.filter(e => e.saleId !== saleId);
   saveFinancialEntries(updatedEntries);
 };
