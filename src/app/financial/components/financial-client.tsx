@@ -1119,7 +1119,8 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     }
   }, [isOpen, currentBalance])
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     const balanceValue = parseFloat(balance.replace(',', '.'));
     if (isNaN(balanceValue) || balanceValue < 0) {
       toast({ title: "Valor Inválido", description: "Por favor, insira um saldo válido.", variant: 'destructive' });
@@ -1131,17 +1132,20 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
-        <div className="py-4 space-y-2">
-          <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
-          <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
-        </div>
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-          <Button onClick={handleSubmit}>Salvar</Button>
-        </DialogFooter>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
+            <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+            <Button type="submit">Salvar</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
+
 
