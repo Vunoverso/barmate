@@ -270,11 +270,11 @@ export const removeSale = (saleId: string): void => {
   if (!saleToDelete) return;
 
   // 1. Load current state
-  const currentEntries = getFinancialEntries();
   const currentAccount = getBankAccount();
   const currentCashStatus = getCashRegisterStatus();
+  const currentEntries = getFinancialEntries();
   
-  // 2. Revert financial impact
+  // 2. Revert financial impact from each payment
   saleToDelete.payments.forEach(payment => {
     if (payment.method === 'cash') {
       if (currentCashStatus.status === 'open') {
@@ -286,9 +286,11 @@ export const removeSale = (saleId: string): void => {
           timestamp: new Date().toISOString(),
           isCorrection: true,
         };
-        currentCashStatus.adjustments = [...(currentCashStatus.adjustments || []), reversalAdjustment];
+        const updatedAdjustments = [...(currentCashStatus.adjustments || []), reversalAdjustment];
+        currentCashStatus.adjustments = updatedAdjustments;
       }
     } else {
+      // Revert bank payments
       const feeEntry = currentEntries.find(e => e.saleId === saleId && e.description.toLowerCase().includes(payment.method));
       const feeAmount = feeEntry ? feeEntry.amount : 0;
       const netAmountToReverse = payment.amount - feeAmount;
@@ -298,9 +300,7 @@ export const removeSale = (saleId: string): void => {
 
   // 3. Save updated balances
   saveBankAccount(currentAccount);
-  if (currentCashStatus.status === 'open') {
-    saveCashRegisterStatus(currentCashStatus);
-  }
+  saveCashRegisterStatus(currentCashStatus);
   
   // 4. Remove sale and associated fees
   const updatedSales = getSales().filter(s => s.id !== saleId);
