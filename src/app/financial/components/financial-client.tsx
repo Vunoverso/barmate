@@ -72,7 +72,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 
 const expenseSchema = z.object({
@@ -392,7 +392,14 @@ export default function FinancialClient() {
   const handleDeleteEntry = () => {
     if (!entryToDelete) return;
     
-    if (entryToDelete.type === 'expense' && !entryToDelete.saleId) {
+    // Do not allow deleting entries linked to sales from here.
+    if(entryToDelete.saleId) {
+        toast({ title: "Ação Bloqueada", description: "Para remover esta taxa, remova a venda correspondente.", variant: "destructive" });
+        setEntryToDelete(null);
+        return;
+    }
+
+    if (entryToDelete.type === 'expense') {
         // Refund the amount to the source for general expenses
         if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
             const refundAdjustment: CashAdjustment = {
@@ -435,43 +442,51 @@ export default function FinancialClient() {
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
 
-    // 1. Revert financial impact
-    const feesForThisSale = getFinancialEntries().filter(e => e.saleId === saleToDelete!.id);
-    const totalFees = feesForThisSale.reduce((sum, fee) => sum + fee.amount, 0);
+    const currentEntries = getFinancialEntries();
+    const currentAccount = getBankAccount();
+    let currentCashStatus = getCashRegisterStatus();
 
-    const saleCashPayment = saleToDelete.payments.find(p => p.method === 'cash')?.amount || 0;
-    const saleBankPayments = saleToDelete.totalAmount - saleCashPayment;
+    // 1. Revert financial impact by iterating through each payment
+    saleToDelete.payments.forEach(payment => {
+        if (payment.method === 'cash') {
+            if (currentCashStatus.status === 'open') {
+                const reversalAdjustment: CashAdjustment = {
+                    id: `adj-reversal-${saleToDelete.id}-${payment.method}`,
+                    amount: payment.amount,
+                    type: 'out', // Money out to reverse the sale
+                    description: `Estorno da Venda #${saleToDelete.id.slice(-6)}`,
+                    timestamp: new Date().toISOString(),
+                    isCorrection: true,
+                };
+                currentCashStatus = {
+                    ...currentCashStatus,
+                    adjustments: [...(currentCashStatus.adjustments || []), reversalAdjustment],
+                };
+            }
+        } else {
+            // For card/pix, find the fee associated with this sale to calculate net reversal
+            const feeEntry = currentEntries.find(e => e.saleId === saleToDelete!.id && e.description.toLowerCase().includes(payment.method));
+            const feeAmount = feeEntry ? feeEntry.amount : 0;
+            const netAmountToReverse = payment.amount - feeAmount;
+            
+            // Subtract the net amount from the bank account
+            currentAccount.balance -= netAmountToReverse;
+        }
+    });
 
-    // Apply reversions
-    if (saleBankPayments > 0) {
-        const currentAccount = getBankAccount();
-        // Reverse the net amount that went to the bank (sale value on card/pix minus fees)
-        const netAmountToReverse = saleBankPayments - totalFees;
-        saveBankAccount({ balance: currentAccount.balance - netAmountToReverse });
-    }
-
-    if (saleCashPayment > 0 && cashStatus.status === 'open') {
-        const reversalAdjustment: CashAdjustment = {
-            id: `adj-reversal-${saleToDelete.id}`,
-            amount: saleCashPayment,
-            type: 'out', // Reverting a cash payment means taking money out
-            description: `Estorno da Venda #${saleToDelete.id.slice(-6)}`,
-            timestamp: new Date().toISOString(),
-            isCorrection: true,
-        };
-        saveCashRegisterStatus({
-            ...cashStatus,
-            adjustments: [...(cashStatus.adjustments || []), reversalAdjustment],
-        });
+    // 2. Save the updated balances
+    saveBankAccount(currentAccount);
+    if(currentCashStatus.status === 'open') {
+        saveCashRegisterStatus(currentCashStatus);
     }
     
-    // 2. Remove sale record
+    // 3. Remove sale record
     const currentSales = getSales();
     const updatedSales = currentSales.filter(s => s.id !== saleToDelete!.id);
     saveSales(updatedSales);
 
-    // 3. Remove associated financial entries (fees)
-    const updatedEntries = getFinancialEntries().filter(e => e.saleId !== saleToDelete!.id);
+    // 4. Remove associated financial entries (fees)
+    const updatedEntries = currentEntries.filter(e => e.saleId !== saleToDelete!.id);
     saveFinancialEntries(updatedEntries);
     
     toast({ title: "Venda Removida", description: "A venda e seu impacto financeiro foram revertidos.", variant: "destructive" });
@@ -976,7 +991,7 @@ export default function FinancialClient() {
       {entryToDelete && (
         <AlertDialog open={!!entryToDelete} onOpenChange={() => setEntryToDelete(null)}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover o lançamento "{entryToDelete.description}"? A remoção estornará o valor do caixa de origem (exceto taxas de vendas). Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover o lançamento "{entryToDelete.description}"? A remoção estornará o valor do caixa de origem. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteEntry} className="bg-destructive hover:bg-destructive/90">Remover</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -985,7 +1000,7 @@ export default function FinancialClient() {
       {saleToDelete && (
         <AlertDialog open={!!saleToDelete} onOpenChange={() => setSaleToDelete(null)}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover esta venda do relatório? Esta ação não pode ser desfeita e irá estornar os valores da conta bancária, incluindo as taxas.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover esta venda do relatório? Esta ação não pode ser desfeita e irá estornar os valores da conta bancária e/ou caixa, incluindo as taxas.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSale} className="bg-destructive hover:bg-destructive/90">Remover Venda</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
