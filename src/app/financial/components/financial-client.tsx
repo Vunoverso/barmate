@@ -317,14 +317,15 @@ export default function FinancialClient() {
 
     // Deduct from source
     if (data.source === 'daily_cash' && cashStatus.status === 'open') {
-      const sangriaAdjustment = {
+      const currentCashStatus = getCashRegisterStatus();
+      const sangriaAdjustment: CashAdjustment = {
         id: `adj-exp-${Date.now()}`,
         amount: data.amount,
         type: 'out' as 'out',
         description: `Despesa: ${data.description}`,
         timestamp: new Date().toISOString()
       };
-      const updatedStatus = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), sangriaAdjustment]};
+      const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), sangriaAdjustment]};
       saveCashRegisterStatus(updatedStatus);
     } else if (data.source === 'secondary_cash') {
       saveSecondaryCashBox({ balance: secondaryCashBox.balance - data.amount });
@@ -361,6 +362,7 @@ export default function FinancialClient() {
         return;
     }
 
+    const currentCashStatus = getCashRegisterStatus();
     const newAdjustment: CashAdjustment = {
         id: `adj-corr-${Date.now()}`,
         amount: Math.abs(adjustmentAmount),
@@ -370,7 +372,7 @@ export default function FinancialClient() {
         isCorrection: true, // Mark it as a correction so it's not displayed
     };
 
-    const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), newAdjustment] };
+    const newState = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), newAdjustment] };
     saveCashRegisterStatus(newState);
 
     toast({ title: "Saldo do Caixa Diário Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
@@ -402,6 +404,7 @@ export default function FinancialClient() {
     if (entryToDelete.type === 'expense') {
         // Refund the amount to the source for general expenses
         if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
+            const currentCashStatus = getCashRegisterStatus();
             const refundAdjustment: CashAdjustment = {
                 id: `adj-refund-${Date.now()}`,
                 amount: entryToDelete.amount,
@@ -410,7 +413,7 @@ export default function FinancialClient() {
                 timestamp: new Date().toISOString(),
                 isCorrection: true,
             };
-            const updatedStatus = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), refundAdjustment] };
+            const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), refundAdjustment] };
             saveCashRegisterStatus(updatedStatus);
         } else if (entryToDelete.source === 'secondary_cash') {
             saveSecondaryCashBox({ balance: secondaryCashBox.balance + entryToDelete.amount });
@@ -420,6 +423,7 @@ export default function FinancialClient() {
     } else if (entryToDelete.type === 'income') {
       // Revert income entry from the source
        if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
+         const currentCashStatus = getCashRegisterStatus();
          const debitAdjustment: CashAdjustment = {
             id: `adj-debit-${Date.now()}`,
             amount: entryToDelete.amount,
@@ -428,7 +432,7 @@ export default function FinancialClient() {
             timestamp: new Date().toISOString(),
             isCorrection: true,
          };
-         const updatedStatus = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), debitAdjustment] };
+         const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), debitAdjustment] };
          saveCashRegisterStatus(updatedStatus);
        }
     }
@@ -443,11 +447,9 @@ export default function FinancialClient() {
     if (!saleToDelete) return;
 
     // Load fresh data to ensure we have the latest state
-    const currentSales = getSales();
     let currentEntries = getFinancialEntries();
     let currentAccount = getBankAccount();
     let currentCashStatus = getCashRegisterStatus();
-    let wasCashReversed = false;
 
     // 1. Revert financial impact by iterating through each payment
     saleToDelete.payments.forEach(payment => {
@@ -463,7 +465,6 @@ export default function FinancialClient() {
                 };
                 if (!currentCashStatus.adjustments) currentCashStatus.adjustments = [];
                 currentCashStatus.adjustments.push(reversalAdjustment);
-                wasCashReversed = true;
             }
         } else {
             // For card/pix, find the fee associated with this sale to calculate net reversal
@@ -478,12 +479,10 @@ export default function FinancialClient() {
 
     // 2. Save the updated balances
     saveBankAccount(currentAccount);
-    if(wasCashReversed) {
-        saveCashRegisterStatus(currentCashStatus);
-    }
+    saveCashRegisterStatus(currentCashStatus); // Always save, even if no cash was reversed
     
     // 3. Remove sale record
-    const updatedSales = currentSales.filter(s => s.id !== saleToDelete!.id);
+    const updatedSales = getSales().filter(s => s.id !== saleToDelete!.id);
     saveSales(updatedSales);
 
     // 4. Remove associated financial entries (fees)
@@ -1154,3 +1153,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
