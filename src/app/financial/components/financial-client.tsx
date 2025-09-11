@@ -6,7 +6,8 @@ import {
   getFinancialEntries, saveFinancialEntries, formatCurrency, 
   getSecondaryCashBox, saveSecondaryCashBox, 
   getBankAccount, saveBankAccount,
-  getCashRegisterStatus, saveCashRegisterStatus, getSales, saveSales, PAYMENT_METHODS
+  getCashRegisterStatus, saveCashRegisterStatus, getSales, saveSales, PAYMENT_METHODS,
+  removeSale
 } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -445,50 +446,7 @@ export default function FinancialClient() {
   
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
-
-    // Load fresh data to ensure we have the latest state
-    let currentEntries = getFinancialEntries();
-    let currentAccount = getBankAccount();
-    let currentCashStatus = getCashRegisterStatus();
-
-    // 1. Revert financial impact by iterating through each payment
-    saleToDelete.payments.forEach(payment => {
-        if (payment.method === 'cash') {
-            if (currentCashStatus.status === 'open') {
-                const reversalAdjustment: CashAdjustment = {
-                    id: `adj-reversal-${saleToDelete.id}-${payment.method}`,
-                    amount: payment.amount,
-                    type: 'out', // Money out to reverse the sale
-                    description: `Estorno da Venda #${saleToDelete.id.slice(-6)}`,
-                    timestamp: new Date().toISOString(),
-                    isCorrection: true,
-                };
-                if (!currentCashStatus.adjustments) currentCashStatus.adjustments = [];
-                currentCashStatus.adjustments.push(reversalAdjustment);
-            }
-        } else {
-            // For card/pix, find the fee associated with this sale to calculate net reversal
-            const feeEntry = currentEntries.find(e => e.saleId === saleToDelete!.id && e.description.toLowerCase().includes(payment.method));
-            const feeAmount = feeEntry ? feeEntry.amount : 0;
-            const netAmountToReverse = payment.amount - feeAmount;
-            
-            // Subtract the net amount from the bank account
-            currentAccount.balance -= netAmountToReverse;
-        }
-    });
-
-    // 2. Save the updated balances
-    saveBankAccount(currentAccount);
-    saveCashRegisterStatus(currentCashStatus); // Always save, even if no cash was reversed
-    
-    // 3. Remove sale record
-    const updatedSales = getSales().filter(s => s.id !== saleToDelete!.id);
-    saveSales(updatedSales);
-
-    // 4. Remove associated financial entries (fees)
-    const updatedEntries = currentEntries.filter(e => e.saleId !== saleToDelete!.id);
-    saveFinancialEntries(updatedEntries);
-    
+    removeSale(saleToDelete.id);
     toast({ title: "Venda Removida", description: "A venda e seu impacto financeiro foram revertidos.", variant: "destructive" });
     setSaleToDelete(null);
   };
@@ -1153,5 +1111,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
 
     

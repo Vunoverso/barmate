@@ -263,6 +263,58 @@ export const addSale = (newSale: Sale): void => {
 };
 
 
+export const removeSale = (saleId: string): void => {
+  if (typeof window === 'undefined') return;
+
+  const saleToDelete = getSales().find(s => s.id === saleId);
+  if (!saleToDelete) return;
+
+  // 1. Load current state of all financial assets
+  let currentEntries = getFinancialEntries();
+  let currentAccount = getBankAccount();
+  let currentCashStatus = getCashRegisterStatus();
+
+  // 2. Revert financial impact by iterating through each payment
+  saleToDelete.payments.forEach(payment => {
+    if (payment.method === 'cash') {
+      // If payment was cash, revert from daily cash if it's open
+      if (currentCashStatus.status === 'open') {
+        const reversalAdjustment: CashAdjustment = {
+          id: `adj-reversal-${saleToDelete.id}-${payment.method}`,
+          amount: payment.amount,
+          type: 'out', // Money out to reverse the sale
+          description: `Estorno da Venda #${saleToDelete.id.slice(-6)}`,
+          timestamp: new Date().toISOString(),
+          isCorrection: true, // Mark as correction to hide from UI if needed
+        };
+        if (!currentCashStatus.adjustments) currentCashStatus.adjustments = [];
+        currentCashStatus.adjustments.push(reversalAdjustment);
+      }
+    } else {
+      // For card/pix, find the fee associated with this sale to calculate net reversal
+      const feeEntry = currentEntries.find(e => e.saleId === saleToDelete!.id && e.description.toLowerCase().includes(payment.method));
+      const feeAmount = feeEntry ? feeEntry.amount : 0;
+      const netAmountToReverse = payment.amount - feeAmount;
+      
+      // Subtract the net amount from the bank account
+      currentAccount.balance -= netAmountToReverse;
+    }
+  });
+
+  // 3. Save the updated balances
+  saveBankAccount(currentAccount);
+  saveCashRegisterStatus(currentCashStatus); // Crucial: Save the updated cash status
+  
+  // 4. Remove the sale record itself
+  const updatedSales = getSales().filter(s => s.id !== saleToDelete!.id);
+  saveSales(updatedSales);
+
+  // 5. Remove associated financial entries (fees)
+  const updatedEntries = currentEntries.filter(e => e.saleId !== saleToDelete!.id);
+  saveFinancialEntries(updatedEntries);
+};
+
+
 export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
@@ -444,3 +496,6 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
         window.dispatchEvent(new Event('transactionFeesChanged'));
     }
 };
+
+
+    
