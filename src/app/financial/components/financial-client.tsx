@@ -442,6 +442,8 @@ export default function FinancialClient() {
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
 
+    // Load fresh data to ensure we have the latest state
+    const currentSales = getSales();
     let currentEntries = getFinancialEntries();
     let currentAccount = getBankAccount();
     let currentCashStatus = getCashRegisterStatus();
@@ -459,10 +461,7 @@ export default function FinancialClient() {
                     timestamp: new Date().toISOString(),
                     isCorrection: true,
                 };
-                // Ensure adjustments array exists
-                if (!currentCashStatus.adjustments) {
-                    currentCashStatus.adjustments = [];
-                }
+                if (!currentCashStatus.adjustments) currentCashStatus.adjustments = [];
                 currentCashStatus.adjustments.push(reversalAdjustment);
                 wasCashReversed = true;
             }
@@ -484,7 +483,6 @@ export default function FinancialClient() {
     }
     
     // 3. Remove sale record
-    const currentSales = getSales();
     const updatedSales = currentSales.filter(s => s.id !== saleToDelete!.id);
     saveSales(updatedSales);
 
@@ -1156,9 +1154,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
-
-
-
-
-
-    
