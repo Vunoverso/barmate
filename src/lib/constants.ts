@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, CashAdjustment } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
@@ -269,48 +269,44 @@ export const removeSale = (saleId: string): void => {
   const saleToDelete = getSales().find(s => s.id === saleId);
   if (!saleToDelete) return;
 
-  // 1. Load current state of all financial assets
-  let currentEntries = getFinancialEntries();
-  let currentAccount = getBankAccount();
-  let currentCashStatus = getCashRegisterStatus();
-
-  // 2. Revert financial impact by iterating through each payment
+  // 1. Load current state
+  const currentEntries = getFinancialEntries();
+  const currentAccount = getBankAccount();
+  const currentCashStatus = getCashRegisterStatus();
+  
+  // 2. Revert financial impact
   saleToDelete.payments.forEach(payment => {
     if (payment.method === 'cash') {
-      // If payment was cash, revert from daily cash if it's open
       if (currentCashStatus.status === 'open') {
         const reversalAdjustment: CashAdjustment = {
-          id: `adj-reversal-${saleToDelete.id}-${payment.method}`,
+          id: `adj-reversal-${saleToDelete.id}`,
           amount: payment.amount,
-          type: 'out', // Money out to reverse the sale
-          description: `Estorno da Venda #${saleToDelete.id.slice(-6)}`,
+          type: 'out', // money out
+          description: `Estorno Venda #${saleToDelete.id.slice(-6)}`,
           timestamp: new Date().toISOString(),
-          isCorrection: true, // Mark as correction to hide from UI if needed
+          isCorrection: true,
         };
-        if (!currentCashStatus.adjustments) currentCashStatus.adjustments = [];
-        currentCashStatus.adjustments.push(reversalAdjustment);
+        currentCashStatus.adjustments = [...(currentCashStatus.adjustments || []), reversalAdjustment];
       }
     } else {
-      // For card/pix, find the fee associated with this sale to calculate net reversal
-      const feeEntry = currentEntries.find(e => e.saleId === saleToDelete!.id && e.description.toLowerCase().includes(payment.method));
+      const feeEntry = currentEntries.find(e => e.saleId === saleId && e.description.toLowerCase().includes(payment.method));
       const feeAmount = feeEntry ? feeEntry.amount : 0;
       const netAmountToReverse = payment.amount - feeAmount;
-      
-      // Subtract the net amount from the bank account
       currentAccount.balance -= netAmountToReverse;
     }
   });
 
-  // 3. Save the updated balances
+  // 3. Save updated balances
   saveBankAccount(currentAccount);
-  saveCashRegisterStatus(currentCashStatus); // Crucial: Save the updated cash status
+  if (currentCashStatus.status === 'open') {
+    saveCashRegisterStatus(currentCashStatus);
+  }
   
-  // 4. Remove the sale record itself
-  const updatedSales = getSales().filter(s => s.id !== saleToDelete!.id);
+  // 4. Remove sale and associated fees
+  const updatedSales = getSales().filter(s => s.id !== saleId);
   saveSales(updatedSales);
-
-  // 5. Remove associated financial entries (fees)
-  const updatedEntries = currentEntries.filter(e => e.saleId !== saleToDelete!.id);
+  
+  const updatedEntries = currentEntries.filter(e => e.saleId !== saleId);
   saveFinancialEntries(updatedEntries);
 };
 
@@ -497,5 +493,7 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
     }
 };
 
+
+    
 
     
