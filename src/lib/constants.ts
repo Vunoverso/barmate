@@ -486,3 +486,5 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
         window.dispatchEvent(new Event('transactionFeesChanged'));
     }
 };
+
+    

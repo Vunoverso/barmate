@@ -447,7 +447,11 @@ export default function FinancialClient() {
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
     removeSale(saleToDelete.id);
-    toast({ title: "Venda Removida", description: "A venda e seu impacto financeiro foram revertidos.", variant: "destructive" });
+    toast({
+      title: "Venda Removida",
+      description: "A venda e seu impacto financeiro foram revertidos.",
+      variant: "destructive"
+    });
     setSaleToDelete(null);
   };
 
@@ -1111,3 +1115,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
