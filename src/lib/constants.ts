@@ -269,28 +269,24 @@ export const removeSale = (saleId: string): void => {
   const saleToDelete = getSales().find(s => s.id === saleId);
   if (!saleToDelete) return;
 
-  // 1. Load current state
   const currentAccount = getBankAccount();
   const currentCashStatus = getCashRegisterStatus();
   const currentEntries = getFinancialEntries();
   
-  // 2. Revert financial impact from each payment
   saleToDelete.payments.forEach(payment => {
     if (payment.method === 'cash') {
       if (currentCashStatus.status === 'open') {
         const reversalAdjustment: CashAdjustment = {
           id: `adj-reversal-${saleToDelete.id}`,
           amount: payment.amount,
-          type: 'out', // money out
+          type: 'out',
           description: `Estorno Venda #${saleToDelete.id.slice(-6)}`,
           timestamp: new Date().toISOString(),
           isCorrection: true,
         };
-        const updatedAdjustments = [...(currentCashStatus.adjustments || []), reversalAdjustment];
-        currentCashStatus.adjustments = updatedAdjustments;
+        currentCashStatus.adjustments = [...(currentCashStatus.adjustments || []), reversalAdjustment];
       }
     } else {
-      // Revert bank payments
       const feeEntry = currentEntries.find(e => e.saleId === saleId && e.description.toLowerCase().includes(payment.method));
       const feeAmount = feeEntry ? feeEntry.amount : 0;
       const netAmountToReverse = payment.amount - feeAmount;
@@ -298,11 +294,9 @@ export const removeSale = (saleId: string): void => {
     }
   });
 
-  // 3. Save updated balances
   saveBankAccount(currentAccount);
   saveCashRegisterStatus(currentCashStatus);
   
-  // 4. Remove sale and associated fees
   const updatedSales = getSales().filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
@@ -492,8 +486,3 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
         window.dispatchEvent(new Event('transactionFeesChanged'));
     }
 };
-
-
-    
-
-    
