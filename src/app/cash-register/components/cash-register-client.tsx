@@ -213,17 +213,19 @@ export default function CashRegisterClient() {
             } else if (adjustment.destination === 'bank_account') {
                 const currentAccount = getBankAccount();
                 saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
-            } else { // It's an expense
-                newFinancialEntry = {
-                    id: `exp-sangria-${adjustment.id}`,
-                    description: `Sangria: ${adjustment.description}`,
-                    amount: adjustment.amount,
-                    type: 'expense',
-                    source: 'daily_cash',
-                    timestamp: new Date(),
-                    adjustmentId: adjustment.id
-                };
-            }
+            } 
+            
+            // ALL sangrias are expenses from the daily cash perspective
+            newFinancialEntry = {
+                id: `exp-sangria-${adjustment.id}`,
+                description: `Sangria: ${adjustment.description}`,
+                amount: adjustment.amount,
+                type: 'expense',
+                source: 'daily_cash',
+                timestamp: new Date(),
+                adjustmentId: adjustment.id
+            };
+            
         } else { // Suprimento (in)
            newFinancialEntry = {
                 id: `inc-suprimento-${adjustment.id}`,
@@ -244,11 +246,12 @@ export default function CashRegisterClient() {
   const revertAdjustment = (adjustment: CashAdjustment) => {
     const { id, type, amount, destination, source } = adjustment;
     
+    // Always remove the associated financial entry
     const currentEntries = getFinancialEntries();
     const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
     saveFinancialEntries(updatedEntries);
 
-    // Revert 'out' transfers (main cash -> destination)
+    // Revert transfers that happened during the adjustment
     if (type === 'out') {
       if (destination === 'secondary_cash') {
         const currentBox = getSecondaryCashBox();
@@ -258,7 +261,6 @@ export default function CashRegisterClient() {
         saveBankAccount({ balance: currentAccount.balance - amount });
       }
     } 
-    // Revert 'in' transfers (source -> main cash)
     else if (type === 'in') {
       if (source === 'secondary_cash') {
         const currentBox = getSecondaryCashBox();
@@ -319,6 +321,9 @@ export default function CashRegisterClient() {
           timestamp: new Date().toISOString(),
           source: 'secondary_cash'
       };
+
+      // Also apply this as a financial entry
+      applyAdjustment(transferAdjustment);
 
       const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
       setCashStatus(newState);
@@ -815,6 +820,8 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
         setDescription(adjustmentToEdit.description);
         setDestination(adjustmentToEdit.destination || 'none');
       } else {
+        setAmount('');
+        setDescription('');
         setDestination('none');
       }
     }
@@ -837,15 +844,10 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
       return;
     }
     onSave({ amount: value, description: description.trim(), destination }, adjustmentToEdit?.id);
-    setAmount('');
-    setDescription('');
+    onOpenChange(false);
   };
 
   const handleOpenChange = (open: boolean) => {
-    if (!open) {
-      setAmount('');
-      setDescription('');
-    }
     onOpenChange(open);
   };
 
@@ -913,8 +915,7 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
       return;
     }
     onTransfer({ amount: value, destination });
-    setAmount('');
-    setDestination('daily_cash');
+    onOpenChange(false);
   };
   
   const handleOpenChange = (open: boolean) => {
@@ -996,6 +997,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
 
 
 

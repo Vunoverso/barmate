@@ -1042,13 +1042,15 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
         setSelectedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
         onMerge(orderIdsToMerge);
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
+              <form onSubmit={handleSubmit}>
                 <DialogHeader>
                     <DialogTitle>Juntar Comandas</DialogTitle>
                     <DialogDescription>
@@ -1082,11 +1084,12 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={orderIdsToMerge.length === 0}>
+                    <Button type="submit" disabled={orderIdsToMerge.length === 0}>
                         <Merge className="mr-2 h-4 w-4" />
                         Juntar {orderIdsToMerge.length > 0 ? `(${orderIdsToMerge.length})` : ''} Comandas
                     </Button>
                 </DialogFooter>
+              </form>
             </DialogContent>
         </Dialog>
     );
