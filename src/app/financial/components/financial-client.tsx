@@ -442,9 +442,10 @@ export default function FinancialClient() {
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
 
-    const currentEntries = getFinancialEntries();
-    const currentAccount = getBankAccount();
+    let currentEntries = getFinancialEntries();
+    let currentAccount = getBankAccount();
     let currentCashStatus = getCashRegisterStatus();
+    let wasCashReversed = false;
 
     // 1. Revert financial impact by iterating through each payment
     saleToDelete.payments.forEach(payment => {
@@ -458,10 +459,12 @@ export default function FinancialClient() {
                     timestamp: new Date().toISOString(),
                     isCorrection: true,
                 };
-                currentCashStatus = {
-                    ...currentCashStatus,
-                    adjustments: [...(currentCashStatus.adjustments || []), reversalAdjustment],
-                };
+                // Ensure adjustments array exists
+                if (!currentCashStatus.adjustments) {
+                    currentCashStatus.adjustments = [];
+                }
+                currentCashStatus.adjustments.push(reversalAdjustment);
+                wasCashReversed = true;
             }
         } else {
             // For card/pix, find the fee associated with this sale to calculate net reversal
@@ -476,7 +479,7 @@ export default function FinancialClient() {
 
     // 2. Save the updated balances
     saveBankAccount(currentAccount);
-    if(currentCashStatus.status === 'open') {
+    if(wasCashReversed) {
         saveCashRegisterStatus(currentCashStatus);
     }
     
