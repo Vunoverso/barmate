@@ -438,31 +438,22 @@ export default function FinancialClient() {
     // 1. Revert financial impact
     const feesForThisSale = getFinancialEntries().filter(e => e.saleId === saleToDelete!.id);
     const totalFees = feesForThisSale.reduce((sum, fee) => sum + fee.amount, 0);
-    
-    let bankBalanceChange = 0;
-    let cashBalanceChange = 0;
 
-    saleToDelete.payments.forEach(p => {
-        if (p.method === 'cash') {
-            cashBalanceChange -= p.amount;
-        } else {
-            bankBalanceChange -= p.amount;
-        }
-    });
-
-    // The fees were already a deduction, so we add them back to reverse the effect
-    bankBalanceChange += totalFees;
+    const saleCashPayment = saleToDelete.payments.find(p => p.method === 'cash')?.amount || 0;
+    const saleBankPayments = saleToDelete.totalAmount - saleCashPayment;
 
     // Apply reversions
-    if (bankBalanceChange !== 0) {
+    if (saleBankPayments > 0) {
         const currentAccount = getBankAccount();
-        saveBankAccount({ balance: currentAccount.balance + bankBalanceChange });
+        // Reverse the net amount that went to the bank (sale value on card/pix minus fees)
+        const netAmountToReverse = saleBankPayments - totalFees;
+        saveBankAccount({ balance: currentAccount.balance - netAmountToReverse });
     }
 
-    if (cashBalanceChange !== 0 && cashStatus.status === 'open') {
+    if (saleCashPayment > 0 && cashStatus.status === 'open') {
         const reversalAdjustment: CashAdjustment = {
             id: `adj-reversal-${saleToDelete.id}`,
-            amount: Math.abs(cashBalanceChange),
+            amount: saleCashPayment,
             type: 'out', // Reverting a cash payment means taking money out
             description: `Estorno da Venda #${saleToDelete.id.slice(-6)}`,
             timestamp: new Date().toISOString(),
@@ -1139,7 +1130,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
             <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
           </div>
           <DialogFooter>
-            <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
             <Button type="submit">Salvar</Button>
           </DialogFooter>
         </form>
@@ -1150,3 +1141,6 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
 
 
 
+
+
+    
