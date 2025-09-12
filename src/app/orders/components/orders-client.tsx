@@ -238,27 +238,37 @@ export default function OrdersClient() {
     let destinationOrder = openOrders.find(o => o.id === currentOrderId);
     if (!destinationOrder) return;
     
-    const itemsToMerge: OrderItem[] = [];
     const sourceOrders = openOrders.filter(o => sourceOrderIds.includes(o.id));
-    sourceOrders.forEach(sourceOrder => {
-      itemsToMerge.push(...sourceOrder.items);
-    });
+    const allItemsToMerge = [...destinationOrder.items, ...sourceOrders.flatMap(o => o.items)];
+
+    const mergedItems = allItemsToMerge.reduce((acc, item) => {
+        // Don't group combos or special negative-price items (payments, credits)
+        const isGroupable = !item.isCombo && item.price > 0 && !item.id.startsWith('payment-') && !item.id.startsWith('credit-');
+        const existingItem = isGroupable ? acc.find(i => i.id === item.id) : null;
+        
+        if (existingItem) {
+            existingItem.quantity += item.quantity;
+        } else {
+            acc.push({ ...item });
+        }
+        return acc;
+    }, [] as OrderItem[]);
 
     setOpenOrders(prevOrders => {
-      // Add items to destination order
-      const updatedOrders = prevOrders.map(order => {
-        if (order.id === currentOrderId) {
-          return { ...order, items: [...order.items, ...itemsToMerge] };
-        }
-        return order;
-      });
-      // Remove source orders
-      return updatedOrders.filter(o => !sourceOrderIds.includes(o.id));
+        const updatedOrder: ActiveOrder = { ...destinationOrder!, items: mergedItems };
+        
+        // Remove source orders and update the destination order
+        const finalOrders = prevOrders
+            .filter(o => !sourceOrderIds.includes(o.id))
+            .map(o => o.id === currentOrderId ? updatedOrder : o);
+            
+        return finalOrders;
     });
 
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
     setIsMergeDialogOpen(false);
   };
+
 
   const handleAddCredit = ({ amount, description }: { amount: number; description: string }) => {
     if (!currentOrderId) {
