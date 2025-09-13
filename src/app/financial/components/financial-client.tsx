@@ -106,6 +106,7 @@ export default function FinancialClient() {
   const [isEditCaixa02DialogOpen, setIsEditCaixa02DialogOpen] = useState(false);
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
   const [isEditCashInDrawerDialogOpen, setIsEditCashInDrawerDialogOpen] = useState(false);
+  const [expenseToConfirm, setExpenseToConfirm] = useState<ExpenseFormData | null>(null);
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
@@ -298,6 +299,16 @@ export default function FinancialClient() {
 
 
   const handleAddExpense = (data: ExpenseFormData) => {
+    // If the source is daily cash, show confirmation dialog first
+    if (data.source === 'daily_cash') {
+      setExpenseToConfirm(data);
+      return;
+    }
+    // Otherwise, proceed directly
+    proceedWithAddExpense(data);
+  };
+
+  const proceedWithAddExpense = (data: ExpenseFormData) => {
     // Check for sufficient funds
     if (data.source === 'daily_cash') {
       if (cashStatus.status !== 'open') {
@@ -949,6 +960,28 @@ export default function FinancialClient() {
             <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover esta venda do relatório? Esta ação não pode ser desfeita e irá estornar os valores da conta bancária e/ou caixa, incluindo as taxas.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSale} className="bg-destructive hover:bg-destructive/90">Remover Venda</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {expenseToConfirm && (
+        <AlertDialog open={!!expenseToConfirm} onOpenChange={() => setExpenseToConfirm(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmar despesa do Caixa Diário?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Você está prestes a registrar uma saída de <strong>{formatCurrency(expenseToConfirm.amount)}</strong> com a descrição "{expenseToConfirm.description}" diretamente do Caixa Diário. Deseja continuar?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => {
+                        proceedWithAddExpense(expenseToConfirm);
+                        setExpenseToConfirm(null);
+                    }}>
+                        Confirmar Saída
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
         </AlertDialog>
       )}
 
