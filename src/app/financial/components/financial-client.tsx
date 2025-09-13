@@ -195,9 +195,9 @@ export default function FinancialClient() {
     return (filterByDate(entries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries, dateRange]);
   
-  const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId), [filteredEntries]);
+  const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId && !e.isAdjustment), [filteredEntries]);
   const feeExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !!e.saleId), [filteredEntries]);
-  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income'), [filteredEntries]);
+  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income' && !e.isAdjustment), [filteredEntries]);
 
 
   // Pagination Logic
@@ -316,24 +316,6 @@ export default function FinancialClient() {
       return;
     }
 
-    // Deduct from source
-    if (data.source === 'daily_cash' && cashStatus.status === 'open') {
-      const currentCashStatus = getCashRegisterStatus();
-      const sangriaAdjustment: CashAdjustment = {
-        id: `adj-exp-${Date.now()}`,
-        amount: data.amount,
-        type: 'out' as 'out',
-        description: `Despesa: ${data.description}`,
-        timestamp: new Date().toISOString()
-      };
-      const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), sangriaAdjustment]};
-      saveCashRegisterStatus(updatedStatus);
-    } else if (data.source === 'secondary_cash') {
-      saveSecondaryCashBox({ balance: secondaryCashBox.balance - data.amount });
-    } else if (data.source === 'bank_account') {
-      saveBankAccount({ balance: bankAccount.balance - data.amount });
-    }
-
     const newEntry: FinancialEntry = {
       id: `exp-${Date.now()}`,
       description: data.description,
@@ -342,6 +324,26 @@ export default function FinancialClient() {
       source: data.source,
       timestamp: new Date(),
     };
+
+    // Deduct from source
+    if (data.source === 'daily_cash' && cashStatus.status === 'open') {
+      const currentCashStatus = getCashRegisterStatus();
+      const sangriaAdjustment: CashAdjustment = {
+        id: `adj-exp-${newEntry.id}`,
+        amount: data.amount,
+        type: 'out' as 'out',
+        description: `Despesa: ${data.description}`,
+        timestamp: new Date().toISOString()
+      };
+      newEntry.adjustmentId = sangriaAdjustment.id;
+      const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), sangriaAdjustment]};
+      saveCashRegisterStatus(updatedStatus);
+    } else if (data.source === 'secondary_cash') {
+      saveSecondaryCashBox({ balance: secondaryCashBox.balance - data.amount });
+    } else if (data.source === 'bank_account') {
+      saveBankAccount({ balance: bankAccount.balance - data.amount });
+    }
+
     saveFinancialEntries([...entries, newEntry]);
     
     toast({ title: "Despesa Adicionada", description: "Sua nova despesa foi registrada com sucesso." });
@@ -402,40 +404,22 @@ export default function FinancialClient() {
         return;
     }
 
+    // Refund the amount to the source for general expenses
     if (entryToDelete.type === 'expense') {
-        // Refund the amount to the source for general expenses
         if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
             const currentCashStatus = getCashRegisterStatus();
-            const refundAdjustment: CashAdjustment = {
-                id: `adj-refund-${Date.now()}`,
-                amount: entryToDelete.amount,
-                type: 'in',
-                description: `Estorno despesa: ${entryToDelete.description}`,
-                timestamp: new Date().toISOString(),
-                isCorrection: true,
-            };
-            const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), refundAdjustment] };
-            saveCashRegisterStatus(updatedStatus);
+            const matchingAdjustment = currentCashStatus.adjustments?.find(adj => adj.id === entryToDelete.adjustmentId);
+            if (matchingAdjustment) {
+                const updatedAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== entryToDelete.adjustmentId);
+                saveCashRegisterStatus({ ...currentCashStatus, adjustments: updatedAdjustments });
+            }
         } else if (entryToDelete.source === 'secondary_cash') {
             saveSecondaryCashBox({ balance: secondaryCashBox.balance + entryToDelete.amount });
         } else if (entryToDelete.source === 'bank_account') {
             saveBankAccount({ balance: bankAccount.balance + entryToDelete.amount });
         }
     } else if (entryToDelete.type === 'income') {
-      // Revert income entry from the source
-       if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
-         const currentCashStatus = getCashRegisterStatus();
-         const debitAdjustment: CashAdjustment = {
-            id: `adj-debit-${Date.now()}`,
-            amount: entryToDelete.amount,
-            type: 'out',
-            description: `Estorno entrada: ${entryToDelete.description}`,
-            timestamp: new Date().toISOString(),
-            isCorrection: true,
-         };
-         const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), debitAdjustment] };
-         saveCashRegisterStatus(updatedStatus);
-       }
+       // This case needs to be defined if income entries can be deleted
     }
 
     const updatedEntries = entries.filter(e => e.id !== entryToDelete.id);

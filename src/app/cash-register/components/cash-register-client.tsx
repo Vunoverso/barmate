@@ -205,53 +205,19 @@ export default function CashRegisterClient() {
   };
   
   const applyAdjustment = (adjustment: CashAdjustment) => {
-        const currentEntries = getFinancialEntries();
-        let newFinancialEntry: FinancialEntry | null = null;
-        
-        if (adjustment.type === 'out') { // Sangria
-            if (adjustment.destination === 'secondary_cash') {
-                const currentBox = getSecondaryCashBox();
-                saveSecondaryCashBox({ balance: currentBox.balance + adjustment.amount });
-            } else if (adjustment.destination === 'bank_account') {
-                const currentAccount = getBankAccount();
-                saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
-            } 
-            
-            // ALL sangrias are expenses from the daily cash perspective
-            newFinancialEntry = {
-                id: `exp-sangria-${adjustment.id}`,
-                description: `Sangria: ${adjustment.description}`,
-                amount: adjustment.amount,
-                type: 'expense',
-                source: 'daily_cash',
-                timestamp: new Date(adjustment.timestamp),
-                adjustmentId: adjustment.id
-            };
-            
-        } else { // Suprimento (in)
-           newFinancialEntry = {
-                id: `inc-suprimento-${adjustment.id}`,
-                description: `Suprimento: ${adjustment.description}`,
-                amount: adjustment.amount,
-                type: 'income',
-                source: 'daily_cash',
-                timestamp: new Date(adjustment.timestamp),
-                adjustmentId: adjustment.id
-           };
+    if (adjustment.type === 'out') { // Sangria
+        if (adjustment.destination === 'secondary_cash') {
+            const currentBox = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: currentBox.balance + adjustment.amount });
+        } else if (adjustment.destination === 'bank_account') {
+            const currentAccount = getBankAccount();
+            saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
         }
-
-        if (newFinancialEntry) {
-            saveFinancialEntries([...currentEntries, newFinancialEntry]);
-        }
+    }
   }
   
   const revertAdjustment = (adjustment: CashAdjustment) => {
     const { id, type, amount, destination, source } = adjustment;
-    
-    // Always remove the associated financial entry
-    const currentEntries = getFinancialEntries();
-    const updatedEntries = currentEntries.filter(e => e.adjustmentId !== id);
-    saveFinancialEntries(updatedEntries);
 
     // Revert transfers that happened during the adjustment
     if (type === 'out') { // Sangria reversal
@@ -321,9 +287,6 @@ export default function CashRegisterClient() {
           timestamp: new Date().toISOString(),
           source: 'secondary_cash'
       };
-
-      // Also apply this as a financial entry
-      applyAdjustment(transferAdjustment);
 
       const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
       setCashStatus(newState);
@@ -996,6 +959,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
 
 
 

@@ -88,6 +88,7 @@ export interface FinancialEntry {
   timestamp: Date;
   adjustmentId?: string;
   saleId?: string;
+  isAdjustment?: boolean; // Flag to link financial entry to a cash adjustment
 }
 
 export interface TransactionFees {
