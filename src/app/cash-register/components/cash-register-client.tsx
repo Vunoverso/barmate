@@ -521,6 +521,7 @@ export default function CashRegisterClient() {
                                     </TableCell>
                                     <TableCell>
                                         {adj.description}
+                                        {adj.source === 'secondary_cash' && <span className="text-xs text-muted-foreground block">Origem: Caixa 02</span>}
                                         {adj.destination === 'secondary_cash' && <span className="text-xs text-muted-foreground block">Destino: Caixa 02</span>}
                                         {adj.destination === 'bank_account' && <span className="text-xs text-muted-foreground block">Destino: Conta Bancária</span>}
                                     </TableCell>
@@ -960,9 +961,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
   );
 }
 
-
-
-
-
-
-
+    
