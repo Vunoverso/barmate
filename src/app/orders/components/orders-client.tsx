@@ -136,10 +136,12 @@ export default function OrdersClient() {
   }, [openOrders, currentOrderId]);
 
   const totalOpenOrdersValue = useMemo(() => {
-    return openOrders.reduce((total, order) => {
-      const orderTotal = order.items.reduce((orderSum, item) => orderSum + (item.price * item.quantity), 0);
-      return total + orderTotal;
-    }, 0);
+    return openOrders
+      .filter(order => order.status !== 'paid') // Exclude paid orders from the total
+      .reduce((total, order) => {
+        const orderTotal = order.items.reduce((orderSum, item) => orderSum + (item.price * item.quantity), 0);
+        return total + orderTotal;
+      }, 0);
   }, [openOrders]);
 
   const currentOrderItems = useMemo(() => {
@@ -243,7 +245,7 @@ export default function OrdersClient() {
 
     const mergedItems = allItemsToMerge.reduce((acc, item) => {
         // Don't group combos or special negative-price items (payments, credits)
-        const isGroupable = !item.isCombo && item.price > 0 && !item.id.startsWith('payment-') && !item.id.startsWith('credit-');
+        const isGroupable = !item.isCombo && !item.id.startsWith('combo-') && item.price > 0 && !item.id.startsWith('payment-') && !item.id.startsWith('credit-');
         const existingItem = isGroupable ? acc.find(i => i.id === item.id) : null;
         
         if (existingItem) {
@@ -318,7 +320,7 @@ export default function OrdersClient() {
              return { ...order, items: [...order.items, newComboItem] };
           }
 
-          const existingItem = order.items.find(item => item.id === product.id && !item.isCombo);
+          const existingItem = order.items.find(item => item.id === product.id && !item.isCombo && !item.id.startsWith('combo-'));
           if (existingItem) {
             return {
               ...order,
@@ -1180,4 +1182,6 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
+    
+
     
