@@ -104,7 +104,7 @@ export default function DashboardPage() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <Card className="w-full max-w-md text-center shadow-xl">
           <CardHeader className="items-center">
-            <Package className="h-12 w-12 text-primary mb-4" />
+            <Package className="h-12 w-12 text-primary mb-4 animate-pulse" />
             <CardTitle className="text-3xl font-bold">Carregando Dashboard...</CardTitle>
           </CardHeader>
           <CardContent>
