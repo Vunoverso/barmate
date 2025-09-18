@@ -157,6 +157,7 @@ const INITIAL_SALES: Sale[] = [
     discountAmount: 0,
     totalAmount: saleTotal2,
     payments: [{ method: 'cash', amount: 25.00 }],
+    cashTendered: 25.00,
     changeGiven: 25.00 - saleTotal2,
     timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     status: 'completed',
@@ -188,6 +189,9 @@ export const getSales = (): Sale[] => {
       const migratedSales = parsedSales.map((s: any) => {
         if (s.paymentMethod && !s.payments) {
           s.payments = [{ method: s.paymentMethod, amount: s.totalAmount }];
+          if (s.paymentMethod === 'cash') {
+            s.cashTendered = s.amountPaid;
+          }
           delete s.paymentMethod;
           if (s.amountPaid) delete s.amountPaid;
         }
@@ -226,6 +230,16 @@ export const addSale = (newSale: Sale): void => {
   let netAmountToBank = 0;
   const newFinancialEntries: FinancialEntry[] = [];
   const transactionFees = getTransactionFees();
+
+  // The total cash that entered the register for this sale
+  const cashPayment = newSale.payments.find(p => p.method === 'cash');
+  if (cashPayment) {
+    // If a specific cashTendered amount is provided (e.g. customer paid 20 for a 14 bill), use it.
+    // Otherwise, use the cash amount from the payment itself.
+    const cashIn = newSale.cashTendered ?? cashPayment.amount;
+
+    // This logic is now handled by the cash register component which tracks its own balance based on sales
+  }
 
   newSale.payments.forEach(p => {
     let feeAmount = 0;

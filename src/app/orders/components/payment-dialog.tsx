@@ -35,6 +35,7 @@ interface PaymentDialogProps {
     discountAmount: number;
     status: 'completed';
     leaveChangeAsCredit: boolean;
+    cashTendered?: number; // Added to track full cash amount
   }) => void;
 }
 
@@ -63,10 +64,18 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
 
   const numCashTendered = parseLocaleFloat(cashTendered);
   const calculatedCashChange = useMemo(() => {
-    if (numCashAmount <= 0) return 0;
-    const tendered = numCashTendered > 0 ? numCashTendered : numCashAmount;
-    return Math.max(0, tendered - numCashAmount);
-  }, [numCashAmount, numCashTendered]);
+    // If a specific cash tendered amount is entered, use it to calculate change against the cash portion of the payment
+    if (numCashTendered > 0 && numCashAmount > 0) {
+      return Math.max(0, numCashTendered - numCashAmount);
+    }
+    // Otherwise, if there is overpayment in total, consider that as potential change/credit
+    if (totalPaid > amountToPay) {
+      // The change is the portion of the overpayment made in cash
+      const overpayment = totalPaid - amountToPay;
+      return Math.min(overpayment, numCashAmount);
+    }
+    return 0;
+  }, [numCashAmount, numCashTendered, totalPaid, amountToPay]);
   
   const changeToReturn = useMemo(() => {
     if (leaveChangeAsCredit) return 0;
@@ -139,12 +148,15 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     if (numCreditAmount > 0) payments.push({ method: 'credit', amount: numCreditAmount });
     if (numPixAmount > 0) payments.push({ method: 'pix', amount: numPixAmount });
 
+    const finalCashTendered = numCashTendered > 0 ? numCashTendered : (numCashAmount > 0 ? numCashAmount : undefined);
+
     onSubmit({
       payments,
       discountAmount: numDiscount,
-      changeGiven: creditToLeave, // Send the credit amount as change given
+      changeGiven: creditToLeave, 
       status: 'completed',
       leaveChangeAsCredit: leaveChangeAsCredit && creditToLeave > 0,
+      cashTendered: finalCashTendered, // Pass the total cash received
     });
   };
   

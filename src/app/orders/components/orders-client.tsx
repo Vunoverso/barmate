@@ -425,7 +425,7 @@ export default function OrdersClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
   
-  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean }) => {
+  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -475,7 +475,8 @@ export default function OrdersClient() {
             payments: details.payments,
             changeGiven: 0,
             timestamp: new Date(),
-            status: 'completed'
+            status: 'completed',
+            cashTendered: details.cashTendered
         })
         
         setOpenOrders(openOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
@@ -496,6 +497,7 @@ export default function OrdersClient() {
       changeGiven: details.changeGiven,
       timestamp: new Date(),
       status: 'completed',
+      cashTendered: details.cashTendered,
     };
     addSale(newSale);
 

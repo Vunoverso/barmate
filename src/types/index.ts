@@ -40,6 +40,7 @@ export interface Sale {
   originalAmount: number; // The pre-discount total
   discountAmount: number; // The discount amount
   payments: Payment[];
+  cashTendered?: number; // Total cash provided by customer
   changeGiven?: number; // For cash transactions
   timestamp: Date;
   status: 'completed' | 'pending' | 'cancelled';

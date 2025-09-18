@@ -217,7 +217,7 @@ export default function CashRegisterClient() {
   }
   
   const revertAdjustment = (adjustment: CashAdjustment) => {
-    const { id, type, amount, destination, source } = adjustment;
+    const { type, amount, destination, source } = adjustment;
 
     // Revert transfers that happened during the adjustment
     if (type === 'out') { // Sangria reversal
@@ -358,8 +358,11 @@ export default function CashRegisterClient() {
     const totalSessionRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
 
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount || 0;
-        return total + cashPayment;
+        const cashPayment = sale.payments.find(p => p.method === 'cash');
+        if (!cashPayment) return total;
+        // Use cashTendered if available and it was a "leave change as credit" scenario. Otherwise, use the payment amount.
+        const cashIn = sale.cashTendered && (sale.changeGiven ?? 0) > 0 ? sale.cashTendered : cashPayment.amount;
+        return total + cashIn;
     }, 0);
     
     const cardRevenue = sessionSales.reduce((total, sale) => {
