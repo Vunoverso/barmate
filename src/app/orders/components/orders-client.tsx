@@ -601,8 +601,8 @@ export default function OrdersClient() {
 
   return (
     <TooltipProvider>
-      <div className="grid md:grid-cols-10 gap-4 h-[calc(100vh-100px)]">
-        <div className="md:col-span-2 flex flex-col h-full">
+      <div className="grid md:grid-cols-11 gap-4 h-[calc(100vh-100px)]">
+        <div className="md:col-span-3 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
