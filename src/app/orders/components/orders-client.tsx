@@ -282,7 +282,6 @@ export default function OrdersClient() {
         id: `credit-${Date.now()}`,
         name: `Crédito: ${description}`,
         price: -amount, // Negative price for credit
-        quantity: 1,
         categoryId: 'cat_outros', // Assign to a generic category
         categoryName: 'Outros',
         categoryIconName: 'Wallet',
