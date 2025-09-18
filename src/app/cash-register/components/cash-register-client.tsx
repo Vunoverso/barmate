@@ -358,8 +358,19 @@ export default function CashRegisterClient() {
     const totalSessionRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
 
     const cashRevenue = sessionSales.reduce((total, sale) => {
-      const cashIn = sale.cashTendered ? (sale.cashTendered - (sale.changeGiven ?? 0)) : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-      return total + cashIn;
+        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+        if (cashPayment === 0) {
+            return total;
+        }
+
+        // If change was left as credit, the full cash tendered amount entered the drawer.
+        if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
+            return total + sale.cashTendered;
+        }
+        
+        // Otherwise, what entered the drawer is the cash payment amount (which could be exact or have had change returned).
+        // This is simply the sum of cash payments.
+        return total + cashPayment;
     }, 0);
     
     const cardRevenue = sessionSales.reduce((total, sale) => {
