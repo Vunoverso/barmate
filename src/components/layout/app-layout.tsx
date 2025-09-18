@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface NavItem {
   href: string;
@@ -97,21 +98,28 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="hidden border-r bg-muted/40 md:block">
            <div className="flex h-full max-h-screen flex-col gap-2">
              <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-                <Link href="/" className="flex items-center gap-2 font-semibold">
-                  <Package className="h-6 w-6 text-primary" />
-                  <span className="">Carregando...</span>
-                </Link>
+                <div className="flex items-center gap-2 font-semibold">
+                  <Skeleton className="h-6 w-6" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              </div>
+              <div className="flex-1 px-2 py-4 lg:px-4 space-y-2">
+                {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
               </div>
            </div>
         </div>
         <div className="flex flex-col">
-          <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6 justify-end">
-             {/* Placeholder for theme toggle and avatar to match structure */}
-             <div className="h-10 w-10 bg-muted rounded-full"></div>
-             <div className="h-10 w-10 bg-muted rounded-full"></div>
+          <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6 justify-between md:justify-end">
+             <Skeleton className="h-9 w-9 md:hidden" />
+             <div className="flex items-center gap-2">
+                <Skeleton className="h-10 w-10" />
+                <Skeleton className="h-10 w-10 rounded-full" />
+             </div>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto">
-            {children}
+            <div className="flex items-center justify-center h-full">
+                <p>Carregando...</p>
+            </div>
           </main>
         </div>
       </div>
@@ -211,5 +219,3 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-    
