@@ -10,6 +10,50 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+      {/* Top Row Cards - Static Data */}
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Receita de Hoje</CardTitle>
+            <span className="text-muted-foreground">💵</span>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">R$ 0,00</div>
+            <p className="text-xs text-muted-foreground">Total de vendas no dia</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Vendas de Hoje</CardTitle>
+            <span className="text-muted-foreground">🛒</span>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">+0</div>
+            <p className="text-xs text-muted-foreground">Transações realizadas hoje</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+            <span className="text-muted-foreground">📊</span>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">R$ 0,00</div>
+            <p className="text-xs text-muted-foreground">Valor médio por venda</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Status do Caixa</CardTitle>
+            <span className="text-muted-foreground">🟢</span>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Fechado</div>
+            <p className="text-xs text-muted-foreground">Consulte a página do caixa</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Bottom Row Cards */}
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-2">
         <Card className="lg:col-span-1">

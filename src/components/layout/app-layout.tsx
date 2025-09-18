@@ -42,17 +42,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     setIsMounted(true);
     
-    const handleStorageChange = (event?: StorageEvent) => {
-        // Handle direct call
-        if (!event) {
-            const storedName = localStorage.getItem('barName');
-            if (storedName) setBarName(storedName);
-            return;
-        }
-        // Handle event listener
-        if (event.key === 'barName' && event.newValue) {
-            setBarName(event.newValue);
-        }
+    const handleStorageChange = () => {
+      const storedName = localStorage.getItem('barName');
+      if (storedName) {
+        setBarName(storedName);
+      }
     };
     
     handleStorageChange();
