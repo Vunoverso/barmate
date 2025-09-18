@@ -37,16 +37,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
   const [isMounted, setIsMounted] = useState(false);
-  const version = "v1.3.0"; // Version number
+  const version = "v1.3.1"; // Version number
 
   useEffect(() => {
     setIsMounted(true);
     
-    const handleStorageChange = () => {
-      const storedName = localStorage.getItem('barName');
-      if (storedName) {
-        setBarName(storedName);
-      }
+    const handleStorageChange = (event?: StorageEvent) => {
+        if (event && event.key !== 'barName') return;
+        const storedName = localStorage.getItem('barName');
+        if (storedName) {
+            setBarName(storedName);
+        }
     };
     
     handleStorageChange();

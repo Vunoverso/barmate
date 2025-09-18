@@ -6,7 +6,7 @@ import { HandCoins, Store, Banknote, TrendingUp } from "lucide-react";
 import { Table, TableBody, TableCell, TableHeader, TableHead, TableRow } from "@/components/ui/table";
 
 export default function DashboardPage() {
-  const version = "v1.3.0";
+  const version = "v1.3.1";
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
