@@ -60,8 +60,16 @@ export default function Home() {
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashIn = sale.cashTendered ? (sale.cashTendered - (sale.changeGiven ?? 0)) : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        return total + cashIn;
+        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+        if (cashPayment === 0) return total;
+
+        if (sale.leaveChangeAsCredit && sale.cashTendered) {
+            // Se o troco virou crédito, o valor total entregue ficou no caixa.
+            return total + sale.cashTendered;
+        }
+        
+        // Se houve troco devolvido ou pagamento exato, o que entrou é a soma dos pagamentos em dinheiro.
+        return total + cashPayment;
     }, 0);
 
     const openingBalance = cashStatus.openingBalance || 0;
@@ -278,3 +286,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

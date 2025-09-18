@@ -151,20 +151,23 @@ export default function FinancialClient() {
     };
   }, []);
   
-  const expectedCashInDrawer = useMemo(() => {
+ const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
     const openingTime = new Date(cashStatus.openingTime);
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        // If cashTendered exists (means there was change involved), that's the full amount that entered the drawer.
-        // Otherwise, it's a simple cash payment for the exact amount.
-        const cashIn = sale.cashTendered ? sale.cashTendered : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        const changeGiven = sale.changeGiven ?? 0;
-        // We only subtract change if it was NOT left as credit. If it was credit, the money stays in the drawer.
-        const effectiveChange = sale.leaveChangeAsCredit ? 0 : changeGiven;
-        return total + (cashIn - effectiveChange);
+        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+        if (cashPayment === 0) return total;
+
+        if (sale.leaveChangeAsCredit && sale.cashTendered) {
+            // Se o troco virou crédito, o valor total entregue ficou no caixa.
+            return total + sale.cashTendered;
+        }
+        
+        // Se houve troco devolvido ou pagamento exato, o que entrou é a soma dos pagamentos em dinheiro.
+        return total + cashPayment;
     }, 0);
 
 
@@ -1149,3 +1152,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
