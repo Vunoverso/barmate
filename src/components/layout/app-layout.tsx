@@ -46,27 +46,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       setBarName(storedBarName);
     }
 
-    const handleBarNameChange = () => {
-      const newName = localStorage.getItem('barName');
-      if (newName) {
-        setBarName(newName);
-      }
-    };
-
-    window.addEventListener('barNameChanged', handleBarNameChange);
-    window.addEventListener('storage', (event) => {
+    const handleStorageChange = (event: StorageEvent) => {
       if (event.key === 'barName' && event.newValue) {
         setBarName(event.newValue);
       }
-    });
+    };
+    
+    // Also update if changed in the same tab via settings
+    const handleBarNameChange = () => {
+        const newName = localStorage.getItem('barName');
+        if (newName) setBarName(newName);
+    }
+    
+    window.addEventListener('barNameChanged', handleBarNameChange);
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
       window.removeEventListener('barNameChanged', handleBarNameChange);
-      window.removeEventListener('storage', (event) => {
-         if (event.key === 'barName' && event.newValue) {
-            setBarName(event.newValue);
-         }
-      });
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
   

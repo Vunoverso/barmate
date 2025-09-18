@@ -52,18 +52,17 @@ export default function ProductManagement() {
   const { toast } = useToast();
 
   useEffect(() => {
-    setProducts(getProducts());
-    setProductCategories(getProductCategories());
-
-    const handleProductsChange = () => setProducts(getProducts());
-    const handleCategoriesChange = () => setProductCategories(getProductCategories());
-
-    window.addEventListener('productsChanged', handleProductsChange);
-    window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+    
+    const handleStorageChange = () => {
+      setProducts(getProducts());
+      setProductCategories(getProductCategories());
+    };
+    
+    handleStorageChange();
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('productsChanged', handleProductsChange);
-      window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 

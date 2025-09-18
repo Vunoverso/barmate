@@ -186,25 +186,20 @@ export default function SettingsClient() {
 
   useEffect(() => {
     setIsMounted(true);
-    const storedName = localStorage.getItem('barName') || 'BarMate';
-    setBarName(storedName);
-    setInitialBarName(storedName);
-    setProductCategories(getProductCategories());
-    setTransactionFees(getTransactionFees());
 
-    const handleCategoriesChange = () => {
-      setProductCategories(getProductCategories());
-    };
-    window.addEventListener('productCategoriesChanged', handleCategoriesChange);
-
-    const handleFeesChange = () => {
+    const handleStorageChange = () => {
+        const storedName = localStorage.getItem('barName') || 'BarMate';
+        setBarName(storedName);
+        setInitialBarName(storedName);
+        setProductCategories(getProductCategories());
         setTransactionFees(getTransactionFees());
-    }
-    window.addEventListener('transactionFeesChanged', handleFeesChange);
+    };
+
+    handleStorageChange();
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
-      window.removeEventListener('transactionFeesChanged', handleFeesChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
 
   }, []);

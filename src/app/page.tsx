@@ -40,16 +40,11 @@ export default function Home() {
     };
 
     handleStorageChange();
-    window.addEventListener('salesChanged', handleStorageChange);
-    window.addEventListener('cashRegisterStatusChanged', handleStorageChange);
-    window.addEventListener('secondaryCashBoxChanged', handleStorageChange);
-    window.addEventListener('bankAccountChanged', handleStorageChange);
+    
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('salesChanged', handleStorageChange);
-      window.removeEventListener('cashRegisterStatusChanged', handleStorageChange);
-      window.removeEventListener('secondaryCashBoxChanged', handleStorageChange);
-      window.removeEventListener('bankAccountChanged', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 

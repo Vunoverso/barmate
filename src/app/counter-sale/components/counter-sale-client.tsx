@@ -42,27 +42,26 @@ export default function CounterSaleClient() {
 
   useEffect(() => {
     setIsMounted(true);
-    setProducts(getProducts());
-    setProductCategories(getProductCategories());
-    const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    if (storedOrderItems) {
-      try {
-        setCurrentOrderItems(JSON.parse(storedOrderItems));
-      } catch (error) {
-        console.error("Failed to parse counter sale items from localStorage", error);
-        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-      }
-    }
-     
-    const handleProductsChange = () => setProducts(getProducts());
-    const handleCategoriesChange = () => setProductCategories(getProductCategories());
+    
+    const handleStorageChange = () => {
+        setProducts(getProducts());
+        setProductCategories(getProductCategories());
+        const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+        if (storedOrderItems) {
+          try {
+            setCurrentOrderItems(JSON.parse(storedOrderItems));
+          } catch (error) {
+            console.error("Failed to parse counter sale items from localStorage", error);
+            localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+          }
+        }
+    };
 
-    window.addEventListener('productsChanged', handleProductsChange);
-    window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+    handleStorageChange();
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('productsChanged', handleProductsChange);
-      window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 

@@ -76,45 +76,31 @@ export default function CashRegisterClient() {
   useEffect(() => {
     setIsMounted(true);
 
-    const handleSalesChange = () => setSales([...getSales()]);
-    const handleSecondaryCashBoxChange = () => setSecondaryCashBox(getSecondaryCashBox());
-    const handleBankAccountChange = () => setBankAccount(getBankAccount());
-    const handleCashStatusChange = () => {
+    const handleStorageChange = () => {
+        setSales(getSales());
+        setSecondaryCashBox(getSecondaryCashBox());
+        setBankAccount(getBankAccount());
         const storedStatusRaw = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
         if (storedStatusRaw) {
-            setCashStatus(currentState => {
-                try {
-                    const newState = JSON.parse(storedStatusRaw);
-                    // Prevent infinite loops by checking if state actually changed
+            try {
+                const newState = JSON.parse(storedStatusRaw);
+                setCashStatus(currentState => {
                     if (JSON.stringify(currentState) !== JSON.stringify(newState)) {
                         return { adjustments: [], ...newState };
                     }
-                } catch (e) {
-                    console.error("Failed to parse cash register status from storage", e);
-                }
-                return currentState;
-            });
+                    return currentState;
+                });
+            } catch (e) {
+                console.error("Failed to parse cash register status from storage", e);
+            }
         }
     };
-
-    // Initial load
-    handleSalesChange();
-    handleSecondaryCashBoxChange();
-    handleBankAccountChange();
-    handleCashStatusChange();
-
-    // Add event listeners
-    window.addEventListener('salesChanged', handleSalesChange);
-    window.addEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
-    window.addEventListener('bankAccountChanged', handleBankAccountChange);
-    window.addEventListener('cashRegisterStatusChanged', handleCashStatusChange);
+    
+    handleStorageChange();
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      // Remove event listeners
-      window.removeEventListener('salesChanged', handleSalesChange);
-      window.removeEventListener('secondaryCashBoxChanged', handleSecondaryCashBoxChange);
-      window.removeEventListener('bankAccountChanged', handleBankAccountChange);
-      window.removeEventListener('cashRegisterStatusChanged', handleCashStatusChange);
+      window.removeEventListener('storage', handleStorageChange);
     }
   }, []);
 

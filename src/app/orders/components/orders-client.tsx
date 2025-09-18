@@ -79,46 +79,47 @@ export default function OrdersClient() {
 
   useEffect(() => {
     setIsMounted(true);
-    const allProducts = getProducts();
-    const allCategories = getProductCategories();
-    setProducts(allProducts);
-    setProductCategories(allCategories);
 
-    const storedOrders = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
-    if (storedOrders) {
-      try {
-        const parsedOrders: ActiveOrder[] = JSON.parse(storedOrders).map((order: ActiveOrder) => ({
-          ...order,
-          createdAt: new Date(order.createdAt),
-          items: order.items.map(item => { // Hydrate items with category details
-            const productDetails = allProducts.find(p => p.id === item.id);
-            const category = allCategories.find(c => c.id === productDetails?.categoryId);
-            return {
-              ...item,
-              categoryName: category?.name,
-              categoryIconName: category?.iconName
-            };
-          })
-        }));
-        setOpenOrders(parsedOrders);
-        if (parsedOrders.length > 0 && !currentOrderId) {
-          setCurrentOrderId(parsedOrders[0].id);
+    const handleStorageChange = () => {
+        const allProducts = getProducts();
+        const allCategories = getProductCategories();
+        setProducts(allProducts);
+        setProductCategories(allCategories);
+
+        const storedOrders = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
+        if (storedOrders) {
+            try {
+                const parsedOrders: ActiveOrder[] = JSON.parse(storedOrders).map((order: ActiveOrder) => ({
+                    ...order,
+                    createdAt: new Date(order.createdAt),
+                    items: order.items.map(item => {
+                        const productDetails = allProducts.find(p => p.id === item.id);
+                        const category = allCategories.find(c => c.id === productDetails?.categoryId);
+                        return {
+                            ...item,
+                            categoryName: category?.name,
+                            categoryIconName: category?.iconName
+                        };
+                    })
+                }));
+                setOpenOrders(parsedOrders);
+                if (parsedOrders.length > 0 && !currentOrderId) {
+                    setCurrentOrderId(parsedOrders[0].id);
+                } else if (parsedOrders.length === 0) {
+                    setCurrentOrderId(null);
+                }
+            } catch (error) {
+                console.error("Failed to parse open orders from localStorage", error);
+                localStorage.removeItem(LOCAL_STORAGE_ORDERS_KEY);
+            }
         }
-      } catch (error) {
-        console.error("Failed to parse open orders from localStorage", error);
-        localStorage.removeItem(LOCAL_STORAGE_ORDERS_KEY); 
-      }
-    }
-     
-    const handleProductsChange = () => setProducts(getProducts());
-    const handleCategoriesChange = () => setProductCategories(getProductCategories());
+    };
 
-    window.addEventListener('productsChanged', handleProductsChange);
-    window.addEventListener('productCategoriesChanged', handleCategoriesChange);
+    handleStorageChange();
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('productsChanged', handleProductsChange);
-      window.removeEventListener('productCategoriesChanged', handleCategoriesChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 
@@ -126,6 +127,9 @@ export default function OrdersClient() {
   useEffect(() => {
     if (isMounted) {
       localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(openOrders));
+      // Manually dispatch a storage event for the current tab to pick up changes
+      // This helps when the change happens in the same tab, which `storage` event doesn't always do
+      window.dispatchEvent(new Event('storage'));
     }
   }, [openOrders, isMounted]);
 

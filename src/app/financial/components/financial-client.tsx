@@ -140,14 +140,10 @@ export default function FinancialClient() {
     };
     handleStorageChange();
 
-    const eventListeners = [
-        'financialEntriesChanged', 'secondaryCashBoxChanged', 
-        'bankAccountChanged', 'cashRegisterStatusChanged', 'salesChanged'
-    ];
-    eventListeners.forEach(event => window.addEventListener(event, handleStorageChange));
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      eventListeners.forEach(event => window.removeEventListener(event, handleStorageChange));
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
   
