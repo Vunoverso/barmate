@@ -127,9 +127,6 @@ export default function OrdersClient() {
   useEffect(() => {
     if (isMounted) {
       localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(openOrders));
-      // Manually dispatch a storage event for the current tab to pick up changes
-      // This helps when the change happens in the same tab, which `storage` event doesn't always do
-      window.dispatchEvent(new Event('storage'));
     }
   }, [openOrders, isMounted]);
 
@@ -524,6 +521,7 @@ export default function OrdersClient() {
       timestamp: new Date(),
       status: 'completed',
       cashTendered: details.cashTendered,
+      leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
     };
     addSale(newSale);
 
@@ -1268,3 +1266,4 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
