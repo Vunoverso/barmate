@@ -70,6 +70,43 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     };
   }, []);
   
+  if (!isMounted) {
+    return (
+      <div className="grid min-h-screen w-full md:grid-cols-[150px_1fr] lg:grid-cols-[170px_1fr]">
+        <div className="hidden border-r bg-muted/40 md:block">
+           <div className="flex h-full max-h-screen flex-col gap-2">
+             <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+                <div className="flex items-center gap-2 font-semibold">
+                  <Skeleton className="h-6 w-6" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              </div>
+              <div className="flex-1 px-2 py-4 lg:px-4 space-y-2">
+                {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+              </div>
+              <div className="mt-auto p-4">
+                  <Skeleton className="h-4 w-8" />
+              </div>
+           </div>
+        </div>
+        <div className="flex flex-col">
+          <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6 justify-between md:justify-end">
+             <Skeleton className="h-9 w-9 md:hidden" />
+             <div className="flex items-center gap-2">
+                <Skeleton className="h-9 w-9" />
+                <Skeleton className="h-9 w-9 rounded-full" />
+             </div>
+          </header>
+          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto">
+            <div className="flex items-center justify-center h-full">
+                <p>Carregando...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   const allNavItems = [...mainNavItems, settingsNavItem];
 
   const SidebarNav = ({ items, className }: { items: NavItem[], className?: string }) => (
@@ -91,41 +128,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </nav>
   );
 
-  if (!isMounted) {
-    // Basic skeleton or loading state to prevent hydration issues with theme/localStorage dependent items
-    return (
-      <div className="grid min-h-screen w-full md:grid-cols-[150px_1fr] lg:grid-cols-[170px_1fr]">
-        <div className="hidden border-r bg-muted/40 md:block">
-           <div className="flex h-full max-h-screen flex-col gap-2">
-             <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-                <div className="flex items-center gap-2 font-semibold">
-                  <Skeleton className="h-6 w-6" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
-              </div>
-              <div className="flex-1 px-2 py-4 lg:px-4 space-y-2">
-                {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
-              </div>
-           </div>
-        </div>
-        <div className="flex flex-col">
-          <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6 justify-between md:justify-end">
-             <Skeleton className="h-9 w-9 md:hidden" />
-             <div className="flex items-center gap-2">
-                <Skeleton className="h-10 w-10" />
-                <Skeleton className="h-10 w-10 rounded-full" />
-             </div>
-          </header>
-          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto">
-            <div className="flex items-center justify-center h-full">
-                <p>Carregando...</p>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="grid min-h-screen w-full md:grid-cols-[150px_1fr] lg:grid-cols-[170px_1fr]">
       <div className="hidden border-r bg-muted/40 md:block">
@@ -140,7 +142,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <SidebarNav items={allNavItems} className="px-2 text-sm font-medium lg:px-4" />
           </div>
           <div className="mt-auto p-4">
-            
+            <span className="text-xs text-muted-foreground">{version}</span>
           </div>
         </div>
       </div>

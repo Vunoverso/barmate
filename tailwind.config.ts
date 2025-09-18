@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -10,13 +11,13 @@ export default {
   theme: {
   	extend: {
       fontSize: {
-        'xs': ['0.7rem', '1rem'],
-        'sm': ['0.8rem', '1.25rem'],
-        'base': ['0.9rem', '1.3rem'],
-        'lg': ['1rem', '1.5rem'],
-        'xl': ['1.1rem', '1.6rem'],
-        '2xl': ['1.2rem', '1.7rem'],
-        '3xl': ['1.3rem', '1.8rem'],
+        'xs': '0.7rem',
+        'sm': '0.8rem',
+        'base': '0.9rem',
+        'lg': '1rem',
+        'xl': '1.2rem',
+        '2xl': '1.3rem',
+        '3xl': '1.4rem',
       },
   		colors: {
   			background: 'hsl(var(--background))',
@@ -101,5 +102,3 @@ export default {
   },
   plugins: [require("tailwindcss-animate")],
 } satisfies Config;
-
-    

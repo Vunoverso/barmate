@@ -1,6 +1,7 @@
+
 "use client";
 
-import type { PaymentMethod, Sale } from '@/types';
+import type { PaymentMethod, Sale, Payment } from '@/types';
 import { PAYMENT_METHODS, formatCurrency } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import {
@@ -23,7 +24,7 @@ interface PaymentDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   totalAmount: number;
-  onSubmit: (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount'>) => void;
+  onSubmit: (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount' | 'originalAmount' | 'discountAmount'>) => void;
 }
 
 export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit }: PaymentDialogProps) {
@@ -68,9 +69,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
         setError('Valor pago inválido ou insuficiente.');
         return;
       }
-      onSubmit({ paymentMethod: 'cash', amountPaid: paid, changeGiven: change, status: 'completed' });
+      const payment: Payment = { method: 'cash', amount: totalAmount };
+      onSubmit({ payments: [payment], cashTendered: paid, changeGiven: change, status: 'completed' });
     } else {
-      onSubmit({ paymentMethod: selectedMethod, status: 'completed' });
+      const payment: Payment = { method: selectedMethod, amount: totalAmount };
+      onSubmit({ payments: [payment], status: 'completed' });
     }
   };
 

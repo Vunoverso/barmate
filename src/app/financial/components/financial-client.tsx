@@ -158,8 +158,13 @@ export default function FinancialClient() {
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashIn = sale.cashTendered ? (sale.cashTendered - (sale.changeGiven ?? 0)) : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        return total + cashIn;
+        // If cashTendered exists (means there was change involved), that's the full amount that entered the drawer.
+        // Otherwise, it's a simple cash payment for the exact amount.
+        const cashIn = sale.cashTendered ? sale.cashTendered : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+        const changeGiven = sale.changeGiven ?? 0;
+        // We only subtract change if it was NOT left as credit. If it was credit, the money stays in the drawer.
+        const effectiveChange = sale.leaveChangeAsCredit ? 0 : changeGiven;
+        return total + (cashIn - effectiveChange);
     }, 0);
 
 
@@ -1144,9 +1149,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
-
-    
-
-    
-
-    

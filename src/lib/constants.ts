@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, CashAdjustment } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, CashAdjustment, OrderItem } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // In-memory cache to reduce localStorage reads and improve performance
@@ -140,7 +140,7 @@ const INITIAL_SALES: Sale[] = [
     items: [
       { ...INITIAL_PRODUCTS.find(p=>p.id==='1')!, quantity: 2 }, 
       { ...INITIAL_PRODUCTS.find(p=>p.id==='9')!, quantity: 1 }, 
-    ],
+    ] as OrderItem[],
     originalAmount: saleTotal1,
     discountAmount: 0,
     totalAmount: saleTotal1,
@@ -152,7 +152,7 @@ const INITIAL_SALES: Sale[] = [
     id: 'sale2',
     items: [
       { ...INITIAL_PRODUCTS.find(p=>p.id==='4')!, quantity: 3 },
-    ],
+    ] as OrderItem[],
     originalAmount: saleTotal2,
     discountAmount: 0,
     totalAmount: saleTotal2,
@@ -298,18 +298,11 @@ export const addSale = (newSale: Sale): void => {
 
   saveBankAccount(bankAccount);
 
-  if (newSale.changeGiven && newSale.changeGiven > 0) {
-    const cashPayment = newSale.payments.find(p => p.method === 'cash');
-    if (cashPayment) {
-        addFinancialEntry({
-            description: `Crédito de Troco (Venda #${newSale.id.slice(-6)})`,
-            amount: newSale.changeGiven,
-            type: 'income',
-            source: 'daily_cash',
-            saleId: newSale.id,
-            isAdjustment: true,
-        });
-    }
+  if (newSale.changeGiven && newSale.changeGiven > 0 && newSale.leaveChangeAsCredit) {
+    // This logic seems reversed. If change is left as credit, it should be an income to a virtual "credit" account,
+    // but for the cash drawer, it's as if the money stayed. The logic in the cash-register-client handles the
+    // drawer calculation correctly. Here we just need to record the credit creation if needed.
+    // The current implementation of creating a new order for credit is handled in orders-client.
   }
 
 
@@ -535,5 +528,3 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
         window.dispatchEvent(new Event('transactionFeesChanged'));
     }
 };
-
-    

@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle } from 'lucide-react';
-import Image from 'next/image';
+import NextImage from 'next/image';
 import PaymentDialog from './payment-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +29,7 @@ import {
 // Group products by category
 const groupProductsByCategory = (products: Product[]) => {
   return products.reduce((acc, product) => {
-    const category = product.category || 'Outros';
+    const category = product.categoryId || 'Outros';
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -135,7 +135,7 @@ export default function POSClient() {
               ),
             };
           }
-          return { ...order, items: [...order.items, { ...product, quantity: 1 }] };
+          return { ...order, items: [...order.items, { ...product, quantity: 1 } as OrderItem] };
         }
         return order;
       })
@@ -177,7 +177,7 @@ export default function POSClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount'>) => {
+  const handlePayment = (saleDetails: Omit<Sale, 'id' | 'timestamp' | 'items' | 'totalAmount'| 'originalAmount' | 'discountAmount'>) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -187,6 +187,8 @@ export default function POSClient() {
       id: `sale-${Date.now()}`,
       items: currentOrderItems,
       totalAmount: orderTotal,
+      originalAmount: orderTotal,
+      discountAmount: 0,
       timestamp: new Date(),
       ...saleDetails,
     };
@@ -353,11 +355,7 @@ export default function POSClient() {
                   {currentOrderItems.map(item => (
                     <li key={item.id} className="flex items-center gap-3 p-2 rounded-md border">
                       <div className="flex-shrink-0">
-                        {item.icon ? (
-                            <item.icon className="h-8 w-8 text-muted-foreground" />
-                        ) : (
-                             <Image src={`https://placehold.co/64x64.png?text=${item.name.substring(0,2)}`} alt={item.name} width={32} height={32} data-ai-hint="product item" className="rounded-sm" />
-                        )}
+                         <NextImage src={`https://placehold.co/64x64.png?text=${item.name.substring(0,2)}`} alt={item.name} width={32} height={32} data-ai-hint="product item" className="rounded-sm" />
                       </div>
                       <div className="flex-grow">
                         <p className="font-medium">{item.name}</p>
@@ -404,7 +402,7 @@ export default function POSClient() {
         isOpen={isPaymentDialogOpen}
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
-        onSubmit={handlePayment}
+        onSubmit={handlePayment as any}
       />
 
       {orderToDelete && (
@@ -449,11 +447,9 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
         {products.map(product => (
           <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
             <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
-              {product.icon ? (
-                <product.icon className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground group-hover:text-primary transition-colors" />
-              ) : (
-                <Image src={`https://placehold.co/100x100.png?text=${product.name.substring(0,2)}`} alt={product.name} width={80} height={80} data-ai-hint="product item" />
-              )}
+              
+                <NextImage src={`https://placehold.co/100x100.png?text=${product.name.substring(0,2)}`} alt={product.name} width={80} height={80} data-ai-hint="product item" />
+              
             </div>
             <CardContent className="p-2 sm:p-3">
               <h3 className="font-medium truncate text-xs sm:text-sm">{product.name}</h3>
@@ -470,15 +466,13 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
       {products.map(product => (
         <Card key={product.id} className="flex items-center p-3 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted rounded-md flex items-center justify-center mr-3 group-hover:bg-muted/80 transition-colors">
-             {product.icon ? (
-                <product.icon className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground group-hover:text-primary transition-colors" />
-              ) : (
-                <Image src={`https://placehold.co/48x48.png?text=${product.name.substring(0,2)}`} alt={product.name} width={32} height={32} data-ai-hint="product item" />
-              )}
+             
+                <NextImage src={`https://placehold.co/48x48.png?text=${product.name.substring(0,2)}`} alt={product.name} width={32} height={32} data-ai-hint="product item" />
+              
           </div>
           <div className="flex-grow">
             <h3 className="font-medium text-sm sm:text-base">{product.name}</h3>
-            <p className="text-xs text-muted-foreground">{product.category}</p>
+            <p className="text-xs text-muted-foreground">{product.categoryId}</p>
           </div>
           <p className="text-primary font-semibold text-md sm:text-lg">{formatCurrency(product.price)}</p>
         </Card>

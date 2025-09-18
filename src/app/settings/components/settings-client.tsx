@@ -155,7 +155,7 @@ function AddCategoryDialog({ isOpen, onOpenChange, onSave }: { isOpen: boolean; 
                         return (
                           <SelectItem key={iconKey} value={iconKey}>
                               <div className="flex items-center gap-2">
-                                  <IconComponent className="h-4 w-4 text-muted-foreground" />
+                                  {IconComponent && <IconComponent className="h-4 w-4 text-muted-foreground" />}
                                   {iconKey}
                               </div>
                           </SelectItem>
@@ -185,12 +185,12 @@ export default function SettingsClient() {
   const { toast } = useToast();
 
   useEffect(() => {
+    setIsMounted(true);
     const storedName = localStorage.getItem('barName') || 'BarMate';
     setBarName(storedName);
     setInitialBarName(storedName);
     setProductCategories(getProductCategories());
     setTransactionFees(getTransactionFees());
-    setIsMounted(true);
 
     const handleCategoriesChange = () => {
       setProductCategories(getProductCategories());
@@ -289,54 +289,8 @@ export default function SettingsClient() {
 
   if (!isMounted) {
     return (
-      <div className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nome do Estabelecimento</CardTitle>
-            <CardDescription>Altere o nome do seu bar que será exibido no sistema.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="barName">Nome do Bar</Label>
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <Button disabled>
-              <Save className="mr-2 h-4 w-4" />
-              Salvar Nome do Bar
-            </Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Gerenciar Categorias de Produtos</CardTitle>
-            <CardDescription>Renomeie ou remova as categorias de produtos. Os ícones são fixos por categoria original.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ícone</TableHead>
-                  <TableHead>Nome Atual da Categoria</TableHead>
-                  <TableHead>ID (interno)</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[...Array(3)].map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-5 rounded-full" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Skeleton className="h-9 w-24 inline-block" />
-                      <Skeleton className="h-9 w-24 inline-block" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center h-full">
+        <p>Carregando configurações...</p>
       </div>
     );
   }
@@ -443,7 +397,7 @@ export default function SettingsClient() {
                   const IconComponent = LUCIDE_ICON_MAP[category.iconName] || LUCIDE_ICON_MAP['Package'];
                   return (
                     <TableRow key={category.id}>
-                      <TableCell><IconComponent className="h-5 w-5 text-muted-foreground" /></TableCell>
+                      <TableCell>{IconComponent && <IconComponent className="h-5 w-5 text-muted-foreground" />}</TableCell>
                       <TableCell className="font-medium">{category.name}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{category.id}</TableCell>
                       <TableCell className="text-right space-x-2">
@@ -485,7 +439,7 @@ export default function SettingsClient() {
               <AlertDialogTitle>Confirmar Remoção de Categoria</AlertDialogTitle>
               <AlertDialogDescription>
                 Tem certeza que deseja remover a categoria "{categoryToDelete.name}"? 
-                Produtos que utilizam esta categoria podem precisar ser reatribuídos manualmente a uma nova categoria.
+                Produtos que utilizam esta categoria podem precisar ser reatribuídos manually a uma nova categoria.
                 Esta ação não pode ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>

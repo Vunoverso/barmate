@@ -44,6 +44,7 @@ export interface Sale {
   changeGiven?: number; // For cash transactions
   timestamp: Date;
   status: 'completed' | 'pending' | 'cancelled';
+  leaveChangeAsCredit?: boolean;
 }
 
 export interface ActiveOrder {
