@@ -226,20 +226,10 @@ export const addSale = (newSale: Sale): void => {
   const updatedSales = [...currentSales, newSale];
   saveSales(updatedSales);
 
-  const bankAccount = getBankAccount();
-  let netAmountToBank = 0;
+  let bankAccount = getBankAccount();
+  const currentFinancialEntries = getFinancialEntries();
   const newFinancialEntries: FinancialEntry[] = [];
   const transactionFees = getTransactionFees();
-
-  // The total cash that entered the register for this sale
-  const cashPayment = newSale.payments.find(p => p.method === 'cash');
-  if (cashPayment) {
-    // If a specific cashTendered amount is provided (e.g. customer paid 20 for a 14 bill), use it.
-    // Otherwise, use the cash amount from the payment itself.
-    const cashIn = newSale.cashTendered ?? cashPayment.amount;
-
-    // This logic is now handled by the cash register component which tracks its own balance based on sales
-  }
 
   newSale.payments.forEach(p => {
     let feeAmount = 0;
@@ -251,27 +241,42 @@ export const addSale = (newSale: Sale): void => {
 
     if (feeRate > 0) {
       feeAmount = p.amount * (feeRate / 100);
-      netAmountToBank += p.amount - feeAmount;
+      bankAccount = { balance: bankAccount.balance + (p.amount - feeAmount) };
       newFinancialEntries.push({
         id: `fee-${newSale.id}-${p.method}`,
         description: `Taxa ${p.method.charAt(0).toUpperCase() + p.method.slice(1)} (Venda #${newSale.id.slice(-6)})`,
         amount: feeAmount,
         type: 'expense',
-        source: 'bank_account', // The fee is conceptually paid from the bank
+        source: 'bank_account',
         timestamp: new Date(),
         saleId: newSale.id,
       });
     } else if (p.method !== 'cash') {
-       netAmountToBank += p.amount;
+       bankAccount = { balance: bankAccount.balance + p.amount };
     }
   });
 
-  if (netAmountToBank > 0) {
-    saveBankAccount({ balance: bankAccount.balance + netAmountToBank });
+  saveBankAccount(bankAccount);
+
+  // If change was given as credit, create a corresponding income entry
+  if (newSale.changeGiven && newSale.changeGiven > 0) {
+    const cashPayment = newSale.payments.find(p => p.method === 'cash');
+    if (cashPayment) {
+        newFinancialEntries.push({
+            id: `income-credit-${newSale.id}`,
+            description: `Crédito de Troco (Venda #${newSale.id.slice(-6)})`,
+            amount: newSale.changeGiven,
+            type: 'income',
+            source: 'daily_cash',
+            timestamp: new Date(),
+            saleId: newSale.id,
+            isAdjustment: true, // Mark as adjustment-like to potentially filter it
+        });
+    }
   }
 
+
   if (newFinancialEntries.length > 0) {
-    const currentFinancialEntries = getFinancialEntries();
     saveFinancialEntries([...currentFinancialEntries, ...newFinancialEntries]);
   }
 };
@@ -306,7 +311,7 @@ export const removeSale = (saleId: string): void => {
   const updatedSales = allSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
-  // Remove associated financial entries (like fees)
+  // Remove associated financial entries (like fees and credit income entries)
   const updatedEntries = currentEntries.filter(e => e.saleId !== saleId);
   saveFinancialEntries(updatedEntries);
 };

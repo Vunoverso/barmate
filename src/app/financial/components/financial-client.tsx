@@ -160,17 +160,17 @@ export default function FinancialClient() {
     const cashRevenue = sessionSales.reduce((total, sale) => {
         const cashPayment = sale.payments.find(p => p.method === 'cash');
         if (!cashPayment) return total;
-        // Correct Logic: Add the full amount tendered, subtract change given.
         const cashIn = sale.cashTendered ?? cashPayment.amount;
         return total + cashIn - (sale.changeGiven ?? 0);
     }, 0);
 
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
+    const incomeFromCreditChange = (getFinancialEntries().filter(e => e.saleId && e.isAdjustment && e.type === 'income' && new Date(e.timestamp) >= openingTime)).reduce((sum, e) => sum + e.amount, 0);
     const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
     const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
     
-    return openingBalance + cashRevenue + totalIn - totalOut;
+    return openingBalance + cashRevenue + totalIn - totalOut - incomeFromCreditChange;
   }, [cashStatus, sales]);
 
 
@@ -204,9 +204,9 @@ export default function FinancialClient() {
     return (filterByDate(entries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries, dateRange]);
   
-  const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId && !e.isAdjustment), [filteredEntries]);
+  const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId), [filteredEntries]);
   const feeExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !!e.saleId), [filteredEntries]);
-  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income' && !e.isAdjustment), [filteredEntries]);
+  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income'), [filteredEntries]);
 
 
   // Pagination Logic
