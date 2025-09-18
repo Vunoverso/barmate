@@ -86,10 +86,11 @@ export default function OrdersClient() {
         setProducts(allProducts);
         setProductCategories(allCategories);
 
-        const storedOrders = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
-        if (storedOrders) {
+        const storedOrdersJSON = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
+        // Previne loop infinito checando se o valor em storage é diferente do estado atual
+        if (storedOrdersJSON && storedOrdersJSON !== JSON.stringify(openOrders)) {
             try {
-                const parsedOrders: ActiveOrder[] = JSON.parse(storedOrders).map((order: ActiveOrder) => ({
+                const parsedOrders: ActiveOrder[] = JSON.parse(storedOrdersJSON).map((order: ActiveOrder) => ({
                     ...order,
                     createdAt: new Date(order.createdAt),
                     items: order.items.map(item => {
@@ -115,8 +116,8 @@ export default function OrdersClient() {
         }
     };
 
-    handleStorageChange();
-    window.addEventListener('storage', handleStorageChange);
+    handleStorageChange(); // Carga inicial
+    window.addEventListener('storage', handleStorageChange); // Listener para outras abas
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -1266,4 +1267,3 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
-

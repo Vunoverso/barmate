@@ -87,18 +87,10 @@ export default function ReportsClient() {
     
     handleStorageChange();
 
-    window.addEventListener('salesChanged', handleStorageChange);
-    window.addEventListener('financialEntriesChanged', handleStorageChange);
-    window.addEventListener('secondaryCashBoxChanged', handleStorageChange);
-    window.addEventListener('bankAccountChanged', handleStorageChange);
-    window.addEventListener('cashRegisterStatusChanged', handleStorageChange);
+    window.addEventListener('storage', handleStorageChange);
     
     return () => {
-      window.removeEventListener('salesChanged', handleStorageChange);
-      window.removeEventListener('financialEntriesChanged', handleStorageChange);
-      window.removeEventListener('secondaryCashBoxChanged', handleStorageChange);
-      window.removeEventListener('bankAccountChanged', handleStorageChange);
-      window.removeEventListener('cashRegisterStatusChanged', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 

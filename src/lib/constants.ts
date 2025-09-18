@@ -68,7 +68,7 @@ export const saveProductCategories = (categories: ProductCategory[]): void => {
   if (typeof window !== 'undefined') {
     productCategoriesCache = categories;
     localStorage.setItem(PRODUCT_CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
-    window.dispatchEvent(new Event('productCategoriesChanged'));
+    window.dispatchEvent(new Event('storage'));
   }
 };
 
@@ -120,7 +120,7 @@ export const saveProducts = (products: Product[]): void => {
   if (typeof window !== 'undefined') {
     productsCache = products;
     localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
-    window.dispatchEvent(new Event('productsChanged'));
+    window.dispatchEvent(new Event('storage'));
   }
 };
 
@@ -171,7 +171,7 @@ export const saveSales = (sales: Sale[]): void => {
   if (typeof window === 'undefined') return;
   salesCache = sales;
   localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(sales));
-  window.dispatchEvent(new Event('salesChanged'));
+  window.dispatchEvent(new Event('storage'));
 };
 
 export const getSales = (): Sale[] => {
@@ -358,7 +358,7 @@ export const saveFinancialEntries = (entries: FinancialEntry[]): void => {
   if (typeof window === 'undefined') return;
   financialEntriesCache = entries;
   localStorage.setItem(FINANCIAL_ENTRIES_STORAGE_KEY, JSON.stringify(entries));
-  window.dispatchEvent(new Event('financialEntriesChanged'));
+  window.dispatchEvent(new Event('storage'));
 };
 
 export const getFinancialEntries = (): FinancialEntry[] => {
@@ -421,7 +421,7 @@ export const saveSecondaryCashBox = (box: SecondaryCashBox): void => {
   if (typeof window !== 'undefined') {
     secondaryCashBoxCache = box;
     localStorage.setItem(SECONDARY_CASH_BOX_KEY, JSON.stringify(box));
-    window.dispatchEvent(new Event('secondaryCashBoxChanged'));
+    window.dispatchEvent(new Event('storage'));
   }
 };
 
@@ -455,7 +455,7 @@ export const saveBankAccount = (account: BankAccount): void => {
   if (typeof window !== 'undefined') {
     bankAccountCache = account;
     localStorage.setItem(BANK_ACCOUNT_KEY, JSON.stringify(account));
-    window.dispatchEvent(new Event('bankAccountChanged'));
+    window.dispatchEvent(new Event('storage'));
   }
 };
 
@@ -485,7 +485,7 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus): void => {
   if (typeof window !== 'undefined') {
     cashRegisterStatusCache = status;
     localStorage.setItem(CASH_REGISTER_STATUS_KEY, JSON.stringify(status));
-    window.dispatchEvent(new Event('cashRegisterStatusChanged'));
+    window.dispatchEvent(new Event('storage'));
   }
 }
 
@@ -525,6 +525,6 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
     if (typeof window !== 'undefined') {
         transactionFeesCache = fees;
         localStorage.setItem(TRANSACTION_FEES_KEY, JSON.stringify(fees));
-        window.dispatchEvent(new Event('transactionFeesChanged'));
+        window.dispatchEvent(new Event('storage'));
     }
 };
