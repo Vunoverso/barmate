@@ -3,8 +3,8 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from 'react';
-import { getSales, getCashRegisterStatus, getSecondaryCashBox, getBankAccount, formatCurrency, getProducts } from '@/lib/constants';
-import type { Sale, CashRegisterStatus, SecondaryCashBox, BankAccount, Product, OrderItem } from '@/types';
+import { getSales, getCashRegisterStatus, getProducts, formatCurrency } from '@/lib/constants';
+import type { Sale, CashRegisterStatus, Product } from '@/types';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowUpRight, BarChart3, Users, DollarSign, Package, Banknote, Store, HandCoins, TrendingUp } from "lucide-react";
@@ -16,15 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
-  const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
-  const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
 
   const version = "v1.3.0";
 
@@ -35,8 +32,6 @@ export default function Home() {
       setSales(getSales());
       setProducts(getProducts());
       setCashStatus(getCashRegisterStatus());
-      setSecondaryCashBox(getSecondaryCashBox());
-      setBankAccount(getBankAccount());
     };
 
     handleStorageChange();
@@ -47,31 +42,6 @@ export default function Home() {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
-
-  const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
-    
-    const openingTime = new Date(cashStatus.openingTime);
-    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
-    
-    const cashRevenue = sessionSales.reduce((total, sale) => {
-        // If change was left as credit, the full cash tendered amount entered the drawer.
-        if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
-            return total + sale.cashTendered;
-        }
-        
-        // Otherwise, what entered the drawer is the sum of cash payments.
-        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        return total + cashPayment;
-    }, 0);
-
-    const openingBalance = cashStatus.openingBalance || 0;
-    const adjustments = cashStatus.adjustments || [];
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
-    
-    return openingBalance + cashRevenue + totalIn - totalOut;
-  }, [cashStatus, sales]);
 
   const dailyStats = useMemo(() => {
     const today = new Date();
@@ -160,8 +130,8 @@ export default function Home() {
         </Card>
       </div>
 
-       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-        <Card className="lg:col-span-2">
+       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-2">
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Ações Rápidas</CardTitle>
             <CardDescription>Acesse as funções mais importantes com um clique.</CardDescription>
@@ -205,30 +175,7 @@ export default function Home() {
             </Link>
           </CardContent>
         </Card>
-         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Saldos Atuais</CardTitle>
-            <CardDescription>Visão geral dos seus caixas e contas.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <p className="font-medium">Caixa Diário</p>
-                <p className="text-lg font-bold">{formatCurrency(expectedCashInDrawer)}</p>
-            </div>
-             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <p className="font-medium">Caixa 02 (Secundário)</p>
-                <p className="text-lg font-bold">{formatCurrency(secondaryCashBox.balance)}</p>
-            </div>
-             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <p className="font-medium">Conta Bancária</p>
-                <p className="text-lg font-bold">{formatCurrency(bankAccount.balance)}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:gap-8 grid-cols-1">
-        <Card>
+        <Card className="lg:col-span-1">
           <CardHeader className="flex flex-row items-center">
             <div className="grid gap-2">
               <CardTitle>Produtos Mais Vendidos Hoje</CardTitle>
@@ -273,6 +220,7 @@ export default function Home() {
           </CardContent>
         </Card>
       </div>
+
       <footer className="flex justify-center p-4">
         <span className="text-xs text-muted-foreground">{version}</span>
       </footer>
