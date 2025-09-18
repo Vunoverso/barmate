@@ -290,7 +290,7 @@ export default function OrdersClient() {
 
     setOpenOrders(prevOrders =>
         prevOrders.map(order =>
-            order.id === currentOrderId ? { ...order, items: [...order.items, creditItem], name: `${order.name.replace(' (Com Crédito)', '')} (Com Crédito)` } : order
+            order.id === currentOrderId ? { ...order, items: [...order.items, creditItem], name: `${order.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)` } : order
         )
     );
 
@@ -531,7 +531,7 @@ export default function OrdersClient() {
     
     if (details.leaveChangeAsCredit && details.changeGiven > 0) {
         const creditAmount = details.changeGiven;
-        const creditOrderName = `${currentOrder.name.replace(' (Com Crédito)', '')} (Crédito de Troco)`;
+        const creditOrderName = `${currentOrder.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)','')} (Crédito de Troco)`;
         const creditItem: OrderItem = {
             id: `credit-${Date.now()}`,
             name: `Crédito de Troco`,
@@ -766,7 +766,11 @@ export default function OrdersClient() {
                     </div>
                   </div>
                   {currentOrder && (
-                    <span className="text-primary font-bold text-lg shrink-0 ml-2">{formatCurrency(orderTotal)}</span>
+                    orderTotal < 0 ? (
+                      <Badge variant="secondary" className="bg-amber-400 dark:bg-amber-600 text-black dark:text-white shrink-0 ml-2 text-lg">Em Crédito: {formatCurrency(Math.abs(orderTotal))}</Badge>
+                    ) : (
+                      <span className="text-primary font-bold text-lg shrink-0 ml-2">{formatCurrency(orderTotal)}</span>
+                    )
                   )}
               </div>
             </CardHeader>
@@ -1205,3 +1209,4 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
