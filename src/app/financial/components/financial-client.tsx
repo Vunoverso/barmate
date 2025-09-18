@@ -160,17 +160,17 @@ export default function FinancialClient() {
     const cashRevenue = sessionSales.reduce((total, sale) => {
         const cashPayment = sale.payments.find(p => p.method === 'cash');
         if (!cashPayment) return total;
-        const cashIn = sale.cashTendered ?? cashPayment.amount;
+        // Use cashTendered if available and it was a "leave change as credit" scenario. Otherwise, use the payment amount.
+        const cashIn = sale.cashTendered ? sale.cashTendered : cashPayment.amount;
         return total + cashIn - (sale.changeGiven ?? 0);
     }, 0);
 
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
-    const incomeFromCreditChange = (getFinancialEntries().filter(e => e.saleId && e.isAdjustment && e.type === 'income' && new Date(e.timestamp) >= openingTime)).reduce((sum, e) => sum + e.amount, 0);
     const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
     const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
     
-    return openingBalance + cashRevenue + totalIn - totalOut - incomeFromCreditChange;
+    return openingBalance + cashRevenue + totalIn - totalOut;
   }, [cashStatus, sales]);
 
 
@@ -1140,5 +1140,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
 
     
