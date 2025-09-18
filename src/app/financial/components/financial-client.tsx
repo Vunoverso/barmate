@@ -157,7 +157,14 @@ export default function FinancialClient() {
     const openingTime = new Date(cashStatus.openingTime);
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
-    const cashRevenue = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
+    const cashRevenue = sessionSales.reduce((total, sale) => {
+        const cashPayment = sale.payments.find(p => p.method === 'cash');
+        if (!cashPayment) return total;
+        // Correct Logic: Add the full amount tendered, subtract change given.
+        const cashIn = sale.cashTendered ?? cashPayment.amount;
+        return total + cashIn - (sale.changeGiven ?? 0);
+    }, 0);
+
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
     const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
@@ -165,6 +172,7 @@ export default function FinancialClient() {
     
     return openingBalance + cashRevenue + totalIn - totalOut;
   }, [cashStatus, sales]);
+
 
    const totalGlobalBalance = useMemo(() => {
     return expectedCashInDrawer + secondaryCashBox.balance + bankAccount.balance;
