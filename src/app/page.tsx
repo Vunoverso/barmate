@@ -1,10 +1,5 @@
 
-"use client";
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useState, useEffect, useMemo } from 'react';
-import { getSales, getCashRegisterStatus, getProducts, formatCurrency, getSecondaryCashBox, getBankAccount } from '@/lib/constants';
-import type { Sale, CashRegisterStatus, Product, SecondaryCashBox, BankAccount } from '@/types';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowUpRight, BarChart3, Users, DollarSign, Package, Banknote, Store, HandCoins, TrendingUp } from "lucide-react";
@@ -18,68 +13,7 @@ import {
 } from "@/components/ui/table"
 
 export default function Home() {
-  const [isMounted, setIsMounted] = useState(false);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-
   const version = "v1.3.0";
-
-  useEffect(() => {
-    setIsMounted(true);
-    
-    const handleStorageChange = () => {
-      setSales(getSales());
-      setProducts(getProducts());
-    };
-
-    handleStorageChange();
-    
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
-
-  const dailyStats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todaysSales = sales.filter(sale => new Date(sale.timestamp) >= today);
-    const totalRevenue = todaysSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-    const salesCount = todaysSales.length;
-    const ticketMedio = salesCount > 0 ? totalRevenue / salesCount : 0;
-    
-    const allItems = todaysSales.flatMap(sale => sale.items);
-    const productSales = allItems.reduce((acc, item) => {
-        if(item.price > 0) { // Count only products, not credits/payments
-            acc[item.id] = (acc[item.id] || 0) + item.quantity;
-        }
-        return acc;
-    }, {} as Record<string, number>);
-
-    const topProducts = Object.entries(productSales)
-      .sort(([, qtyA], [, qtyB]) => qtyB - qtyA)
-      .slice(0, 5)
-      .map(([productId, quantity]) => {
-        const productDetails = products.find(p => p.id === productId);
-        return {
-          name: productDetails?.name || 'Produto Desconhecido',
-          quantity
-        };
-      });
-
-    return { totalRevenue, salesCount, ticketMedio, topProducts };
-  }, [sales, products]);
-
-
-  if (!isMounted) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p>Carregando dashboard...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
@@ -90,8 +24,8 @@ export default function Home() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(dailyStats.totalRevenue)}</div>
-            <p className="text-xs text-muted-foreground">Total de vendas no dia</p>
+            <div className="text-2xl font-bold">R$ 0,00</div>
+            <p className="text-xs text-muted-foreground">Carregue os relatórios para ver os dados</p>
           </CardContent>
         </Card>
         <Card>
@@ -100,8 +34,8 @@ export default function Home() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+{dailyStats.salesCount}</div>
-             <p className="text-xs text-muted-foreground">Transações realizadas hoje</p>
+            <div className="text-2xl font-bold">+0</div>
+             <p className="text-xs text-muted-foreground">Carregue os relatórios para ver os dados</p>
           </CardContent>
         </Card>
         <Card>
@@ -110,8 +44,8 @@ export default function Home() {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(dailyStats.ticketMedio)}</div>
-            <p className="text-xs text-muted-foreground">Valor médio por venda</p>
+            <div className="text-2xl font-bold">R$ 0,00</div>
+            <p className="text-xs text-muted-foreground">Carregue os relatórios para ver os dados</p>
           </CardContent>
         </Card>
       </div>
@@ -185,22 +119,11 @@ export default function Home() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dailyStats.topProducts.length > 0 ? (
-                    dailyStats.topProducts.map((p, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <div className="font-medium">{p.name}</div>
-                      </TableCell>
-                      <TableCell className="text-right">{p.quantity}</TableCell>
-                    </TableRow>
-                    ))
-                ) : (
-                    <TableRow>
-                        <TableCell colSpan={2} className="h-24 text-center">
-                            Nenhuma venda registrada hoje ainda.
-                        </TableCell>
-                    </TableRow>
-                )}
+                <TableRow>
+                    <TableCell colSpan={2} className="h-24 text-center">
+                        Nenhuma venda registrada hoje ainda.
+                    </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </CardContent>
