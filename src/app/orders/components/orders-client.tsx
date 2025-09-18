@@ -697,13 +697,13 @@ export default function OrdersClient() {
                               <span className="font-semibold truncate block max-w-full">{order.name}</span>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
                           </div>
-                          <div className="text-xs text-left">
-                            {order.items.length} item(s)
+                          <div className="text-xs text-muted-foreground flex flex-col items-start">
+                            <span>{order.items.length} item(s)</span>
+                             <span>{format(order.createdAt, "dd/MM HH:mm", { locale: ptBR })}</span>
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
                           <div className="font-semibold text-sm">{formatCurrency(total)}</div>
-                          <div className="text-xs text-muted-foreground">{format(order.createdAt, "dd/MM HH:mm", { locale: ptBR })}</div>
                         </div>
                       </div>
                     )})}
@@ -787,16 +787,25 @@ export default function OrdersClient() {
                       <span className="truncate">{currentOrder ? currentOrder.name : "Comanda"}</span>
                     </CardTitle>
                     <div className="text-sm text-muted-foreground pt-1 flex items-center gap-2">
-                      <span>{currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'} na comanda.</span>
-                      {currentOrder?.status === 'paid' && <Badge variant="default" className="bg-green-600">PAGA</Badge>}
+                       {currentOrder && (
+                        <>
+                          <span>{currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'}</span>
+                          <span className="text-xs">&bull;</span>
+                          <span>{format(currentOrder.createdAt, "dd/MM HH:mm", { locale: ptBR })}</span>
+                        </>
+                       )}
+                       {!currentOrder && <span>Nenhum item na comanda.</span>}
                     </div>
                   </div>
-                  {currentOrder && (
-                    orderTotal < 0 ? (
-                      <Badge variant="secondary" className="bg-amber-400 dark:bg-amber-600 text-black dark:text-white shrink-0 ml-2 text-lg">Em Crédito: {formatCurrency(Math.abs(orderTotal))}</Badge>
-                    ) : (
-                      <span className="text-primary font-bold text-lg shrink-0 ml-2">{formatCurrency(orderTotal)}</span>
-                    )
+                   {currentOrder && (
+                    <div className="flex flex-col items-end shrink-0 ml-2">
+                        {orderTotal < 0 ? (
+                           <Badge variant="secondary" className="bg-amber-400 dark:bg-amber-600 text-black dark:text-white text-base">Em Crédito: {formatCurrency(Math.abs(orderTotal))}</Badge>
+                        ) : (
+                          <span className="text-primary font-bold text-xl">{formatCurrency(orderTotal)}</span>
+                        )}
+                        {currentOrder?.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 mt-1">PAGA</Badge>}
+                    </div>
                   )}
               </div>
             </CardHeader>
