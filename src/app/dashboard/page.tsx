@@ -2,7 +2,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { DollarSign, Users, BarChart, Activity, HandCoins, Store, Banknote, TrendingUp } from "lucide-react";
+import { HandCoins, Store, Banknote, TrendingUp } from "lucide-react";
+import { Table, TableBody, TableCell, TableHeader, TableHead, TableRow } from "@/components/ui/table";
 
 export default function DashboardPage() {
   const version = "v1.3.0";
@@ -14,40 +15,40 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Receita de Hoje</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">💵</span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R$ 42,00</div>
+            <div className="text-2xl font-bold">R$ 0,00</div>
             <p className="text-xs text-muted-foreground">Total de vendas no dia</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Vendas de Hoje</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">🛒</span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+4</div>
+            <div className="text-2xl font-bold">+0</div>
             <p className="text-xs text-muted-foreground">Transações realizadas hoje</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ticket Médio de Hoje</CardTitle>
-            <BarChart className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+            <span className="text-muted-foreground">📊</span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R$ 10,50</div>
+            <div className="text-2xl font-bold">R$ 0,00</div>
             <p className="text-xs text-muted-foreground">Valor médio por venda</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Status do Caixa</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">🟢</span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">Aberto</div>
+            <div className="text-2xl font-bold">Fechado</div>
             <p className="text-xs text-muted-foreground">Caixa Diário</p>
           </CardContent>
         </Card>
@@ -94,22 +95,41 @@ export default function DashboardPage() {
 
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle>Saldos Atuais</CardTitle>
-            <CardDescription>Visão geral dos seus caixas e contas.</CardDescription>
+            <CardTitle>Produtos Mais Vendidos</CardTitle>
+            <CardDescription>Visão geral dos seus produtos mais populares.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="font-medium">Caixa Diário</span>
-                <span className="font-bold">R$ 144,00</span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="font-medium">Caixa 02 (Secundário)</span>
-                <span className="font-bold">R$ 1.950,00</span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="font-medium">Conta Bancária</span>
-                <span className="font-bold">R$ 974,34</span>
-            </div>
+          <CardContent>
+             <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead className="text-right">Vendas</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    <TableRow>
+                        <TableCell>
+                            <div className="font-medium">Cerveja Pilsen</div>
+                            <div className="text-sm text-muted-foreground">Bebidas Alcoólicas</div>
+                        </TableCell>
+                        <TableCell className="text-right">120</TableCell>
+                    </TableRow>
+                     <TableRow>
+                        <TableCell>
+                            <div className="font-medium">X-Burger Clássico</div>
+                            <div className="text-sm text-muted-foreground">Lanches</div>
+                        </TableCell>
+                        <TableCell className="text-right">85</TableCell>
+                    </TableRow>
+                     <TableRow>
+                        <TableCell>
+                            <div className="font-medium">Porção de Batata Frita</div>
+                            <div className="text-sm text-muted-foreground">Lanches</div>
+                        </TableCell>
+                        <TableCell className="text-right">210</TableCell>
+                    </TableRow>
+                </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>

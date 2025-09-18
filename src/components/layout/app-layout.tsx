@@ -22,7 +22,7 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
-  { href: '/', label: 'Início', icon: Home },
+  { href: '/dashboard', label: 'Início', icon: Home },
   { href: '/cash-register', label: 'Caixa', icon: Banknote },
   { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
   { href: '/orders', label: 'Comandas', icon: HandCoins },
@@ -41,28 +41,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setIsMounted(true);
-    const storedBarName = localStorage.getItem('barName');
-    if (storedBarName) {
-      setBarName(storedBarName);
-    }
-
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'barName' && event.newValue) {
-        setBarName(event.newValue);
-      }
+    
+    const handleStorageChange = (event?: StorageEvent) => {
+        // Handle direct call
+        if (!event) {
+            const storedName = localStorage.getItem('barName');
+            if (storedName) setBarName(storedName);
+            return;
+        }
+        // Handle event listener
+        if (event.key === 'barName' && event.newValue) {
+            setBarName(event.newValue);
+        }
     };
     
-    // Also update if changed in the same tab via settings
-    const handleBarNameChange = () => {
-        const newName = localStorage.getItem('barName');
-        if (newName) setBarName(newName);
-    }
-    
-    window.addEventListener('barNameChanged', handleBarNameChange);
+    handleStorageChange();
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('barNameChanged', handleBarNameChange);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
@@ -130,7 +126,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-            <Link href="/" className="flex items-center gap-2 font-semibold">
+            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
               <Package className="h-6 w-6 text-primary" />
               <span className="">{barName}</span>
             </Link>
@@ -154,7 +150,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </SheetTrigger>
             <SheetContent side="left" className="flex flex-col">
               <nav className="grid gap-1 text-lg font-medium">
-                <Link href="#" className="flex items-center gap-2 text-lg font-semibold mb-4">
+                <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold mb-4">
                   <Package className="h-6 w-6 text-primary" />
                   <span className="">{barName}</span>
                 </Link>
