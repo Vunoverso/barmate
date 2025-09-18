@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge";
 
-export default function DashboardPage() {
+export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -278,5 +278,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
