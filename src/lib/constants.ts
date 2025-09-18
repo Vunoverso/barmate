@@ -219,6 +219,46 @@ export const getSales = (): Sale[] => {
   return initialSalesWithDate;
 };
 
+export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'>): void => {
+  if (typeof window === 'undefined') return;
+  
+  const newEntry: FinancialEntry = {
+    ...entry,
+    id: `${entry.type.slice(0,3)}-${Date.now()}`,
+    timestamp: new Date(),
+  };
+
+  const currentEntries = getFinancialEntries();
+  saveFinancialEntries([...currentEntries, newEntry]);
+
+  // Handle side-effects on balances
+  if (entry.type === 'income') {
+    if (entry.source === 'daily_cash') {
+      const currentCashStatus = getCashRegisterStatus();
+      if (currentCashStatus.status === 'open') {
+        const suprimentoAdjustment: CashAdjustment = {
+          id: `adj-inc-${newEntry.id}`,
+          amount: entry.amount,
+          type: 'in' as 'in',
+          description: entry.description,
+          timestamp: new Date().toISOString()
+        };
+        const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), suprimentoAdjustment]};
+        saveCashRegisterStatus(updatedStatus);
+      }
+    } else if (entry.source === 'bank_account') {
+      const currentAccount = getBankAccount();
+      saveBankAccount({ balance: currentAccount.balance + entry.amount });
+    } else if (entry.source === 'secondary_cash') {
+        const currentSecondaryBox = getSecondaryCashBox();
+        saveSecondaryCashBox({ balance: currentSecondaryBox.balance + entry.amount });
+    }
+  }
+  // Note: 'expense' types are handled directly in the components where they are created,
+  // because they need to check for sufficient funds before creating the entry.
+};
+
+
 export const addSale = (newSale: Sale): void => {
   if (typeof window === 'undefined') return;
 
@@ -258,19 +298,16 @@ export const addSale = (newSale: Sale): void => {
 
   saveBankAccount(bankAccount);
 
-  // If change was given as credit, create a corresponding income entry
   if (newSale.changeGiven && newSale.changeGiven > 0) {
     const cashPayment = newSale.payments.find(p => p.method === 'cash');
     if (cashPayment) {
-        newFinancialEntries.push({
-            id: `income-credit-${newSale.id}`,
+        addFinancialEntry({
             description: `Crédito de Troco (Venda #${newSale.id.slice(-6)})`,
             amount: newSale.changeGiven,
             type: 'income',
             source: 'daily_cash',
-            timestamp: new Date(),
             saleId: newSale.id,
-            isAdjustment: true, // Mark as adjustment-like to potentially filter it
+            isAdjustment: true,
         });
     }
   }

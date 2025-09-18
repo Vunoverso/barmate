@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
-import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, PAYMENT_METHODS } from '@/lib/constants';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, PAYMENT_METHODS, addFinancialEntry } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
 
@@ -274,9 +275,9 @@ export default function OrdersClient() {
   };
 
 
-  const handleAddCredit = ({ amount, description }: { amount: number; description: string }) => {
+  const handleAddCredit = ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
     if (!currentOrderId) {
-        toast({ title: "Nenhuma comanda selecionada", description: "Selecione uma comanda para adicionar o crédito.", variant: "destructive" });
+        toast({ title: "Nenhuma comanda selecionada", variant: "destructive" });
         return;
     }
 
@@ -284,7 +285,8 @@ export default function OrdersClient() {
         id: `credit-${Date.now()}`,
         name: `Crédito: ${description}`,
         price: -amount, // Negative price for credit
-        categoryId: 'cat_outros', // Assign to a generic category
+        quantity: 1,
+        categoryId: 'cat_outros',
         categoryName: 'Outros',
         categoryIconName: 'Wallet',
     };
@@ -294,8 +296,27 @@ export default function OrdersClient() {
             order.id === currentOrderId ? { ...order, items: [...order.items, creditItem], name: `${order.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)` } : order
         )
     );
+    
+    // Register the income if it's not a permuta
+    if (source !== 'permuta') {
+        let financialSource: 'daily_cash' | 'bank_account' | 'secondary_cash';
+        if (source === 'dinheiro') {
+            financialSource = 'daily_cash';
+        } else {
+            financialSource = 'bank_account'; // Cartão and PIX go to bank account
+        }
 
-    toast({ title: "Crédito Adicionado", description: `${formatCurrency(amount)} adicionado à comanda.` });
+        addFinancialEntry({
+            description: `Crédito para ${currentOrder?.name}: ${description}`,
+            amount: amount,
+            type: 'income',
+            source: financialSource,
+        });
+        toast({ title: "Crédito Adicionado e Registrado", description: `${formatCurrency(amount)} adicionado à comanda e registrado como entrada.` });
+    } else {
+        toast({ title: "Crédito Adicionado", description: `${formatCurrency(amount)} adicionado à comanda como permuta/cortesia.` });
+    }
+
     setIsCreditDialogOpen(false);
   };
 
@@ -1138,18 +1159,20 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
 interface AddCreditDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (details: { amount: number; description: string }) => void;
+    onSave: (details: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => void;
 }
 
 function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps) {
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
+    const [source, setSource] = useState<'permuta' | 'dinheiro' | 'cartao' | 'pix' | ''>('');
     const { toast } = useToast();
 
     useEffect(() => {
         if (isOpen) {
             setAmount('');
             setDescription('');
+            setSource('');
         }
     }, [isOpen]);
 
@@ -1164,7 +1187,11 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
             toast({ title: "Descrição Obrigatória", description: "Forneça um motivo para o crédito.", variant: "destructive" });
             return;
         }
-        onSave({ amount: value, description: description.trim() });
+        if (!source) {
+            toast({ title: "Origem Obrigatória", description: "Selecione a origem do valor do crédito.", variant: "destructive" });
+            return;
+        }
+        onSave({ amount: value, description: description.trim(), source });
     };
 
     return (
@@ -1190,11 +1217,25 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
                             autoFocus
                         />
                     </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="credit-source">Origem do Crédito</Label>
+                        <Select onValueChange={(value) => setSource(value as any)} value={source}>
+                            <SelectTrigger id="credit-source">
+                                <SelectValue placeholder="Selecione a origem do valor..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="permuta">Permuta / Cortesia (Não afeta o caixa)</SelectItem>
+                                <SelectItem value="dinheiro">Dinheiro (Entra no Caixa Diário)</SelectItem>
+                                <SelectItem value="cartao">Cartão (Entra na Conta Bancária)</SelectItem>
+                                <SelectItem value="pix">PIX (Entra na Conta Bancária)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="credit-description">Descrição/Motivo</Label>
                         <Input
                             id="credit-description"
-                            placeholder="Ex: Troca de produto"
+                            placeholder="Ex: Troca de produto, adiantamento"
                             value={description}
                             onChange={e => setDescription(e.target.value)}
                         />
@@ -1210,10 +1251,3 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     );
 }
     
-
-    
-
-    
-
-    
-
