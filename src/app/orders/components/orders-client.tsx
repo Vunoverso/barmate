@@ -290,7 +290,7 @@ export default function OrdersClient() {
 
     setOpenOrders(prevOrders =>
         prevOrders.map(order =>
-            order.id === currentOrderId ? { ...order, items: [...order.items, creditItem] } : order
+            order.id === currentOrderId ? { ...order, items: [...order.items, creditItem], name: `${order.name.replace(' (Com Crédito)', '')} (Com Crédito)` } : order
         )
     );
 
@@ -529,7 +529,7 @@ export default function OrdersClient() {
     
     if (details.leaveChangeAsCredit && details.changeGiven > 0) {
         const creditAmount = details.changeGiven;
-        const creditOrderName = `${currentOrder.name} (Crédito)`;
+        const creditOrderName = `${currentOrder.name.replace(' (Com Crédito)', '')} (Crédito de Troco)`;
         const creditItem: OrderItem = {
             id: `credit-${Date.now()}`,
             name: `Crédito de Troco`,
@@ -636,7 +636,22 @@ export default function OrdersClient() {
                   <p className="text-muted-foreground text-center py-10">Nenhuma comanda encontrada.</p>
                 ) : (
                   <div className="space-y-2">
-                    {filteredOpenOrders.map(order => (
+                    {filteredOpenOrders.map(order => {
+                       const total = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+                       const isCredit = total < 0;
+                       let variant: "secondary" | "outline" = currentOrderId === order.id ? "secondary" : "outline";
+                       let customClass = "";
+                       if (currentOrderId === order.id) {
+                           if (isCredit) {
+                               customClass = "bg-amber-400 dark:bg-amber-600 text-black dark:text-white border-amber-500 dark:border-amber-700 hover:bg-amber-500/90 dark:hover:bg-amber-600/90";
+                           }
+                       } else {
+                           if (isCredit) {
+                               customClass = "bg-amber-200/50 dark:bg-amber-800/30 border-amber-400/50 hover:bg-amber-200 dark:hover:bg-amber-800/50";
+                           }
+                       }
+
+                      return (
                       <div
                         key={order.id}
                         role="button"
@@ -648,8 +663,9 @@ export default function OrdersClient() {
                           }
                         }}
                         className={cn(
-                          buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }),
-                          "w-full h-auto py-2 px-3 cursor-pointer group flex items-center justify-between"
+                          buttonVariants({ variant }),
+                          "w-full h-auto py-2 px-3 cursor-pointer group flex items-center justify-between",
+                          customClass
                         )}
                       >
                         <div className="flex-1 min-w-0">
@@ -657,12 +673,12 @@ export default function OrdersClient() {
                               <span className="font-semibold truncate block max-w-full">{order.name}</span>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
                           </div>
-                          <div className="text-xs text-muted-foreground text-left">
-                            {order.items.length} item(s) - {formatCurrency(order.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
+                          <div className="text-xs text-left">
+                            {order.items.length} item(s) - {formatCurrency(total)}
                           </div>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
               </ScrollArea>
@@ -1182,6 +1198,8 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
+    
+
     
 
     
