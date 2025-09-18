@@ -4,7 +4,7 @@
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { 
   getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
-  getSecondaryCashBox, getBankAccount, getCashRegisterStatus 
+  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale
 } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -45,6 +45,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { downloadAsCSV } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Label } from '@/components/ui/label';
+
 
 const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
   daily_cash: 'Caixa Principal',
@@ -192,11 +194,12 @@ export default function ReportsClient() {
 
   const handleDeleteSale = () => {
     if (!saleToDelete) return;
-    const currentSales = getSales();
-    const updatedSales = currentSales.filter(s => s.id !== saleToDelete!.id);
-    saveSales(updatedSales);
-
-    toast({ title: "Venda Removida", variant: "destructive" });
+    removeSale(saleToDelete.id);
+    toast({
+      title: "Venda Removida",
+      description: "A venda e seu impacto financeiro foram revertidos.",
+      variant: "destructive"
+    });
     setSaleToDelete(null);
   };
   
@@ -242,6 +245,13 @@ export default function ReportsClient() {
         amount: entry.amount,
         source: SOURCE_MAP[entry.source]
       })),
+       ...filteredEntries.filter(e => e.type === 'income').map(entry => ({
+        timestamp: new Date(entry.timestamp),
+        description: entry.description,
+        type: 'Entrada',
+        amount: entry.amount,
+        source: SOURCE_MAP[entry.source]
+      })),
     ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
     if (combinedData.length === 0) {
@@ -257,7 +267,7 @@ export default function ReportsClient() {
       item.description,
       item.type,
       item.source,
-      (item.type === 'Receita' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
+      (item.type === 'Receita' || item.type === 'Entrada' ? item.amount : -item.amount).toFixed(2).replace('.', ','),
     ]);
     downloadAsCSV(headers, csvData, `${filename}.csv`);
     toast({ title: "Relatório Geral CSV Exportado" });
@@ -509,8 +519,6 @@ export default function ReportsClient() {
   );
 }
 
-const Label = ({ children, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) => ( <label className="text-sm font-medium leading-none" {...props}>{children}</label> );
-
 const SummaryTable = ({ data }: { data: { period: string, income: number, expenses: number, balance: number }[]}) => (
     <Table>
         <TableHeader>
@@ -535,5 +543,3 @@ const SummaryTable = ({ data }: { data: { period: string, income: number, expens
         </TableBody>
     </Table>
 );
-
-    
