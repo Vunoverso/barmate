@@ -158,13 +158,10 @@ export default function FinancialClient() {
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashPayment = sale.payments.find(p => p.method === 'cash');
-        if (!cashPayment) return total;
-        // If cashTendered exists (means change was involved), it's the full amount that entered the drawer
-        // Otherwise, it's just the cash payment amount itself. This correctly handles both cases.
-        const cashIn = sale.cashTendered ?? cashPayment.amount;
+        const cashIn = sale.cashTendered ? (sale.cashTendered - (sale.changeGiven ?? 0)) : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
         return total + cashIn;
     }, 0);
+
 
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
@@ -529,7 +526,13 @@ export default function FinancialClient() {
     toast({ title: "Relatório Geral CSV Exportado" });
   };
 
-  if (!isMounted) return <p>Carregando...</p>;
+  if (!isMounted) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p>Carregando financeiro...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1141,6 +1144,8 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
 
     
 

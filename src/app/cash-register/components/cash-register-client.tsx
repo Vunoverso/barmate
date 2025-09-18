@@ -358,11 +358,8 @@ export default function CashRegisterClient() {
     const totalSessionRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
 
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashPayment = sale.payments.find(p => p.method === 'cash');
-        if (!cashPayment) return total;
-        // Use cashTendered if available and it was a "leave change as credit" scenario. Otherwise, use the payment amount.
-        const cashIn = sale.cashTendered && (sale.changeGiven ?? 0) > 0 ? sale.cashTendered : cashPayment.amount;
-        return total + cashIn;
+      const cashIn = sale.cashTendered ? (sale.cashTendered - (sale.changeGiven ?? 0)) : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+      return total + cashIn;
     }, 0);
     
     const cardRevenue = sessionSales.reduce((total, sale) => {
@@ -399,10 +396,9 @@ export default function CashRegisterClient() {
 
   if (!isMounted) {
     return (
-      <Card>
-        <CardHeader><CardTitle>Carregando...</CardTitle></CardHeader>
-        <CardContent><p>Aguarde um momento enquanto carregamos o estado do caixa.</p></CardContent>
-      </Card>
+      <div className="flex items-center justify-center h-full">
+        <p>Carregando gestão de caixa...</p>
+      </div>
     );
   }
 
@@ -963,5 +959,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
 
     

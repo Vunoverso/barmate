@@ -345,3 +345,5 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
     </div>
   );
 }
+
+    

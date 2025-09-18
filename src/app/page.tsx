@@ -60,10 +60,8 @@ export default function DashboardPage() {
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashPayment = sale.payments.find(p => p.method === 'cash');
-        if (!cashPayment) return total;
-        const cashIn = sale.cashTendered ?? cashPayment.amount;
-        return total + cashIn - (sale.changeGiven ?? 0);
+        const cashIn = sale.cashTendered ? (sale.cashTendered - (sale.changeGiven ?? 0)) : sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+        return total + cashIn;
     }, 0);
 
     const openingBalance = cashStatus.openingBalance || 0;
@@ -108,16 +106,8 @@ export default function DashboardPage() {
 
   if (!isMounted) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
-        <Card className="w-full max-w-md text-center shadow-xl">
-          <CardHeader className="items-center">
-            <Package className="h-12 w-12 text-primary mb-4 animate-pulse" />
-            <CardTitle className="text-3xl font-bold">Carregando Dashboard...</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">Aguarde um momento.</p>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center h-full">
+        <p>Carregando dashboard...</p>
       </div>
     );
   }
@@ -288,3 +278,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
