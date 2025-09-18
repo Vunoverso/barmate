@@ -160,9 +160,10 @@ export default function FinancialClient() {
     const cashRevenue = sessionSales.reduce((total, sale) => {
         const cashPayment = sale.payments.find(p => p.method === 'cash');
         if (!cashPayment) return total;
-        // Use cashTendered if available and it was a "leave change as credit" scenario. Otherwise, use the payment amount.
-        const cashIn = sale.cashTendered ? sale.cashTendered : cashPayment.amount;
-        return total + cashIn - (sale.changeGiven ?? 0);
+        // If cashTendered exists (means change was involved), it's the full amount that entered the drawer
+        // Otherwise, it's just the cash payment amount itself. This correctly handles both cases.
+        const cashIn = sale.cashTendered ?? cashPayment.amount;
+        return total + cashIn;
     }, 0);
 
     const openingBalance = cashStatus.openingBalance || 0;
