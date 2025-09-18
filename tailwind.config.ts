@@ -12,9 +12,11 @@ export default {
       fontSize: {
         'xs': ['0.7rem', '1rem'],
         'sm': ['0.8rem', '1.25rem'],
-        'xl': ['1rem', '1.5rem'],
-        '2xl': ['1.125rem', '1.75rem'],
-        '3xl': ['1.25rem', '1.75rem'],
+        'base': ['0.9rem', '1.3rem'],
+        'lg': ['1rem', '1.5rem'],
+        'xl': ['1.1rem', '1.6rem'],
+        '2xl': ['1.2rem', '1.7rem'],
+        '3xl': ['1.3rem', '1.8rem'],
       },
   		colors: {
   			background: 'hsl(var(--background))',
@@ -99,3 +101,5 @@ export default {
   },
   plugins: [require("tailwindcss-animate")],
 } satisfies Config;
+
+    

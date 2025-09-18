@@ -601,7 +601,7 @@ export default function OrdersClient() {
 
   return (
     <TooltipProvider>
-      <div className="grid md:grid-cols-11 gap-4 h-[calc(100vh-100px)]">
+      <div className="grid md:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
         <div className="md:col-span-3 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
             <CardHeader>
@@ -719,7 +719,7 @@ export default function OrdersClient() {
           </Card>
         </div>
 
-        <div className="md:col-span-4 flex flex-col h-full">
+        <div className="md:col-span-5 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
             <CardHeader>
               <CardTitle>Selecionar Produtos</CardTitle>
@@ -1017,7 +1017,7 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
               <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-grow">
-              <h3 className="font-medium text-xs sm:text-sm flex items-center gap-2">
+              <h3 className="font-medium text-xs sm:text-sm flex items-center gap-2 truncate">
                 {product.name}
                 {product.isCombo && <Badge variant="secondary" className="text-xs px-1.5 py-0">Combo</Badge>}
               </h3>
@@ -1259,4 +1259,6 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
+    
+
     
