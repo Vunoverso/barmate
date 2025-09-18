@@ -4,6 +4,8 @@
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
 import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, PAYMENT_METHODS } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -675,8 +677,12 @@ export default function OrdersClient() {
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
                           </div>
                           <div className="text-xs text-left">
-                            {order.items.length} item(s) - {formatCurrency(total)}
+                            {order.items.length} item(s)
                           </div>
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <div className="font-semibold text-sm">{formatCurrency(total)}</div>
+                          <div className="text-xs text-muted-foreground">{format(order.createdAt, "dd/MM HH:mm", { locale: ptBR })}</div>
                         </div>
                       </div>
                     )})}
@@ -1210,3 +1216,4 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
