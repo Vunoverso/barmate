@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { DollarSign, Users, BarChart, Activity, HandCoins, Store, Banknote, TrendingUp } from "lucide-react";
 
-export default function Home() {
+export default function DashboardPage() {
   const version = "v1.3.0";
 
   return (
