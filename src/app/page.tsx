@@ -60,18 +60,13 @@ export default function Home() {
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        if (cashPayment === 0) {
-            return total;
-        }
-
         // If change was left as credit, the full cash tendered amount entered the drawer.
         if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
             return total + sale.cashTendered;
         }
         
-        // Otherwise, what entered the drawer is the cash payment amount (which could be exact or have had change returned).
-        // This is simply the sum of cash payments.
+        // Otherwise, what entered the drawer is the sum of cash payments.
+        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
         return total + cashPayment;
     }, 0);
 
