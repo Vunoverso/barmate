@@ -61,14 +61,17 @@ export default function Home() {
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
         const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        if (cashPayment === 0) return total;
+        if (cashPayment === 0) {
+            return total;
+        }
 
-        if (sale.leaveChangeAsCredit && sale.cashTendered) {
-            // Se o troco virou crédito, o valor total entregue ficou no caixa.
+        // If change was left as credit, the full cash tendered amount entered the drawer.
+        if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
             return total + sale.cashTendered;
         }
         
-        // Se houve troco devolvido ou pagamento exato, o que entrou é a soma dos pagamentos em dinheiro.
+        // Otherwise, what entered the drawer is the cash payment amount (which could be exact or have had change returned).
+        // This is simply the sum of cash payments.
         return total + cashPayment;
     }, 0);
 
