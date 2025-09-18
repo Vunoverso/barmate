@@ -3,8 +3,8 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect, useMemo } from 'react';
-import { getSales, getCashRegisterStatus, getProducts, formatCurrency } from '@/lib/constants';
-import type { Sale, CashRegisterStatus, Product } from '@/types';
+import { getSales, getCashRegisterStatus, getProducts, formatCurrency, getSecondaryCashBox, getBankAccount } from '@/lib/constants';
+import type { Sale, CashRegisterStatus, Product, SecondaryCashBox, BankAccount } from '@/types';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowUpRight, BarChart3, Users, DollarSign, Package, Banknote, Store, HandCoins, TrendingUp } from "lucide-react";
@@ -21,7 +21,6 @@ export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
 
   const version = "v1.3.0";
 
@@ -31,7 +30,6 @@ export default function Home() {
     const handleStorageChange = () => {
       setSales(getSales());
       setProducts(getProducts());
-      setCashStatus(getCashRegisterStatus());
     };
 
     handleStorageChange();
@@ -85,7 +83,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Receita de Hoje</CardTitle>
@@ -114,18 +112,6 @@ export default function Home() {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(dailyStats.ticketMedio)}</div>
             <p className="text-xs text-muted-foreground">Valor médio por venda</p>
-          </CardContent>
-        </Card>
-         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Status do Caixa</CardTitle>
-             <div className={`h-2 w-2 rounded-full ${cashStatus.status === 'open' ? 'bg-green-500' : 'bg-red-500'}`} />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold capitalize ${cashStatus.status === 'open' ? 'text-green-600' : 'text-red-600'}`}>
-                {cashStatus.status === 'open' ? 'Aberto' : 'Fechado'}
-            </div>
-            <p className="text-xs text-muted-foreground">Caixa Diário</p>
           </CardContent>
         </Card>
       </div>
