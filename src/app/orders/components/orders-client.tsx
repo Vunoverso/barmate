@@ -301,18 +301,11 @@ export default function OrdersClient() {
     
     // Register the income if it's not a permuta
     if (source !== 'permuta') {
-        let financialSource: 'daily_cash' | 'bank_account' | 'secondary_cash';
-        if (source === 'dinheiro') {
-            financialSource = 'daily_cash';
-        } else {
-            financialSource = 'bank_account'; // Cartão and PIX go to bank account
-        }
-
         addFinancialEntry({
             description: `Crédito para ${currentOrder?.name}: ${description}`,
             amount: amount,
             type: 'income',
-            source: financialSource,
+            source: source === 'dinheiro' ? 'daily_cash' : 'bank_account',
         });
         toast({ title: "Crédito Adicionado e Registrado", description: `${formatCurrency(amount)} adicionado à comanda e registrado como entrada.` });
     } else {
@@ -1203,7 +1196,7 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
             toast({ title: "Origem Obrigatória", description: "Selecione a origem do valor do crédito.", variant: "destructive" });
             return;
         }
-        onSave({ amount: value, description: description.trim(), source });
+        onSave({ amount: value, description: description.trim(), source: source as any });
     };
 
     return (
@@ -1262,6 +1255,8 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
+    
+
     
 
     
