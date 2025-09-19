@@ -3,16 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { HandCoins, Store, Banknote, TrendingUp } from "lucide-react";
-import { Table, TableBody, TableCell, TableHeader, TableHead, TableRow } from "@/components/ui/table";
 
 export default function DashboardPage() {
   const version = "v1.3.1";
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-      {/* Bottom Row Cards */}
-      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-2">
-        <Card className="lg:col-span-1">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-1">
+        <Card>
           <CardHeader>
             <CardTitle>Ações Rápidas</CardTitle>
             <CardDescription>Acesse as funções mais importantes com um clique.</CardDescription>
@@ -46,30 +44,6 @@ export default function DashboardPage() {
                     <span className="text-xs font-normal text-muted-foreground">Ver relatórios</span>
                 </Button>
             </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Produtos Mais Vendidos</CardTitle>
-            <CardDescription>Visão geral dos seus produtos mais populares.</CardDescription>
-          </CardHeader>
-          <CardContent>
-             <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Produto</TableHead>
-                        <TableHead className="text-right">Vendas</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    <TableRow>
-                        <TableCell colSpan={2} className="h-24 text-center">
-                            Nenhum dado de vendas para exibir.
-                        </TableCell>
-                    </TableRow>
-                </TableBody>
-            </Table>
           </CardContent>
         </Card>
       </div>
