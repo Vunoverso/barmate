@@ -283,6 +283,9 @@ export default function OrdersClient() {
         return;
     }
 
+    const orderToUpdate = openOrders.find(o => o.id === currentOrderId);
+    if (!orderToUpdate) return;
+    
     const creditItem: OrderItem = {
         id: `credit-${Date.now()}`,
         name: `Crédito: ${description}`,
@@ -295,14 +298,16 @@ export default function OrdersClient() {
 
     setOpenOrders(prevOrders =>
         prevOrders.map(order =>
-            order.id === currentOrderId ? { ...order, items: [...order.items, creditItem], name: `${order.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)` } : order
+            order.id === currentOrderId 
+                ? { ...order, items: [...order.items, creditItem], name: `${order.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)` } 
+                : order
         )
     );
     
     // Register the income if it's not a permuta
     if (source !== 'permuta') {
         addFinancialEntry({
-            description: `Crédito para ${currentOrder?.name}: ${description}`,
+            description: `Crédito para ${orderToUpdate.name}: ${description}`,
             amount: amount,
             type: 'income',
             source: source === 'dinheiro' ? 'daily_cash' : 'bank_account',
@@ -313,7 +318,7 @@ export default function OrdersClient() {
     }
 
     setIsCreditDialogOpen(false);
-  };
+};
 
 
   const addToOrder = (product: Product) => {
@@ -1255,6 +1260,8 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
+    
+
     
 
     
