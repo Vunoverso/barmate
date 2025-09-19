@@ -1,6 +1,6 @@
-import DashboardPage from "./dashboard/page";
+import { redirect } from 'next/navigation';
 
-// Isso garante que a rota raiz "/" renderize o conteúdo do dashboard.
 export default function Home() {
-  return <DashboardPage />;
+  // Redireciona permanentemente a rota raiz para a página de dashboard.
+  redirect('/dashboard');
 }
