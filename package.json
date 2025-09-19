@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
-    "dev:clean": "rm -rf .next && next dev --turbopack -p 9002",
+    "dev:clean": "rimraf .next && next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
@@ -62,6 +62,7 @@
     "@types/react-dom": "^18",
     "genkit-cli": "^1.8.0",
     "postcss": "^8",
+    "rimraf": "^5.0.7",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }
