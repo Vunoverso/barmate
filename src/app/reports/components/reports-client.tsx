@@ -95,6 +95,7 @@ export default function ReportsClient() {
   }, []);
 
   const filterByDate = (items: (Sale | FinancialEntry)[]) => {
+    if (!dateRange || !dateRange.from) return items;
     return items.filter(item => {
       const itemDate = new Date(item.timestamp);
       if (dateRange?.from && itemDate < dateRange.from) return false;
@@ -116,7 +117,7 @@ export default function ReportsClient() {
   }, [sales, dateRange, paymentMethodFilter]);
 
   const filteredEntries = useMemo(() => {
-    return filterByDate(financialEntries) as FinancialEntry[];
+    return (filterByDate(financialEntries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [financialEntries, dateRange]);
 
   const totalRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
@@ -129,7 +130,13 @@ export default function ReportsClient() {
     const openingTime = new Date(cashStatus.openingTime);
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
-    const cashRevenue = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
+    const cashRevenue = sessionSales.reduce((total, sale) => {
+        if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
+            return total + sale.cashTendered;
+        }
+        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+        return total + cashPayment;
+    }, 0);
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
     const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
@@ -499,7 +506,7 @@ export default function ReportsClient() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar Remoção de Venda</AlertDialogTitle>
-              <AlertDialogDescription>Tem certeza que deseja remover esta venda do relatório? Esta ação não pode ser desfeita.</AlertDialogDescription>
+              <AlertDialogDescription>Tem certeza que deseja remover esta venda do relatório? Esta ação não pode ser desfeita e irá estornar os valores da conta bancária e/ou caixa, incluindo as taxas.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>

@@ -18,9 +18,10 @@ interface SummaryTableProps {
         expenses: number;
         balance: number;
     }[];
+    isBalanceVisible?: boolean;
 }
 
-export const SummaryTable = ({ data }: SummaryTableProps) => (
+export const SummaryTable = ({ data, isBalanceVisible = true }: SummaryTableProps) => (
     <Table>
         <TableHeader>
             <TableRow>
@@ -34,9 +35,9 @@ export const SummaryTable = ({ data }: SummaryTableProps) => (
             {data.length > 0 ? data.map(row => (
                 <TableRow key={row.period}>
                     <TableCell className="font-medium capitalize">{row.period}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(row.income)}</TableCell>
-                    <TableCell className="text-right text-destructive">{formatCurrency(row.expenses)}</TableCell>
-                    <TableCell className={`text-right font-bold ${row.balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{formatCurrency(row.balance)}</TableCell>
+                    <TableCell className="text-right">{isBalanceVisible ? formatCurrency(row.income) : '******'}</TableCell>
+                    <TableCell className="text-right text-destructive">{isBalanceVisible ? formatCurrency(row.expenses) : '******'}</TableCell>
+                    <TableCell className={`text-right font-bold ${row.balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{isBalanceVisible ? formatCurrency(row.balance) : '******'}</TableCell>
                 </TableRow>
             )) : (
                 <TableRow><TableCell colSpan={4} className="h-24 text-center">Nenhum dado para este período.</TableCell></TableRow>

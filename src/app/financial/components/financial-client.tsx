@@ -180,6 +180,7 @@ export default function FinancialClient() {
 
   // Filtering logic from reports
   const filterByDate = (items: (Sale | FinancialEntry)[]) => {
+    if (!dateRange || !dateRange.from) return items;
     return items.filter(item => {
       const itemDate = new Date(item.timestamp);
       if (dateRange?.from && itemDate < dateRange.from) return false;
@@ -944,9 +945,9 @@ export default function FinancialClient() {
               <FormField control={form.control} name="source" render={({ field }) => (
                   <FormItem className="space-y-3"><FormLabel>Origem do Dinheiro</FormLabel><FormControl>
                       <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
-                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="daily_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Banknote className="h-4 w-4"/> Caixa Diário ({formatCurrency(expectedCashInDrawer)})</FormLabel></FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="secondary_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><PiggyBank className="h-4 w-4"/> Caixa 02 ({formatCurrency(secondaryCashBox.balance)})</FormLabel></FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="bank_account" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Landmark className="h-4 w-4"/> Conta Bancária ({formatCurrency(bankAccount.balance)})</FormLabel></FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="daily_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Banknote className="h-4 w-4"/> Caixa Diário ({isBalanceVisible ? formatCurrency(expectedCashInDrawer) : '***'})</FormLabel></FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="secondary_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><PiggyBank className="h-4 w-4"/> Caixa 02 ({isBalanceVisible ? formatCurrency(secondaryCashBox.balance) : '***'})</FormLabel></FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="bank_account" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Landmark className="h-4 w-4"/> Conta Bancária ({isBalanceVisible ? formatCurrency(bankAccount.balance) : '***'})</FormLabel></FormItem>
                       </RadioGroup>
                   </FormControl><FormMessage /></FormItem>
               )} />
@@ -1146,5 +1147,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
-
-    
