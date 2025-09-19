@@ -285,7 +285,8 @@ export default function OrdersClient() {
 
     const orderToUpdate = openOrders.find(o => o.id === currentOrderId);
     if (!orderToUpdate) return;
-    
+
+    // 1. Calculate the new state
     const creditItem: OrderItem = {
         id: `credit-${Date.now()}`,
         name: `Crédito: ${description}`,
@@ -296,15 +297,17 @@ export default function OrdersClient() {
         categoryIconName: 'Wallet',
     };
 
-    setOpenOrders(prevOrders =>
-        prevOrders.map(order =>
-            order.id === currentOrderId 
-                ? { ...order, items: [...order.items, creditItem], name: `${order.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)` } 
-                : order
-        )
-    );
-    
-    // Register the income if it's not a permuta
+    const newName = `${orderToUpdate.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)`;
+    const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
+    const newOrdersState = openOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
+
+    // 2. Save the new state to localStorage FIRST to prevent race conditions
+    localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(newOrdersState));
+
+    // 3. Update the component's state
+    setOpenOrders(newOrdersState);
+
+    // 4. Handle the financial side-effect
     if (source !== 'permuta') {
         addFinancialEntry({
             description: `Crédito para ${orderToUpdate.name}: ${description}`,
