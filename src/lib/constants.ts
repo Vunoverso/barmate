@@ -131,35 +131,59 @@ export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: Lucide
   { name: 'PIX', value: 'pix', icon: QrCode },
 ];
 
-const saleTotal1 = (INITIAL_PRODUCTS.find(p=>p.id==='1')!.price * 2) + INITIAL_PRODUCTS.find(p=>p.id==='9')!.price;
-const saleTotal2 = INITIAL_PRODUCTS.find(p=>p.id==='4')!.price * 3;
+// SIMULATION DATA
+const saleTotal1 = INITIAL_PRODUCTS[8].price + INITIAL_PRODUCTS[3].price; // X-Burger + Refri = 28 + 7 = 35
+const saleTotal2 = INITIAL_PRODUCTS[1].price + INITIAL_PRODUCTS[2].price; // Vinho + Caipirinha = 25 + 18 = 43
+const saleTotal3 = (INITIAL_PRODUCTS[0].price * 2) + INITIAL_PRODUCTS[9].price; // 2 Cervejas + Fritas = 24 + 22 = 46
 
-const INITIAL_SALES: Sale[] = [
+const SIMULATION_SALES: Sale[] = [
+  // 1. Venda Balcão (dinheiro)
   {
-    id: 'sale1',
+    id: 'sim-sale-1',
     items: [
-      { ...INITIAL_PRODUCTS.find(p=>p.id==='1')!, quantity: 2 }, 
       { ...INITIAL_PRODUCTS.find(p=>p.id==='9')!, quantity: 1 }, 
+      { ...INITIAL_PRODUCTS.find(p=>p.id==='4')!, quantity: 1 }, 
     ] as OrderItem[],
-    originalAmount: saleTotal1,
-    discountAmount: 0,
-    totalAmount: saleTotal1,
-    payments: [{ method: 'credit', amount: saleTotal1 }],
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    originalAmount: 35,
+    discountAmount: 1, // Desconto de 1 real
+    totalAmount: 34,
+    payments: [{ method: 'cash', amount: 34 }],
+    cashTendered: 40,
+    changeGiven: 6,
+    timestamp: new Date(),
     status: 'completed',
   },
+  // 2. Venda Comanda (multi-pagamento)
   {
-    id: 'sale2',
+    id: 'sim-sale-2',
     items: [
-      { ...INITIAL_PRODUCTS.find(p=>p.id==='4')!, quantity: 3 },
+      { ...INITIAL_PRODUCTS.find(p=>p.id==='1')!, quantity: 5 }, // 5 Cervejas
+      { ...INITIAL_PRODUCTS.find(p=>p.id==='10')!, quantity: 1 }, // Pastel
+      { ...INITIAL_PRODUCTS.find(p=>p.id==='2')!, quantity: 1 }, // Caipirinha
+      { ...INITIAL_PRODUCTS.find(p=>p.id==='4')!, quantity: 1 }, // Suco
     ] as OrderItem[],
-    originalAmount: saleTotal2,
+    originalAmount: (12*5) + 8 + 18 + 10, // 60 + 8 + 18 + 10 = 96
     discountAmount: 0,
-    totalAmount: saleTotal2,
-    payments: [{ method: 'cash', amount: 25.00 }],
-    cashTendered: 25.00,
-    changeGiven: 25.00 - saleTotal2,
-    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
+    totalAmount: 96,
+    payments: [
+        { method: 'pix', amount: 46 },
+        { method: 'debit', amount: 50 }
+    ],
+    timestamp: new Date(),
+    status: 'completed',
+  },
+    // 3. Venda com taxa de cartão
+  {
+    id: 'sim-sale-3',
+    items: [
+        { ...INITIAL_PRODUCTS.find(p => p.id === '1')!, quantity: 2 }, // 2 Cervejas = 24
+        { ...INITIAL_PRODUCTS.find(p => p.id === '9')!, quantity: 1 }  // 1 X-Burger = 28
+    ] as OrderItem[],
+    originalAmount: 52,
+    discountAmount: 0,
+    totalAmount: 52,
+    payments: [{ method: 'credit', amount: 52 }],
+    timestamp: new Date(),
     status: 'completed',
   },
 ];
@@ -214,7 +238,7 @@ export const getSales = (): Sale[] => {
     }
   }
   // Seed with initial data only if nothing is in storage
-  const initialSalesWithDate = INITIAL_SALES.map(s => ({...s, timestamp: new Date(s.timestamp)}));
+  const initialSalesWithDate = SIMULATION_SALES.map(s => ({...s, timestamp: new Date(s.timestamp)}));
   saveSales(initialSalesWithDate);
   return initialSalesWithDate;
 };
@@ -354,6 +378,29 @@ export const formatCurrency = (value: number) => {
 
 export const FINANCIAL_ENTRIES_STORAGE_KEY = 'barmate_financialEntries';
 
+const SIMULATION_FINANCIAL_ENTRIES: FinancialEntry[] = [
+    // Taxa da Venda 3 (crédito)
+    {
+        id: `fee-sim-sale-3-credit`,
+        description: `Taxa Crédito (Venda #m-sale)`,
+        amount: 52 * 0.04, // 4%
+        type: 'expense',
+        source: 'bank_account',
+        timestamp: new Date(),
+        saleId: 'sim-sale-3',
+    },
+    // Despesa
+    {
+        id: 'sim-exp-1',
+        description: 'Compra de gelo',
+        amount: 35,
+        type: 'expense',
+        source: 'daily_cash',
+        timestamp: new Date(),
+        adjustmentId: 'adj-exp-sim-exp-1',
+    }
+];
+
 export const saveFinancialEntries = (entries: FinancialEntry[]): void => {
   if (typeof window === 'undefined') return;
   financialEntriesCache = entries;
@@ -384,12 +431,14 @@ export const getFinancialEntries = (): FinancialEntry[] => {
       localStorage.removeItem(FINANCIAL_ENTRIES_STORAGE_KEY);
     }
   }
-  financialEntriesCache = [];
+  financialEntriesCache = SIMULATION_FINANCIAL_ENTRIES.map(e => ({...e, timestamp: new Date(e.timestamp)}));
+  saveFinancialEntries(financialEntriesCache);
   return financialEntriesCache;
 };
 
 // --- Caixa 02 ---
 export const SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox';
+const SIMULATION_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 2000 - 100 + 150 - 200 }; // 1850
 
 export const getSecondaryCashBox = (): SecondaryCashBox => {
   if (typeof window === 'undefined') {
@@ -411,9 +460,9 @@ export const getSecondaryCashBox = (): SecondaryCashBox => {
       localStorage.removeItem(SECONDARY_CASH_BOX_KEY);
     }
   }
-  const initial = { balance: 0 };
-  localStorage.setItem(SECONDARY_CASH_BOX_KEY, JSON.stringify(initial));
-  secondaryCashBoxCache = initial;
+
+  secondaryCashBoxCache = SIMULATION_SECONDARY_CASH_BOX;
+  localStorage.setItem(SECONDARY_CASH_BOX_KEY, JSON.stringify(secondaryCashBoxCache));
   return secondaryCashBoxCache;
 };
 
@@ -427,6 +476,8 @@ export const saveSecondaryCashBox = (box: SecondaryCashBox): void => {
 
 // --- Conta Bancária ---
 export const BANK_ACCOUNT_KEY = 'barmate_bankAccount';
+// 1000 (inicial) + 46 (pix) + 50 (debito) + 52 (credito) - 2.08 (taxa) + 200 (transferencia)
+const SIMULATION_BANK_ACCOUNT: BankAccount = { balance: 1000 + 46 + 50 + (52 - (52*0.04)) + 200 }; 
 
 export const getBankAccount = (): BankAccount => {
   if (typeof window === 'undefined') return { balance: 0 };
@@ -445,9 +496,9 @@ export const getBankAccount = (): BankAccount => {
       localStorage.removeItem(BANK_ACCOUNT_KEY);
     }
   }
-  const initial = { balance: 0 };
-  localStorage.setItem(BANK_ACCOUNT_KEY, JSON.stringify(initial));
-  bankAccountCache = initial;
+  
+  bankAccountCache = SIMULATION_BANK_ACCOUNT;
+  localStorage.setItem(BANK_ACCOUNT_KEY, JSON.stringify(bankAccountCache));
   return bankAccountCache;
 };
 
@@ -461,6 +512,20 @@ export const saveBankAccount = (account: BankAccount): void => {
 
 // --- Status do Caixa Diário ---
 const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus';
+
+const SIMULATION_CASH_STATUS: CashRegisterStatus = {
+    status: 'open',
+    openingBalance: 100,
+    openingTime: new Date().toISOString(),
+    adjustments: [
+        // 1. Suprimento
+        { id: 'sim-adj-1', amount: 50, type: 'in', description: 'Reforço de troco', timestamp: new Date().toISOString() },
+        // 2. Sangria
+        { id: 'sim-adj-2', amount: 150, type: 'out', description: 'Retirada para Caixa 02', destination: 'secondary_cash', timestamp: new Date().toISOString() },
+        // 3. Despesa (gerada a partir da financial entry)
+        { id: 'adj-exp-sim-exp-1', amount: 35, type: 'out', description: 'Despesa: Compra de gelo', timestamp: new Date().toISOString() }
+    ],
+};
 
 export const getCashRegisterStatus = (): CashRegisterStatus => {
   if (typeof window === 'undefined') return { status: 'closed', adjustments: [] };
@@ -477,7 +542,9 @@ export const getCashRegisterStatus = (): CashRegisterStatus => {
       return cashRegisterStatusCache;
     }
   }
-  cashRegisterStatusCache = { status: 'closed', adjustments: [] };
+
+  cashRegisterStatusCache = SIMULATION_CASH_STATUS;
+  saveCashRegisterStatus(cashRegisterStatusCache);
   return cashRegisterStatusCache;
 }
 
@@ -491,6 +558,7 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus): void => {
 
 // --- Transaction Fees ---
 export const TRANSACTION_FEES_KEY = 'barmate_transactionFees';
+const SIMULATION_TRANSACTION_FEES: TransactionFees = { debitRate: 2, creditRate: 4, pixRate: 1 };
 
 export const getTransactionFees = (): TransactionFees => {
     if (typeof window === 'undefined') {
@@ -515,9 +583,9 @@ export const getTransactionFees = (): TransactionFees => {
             localStorage.removeItem(TRANSACTION_FEES_KEY);
         }
     }
-    const initial = { debitRate: 0, creditRate: 0, pixRate: 0 };
-    localStorage.setItem(TRANSACTION_FEES_KEY, JSON.stringify(initial));
-    transactionFeesCache = initial;
+
+    transactionFeesCache = SIMULATION_TRANSACTION_FEES;
+    localStorage.setItem(TRANSACTION_FEES_KEY, JSON.stringify(transactionFeesCache));
     return transactionFeesCache;
 };
 
@@ -528,3 +596,4 @@ export const saveTransactionFees = (fees: TransactionFees): void => {
         window.dispatchEvent(new Event('storage'));
     }
 };
+
