@@ -26,18 +26,19 @@ const saveToLocalStorage = <T,>(key: string, value: T) => {
     }
 };
 
-// This is the single row ID we'll use for storing all app-wide JSON data.
 const APP_DATA_ID = 'app_data';
 
 const getAppData = async () => {
     if (!supabase) return null;
-    // Use .limit(1).single() to ensure it never returns more than one row, preventing the 406 error.
-    const { data, error } = await supabase.from('balances').select('*').eq('id', APP_DATA_ID).limit(1).single();
-    if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is not a critical error here.
+    const { data, error } = await supabase.from('balances').select('*').eq('id', APP_DATA_ID);
+    
+    if (error) {
         console.error("Error fetching app_data:", error);
         return null;
     }
-    return data;
+
+    // No error, but maybe no data. Return the first result or null.
+    return data?.[0] || null;
 }
 
 const getJsonData = async <T,>(key: keyof import('@/types/supabase').Database['public']['Tables']['balances']['Row'], defaultValue: T): Promise<T> => {
@@ -46,7 +47,6 @@ const getJsonData = async <T,>(key: keyof import('@/types/supabase').Database['p
     }
     try {
         const appData = await getAppData();
-        // If appData is null or the specific key is null/undefined, return the default value.
         if (!appData || appData[key] === null || typeof appData[key] === 'undefined') {
             return defaultValue;
         }
@@ -65,8 +65,6 @@ const saveJsonData = async (key: keyof import('@/types/supabase').Database['publ
         return;
     }
     try {
-        // Use upsert to either create the row if it doesn't exist, or update it if it does.
-        // This prevents creating duplicate rows and is the key to fixing the 406 error.
         const { error } = await supabase.from('balances').upsert({ id: APP_DATA_ID, [key]: value }, { onConflict: 'id' });
         if (error) throw error;
     } catch (error) {
@@ -287,7 +285,15 @@ export const getProducts = async (): Promise<Product[]> => {
 };
 export const saveProducts = async (products: Product[]) => {
     if (supabase) {
-        const productsToSave = products.map(p => ({...p, is_combo: p.isCombo, combo_items: p.comboItems, isCombo: undefined, comboItems: undefined }));
+        const productsToSave = products.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            categoryId: p.categoryId,
+            stock: p.stock,
+            is_combo: p.isCombo,
+            combo_items: p.comboItems,
+        }));
         const { error } = await supabase.from('products').upsert(productsToSave, { onConflict: 'id' });
         if (error) console.error("Error saving products:", error);
     }
@@ -364,7 +370,22 @@ export const removeSale = async (saleId: string) => {
     saveToLocalStorage(SALES_KEY, updatedSales);
     window.dispatchEvent(new Event('storage'));
 };
-export const saveSales = (sales: Sale[]) => {
+export const saveSales = async (sales: Sale[]) => {
+    if (supabase) {
+        // Simple approach: delete all and insert all. Be careful with large datasets.
+        await supabase.from('sales').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
+        const salesToSave = sales.map(s => ({
+            ...s,
+            total_amount: s.totalAmount,
+            original_amount: s.originalAmount,
+            discount_amount: s.discountAmount,
+            cash_tendered: s.cashTendered,
+            change_given: s.changeGiven,
+            leave_change_as_credit: s.leaveChangeAsCredit
+        }));
+        const { error } = await supabase.from('sales').insert(salesToSave as any);
+        if (error) console.error("Error saving sales:", error);
+    }
     saveToLocalStorage(SALES_KEY, sales); // Should be handled by addSale/removeSale
     window.dispatchEvent(new Event('storage'));
 };
@@ -384,11 +405,12 @@ export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
 };
 export const saveOpenOrders = async (orders: ActiveOrder[]) => {
      if (supabase) {
-        // Delete all and insert, simpler than upserting all
         await supabase.from('active_orders').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
-        const ordersToSave = orders.map(o => ({...o, created_at: o.createdAt.toISOString() }));
-        const { error } = await supabase.from('active_orders').insert(ordersToSave as any);
-        if (error) console.error("Error saving open orders:", error);
+        if (orders.length > 0) {
+            const ordersToSave = orders.map(o => ({...o, created_at: o.createdAt.toISOString() }));
+            const { error } = await supabase.from('active_orders').insert(ordersToSave as any);
+            if (error) console.error("Error saving open orders:", error);
+        }
     }
     saveToLocalStorage(OPEN_ORDERS_KEY, orders);
     window.dispatchEvent(new Event('storage'));
@@ -428,6 +450,18 @@ export const removeFinancialEntry = async (entryId: string) => {
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
     window.dispatchEvent(new Event('storage'));
 };
+export const saveFinancialEntries = async (entries: FinancialEntry[]) => {
+    if (supabase) {
+        await supabase.from('financial_entries').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
+        if (entries.length > 0) {
+            const { error } = await supabase.from('financial_entries').insert(entries as any);
+            if (error) console.error("Error saving financial entries:", error);
+        }
+    }
+    saveToLocalStorage(FINANCIAL_ENTRIES_KEY, entries);
+    window.dispatchEvent(new Event('storage'));
+};
+
 
 // Balances
 export const getSecondaryCashBox = (): Promise<SecondaryCashBox> => getJsonData('secondary_cash_data', { balance: 0 });
@@ -444,3 +478,5 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveJsonDa
 // Transaction Fees
 export const getTransactionFees = (): Promise<TransactionFees> => getJsonData('fees_data', { debitRate: 0, creditRate: 0, pixRate: 0 });
 export const saveTransactionFees = (fees: TransactionFees) => saveJsonData('fees_data', fees);
+
+    

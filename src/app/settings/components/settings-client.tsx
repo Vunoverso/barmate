@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { ProductCategory, TransactionFees } from '@/types';
-import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, INITIAL_PRODUCT_CATEGORIES, getTransactionFees, saveTransactionFees } from '@/lib/constants';
+import type { ProductCategory, TransactionFees, Product, Sale, ActiveOrder, FinancialEntry, CashRegisterStatus, SecondaryCashBox, BankAccount } from '@/types';
+import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, getTransactionFees, saveTransactionFees, getProducts, getSales, getOpenOrders, getFinancialEntries, getCashRegisterStatus, getSecondaryCashBox, getBankAccount, saveProducts, saveSales, saveOpenOrders, saveFinancialEntries, saveCashRegisterStatus, saveSecondaryCashBox, saveBankAccount } from '@/lib/constants';
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -181,6 +181,9 @@ export default function SettingsClient() {
   const [initialBarName, setInitialBarName] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
+  const [isImporting, setIsImporting] = useState(false);
+  const [importAlertOpen, setImportAlertOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
 
@@ -268,11 +271,98 @@ export default function SettingsClient() {
     if (!categoryToDelete) return;
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
+    // You'd also need to handle products that use this category, maybe reassign to 'Outros'
     await saveProductCategories(updatedCategories);
     setProductCategories(updatedCategories);
     toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
   };
+
+  const handleExportData = async () => {
+    toast({ title: "Exportando dados...", description: "Aguarde enquanto preparamos seu backup." });
+    try {
+        const backupData = {
+            products: await getProducts(),
+            productCategories: await getProductCategories(),
+            sales: await getSales(),
+            openOrders: await getOpenOrders(),
+            financialEntries: await getFinancialEntries(),
+            cashRegisterStatus: await getCashRegisterStatus(),
+            secondaryCashBox: await getSecondaryCashBox(),
+            bankAccount: await getBankAccount(),
+            transactionFees: await getTransactionFees(),
+            barName: localStorage.getItem('barName') || 'BarMate',
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+        };
+
+        const jsonString = JSON.stringify(backupData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `barmate_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast({ title: "Backup Concluído!", description: "Seu arquivo de backup foi baixado." });
+    } catch (error) {
+        console.error("Export error:", error);
+        toast({ title: "Erro na Exportação", description: "Não foi possível gerar o arquivo de backup.", variant: "destructive" });
+    }
+  };
+
+  const handleTriggerImport = () => {
+    setImportAlertOpen(true);
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    toast({ title: "Importando dados...", description: "Isso pode levar alguns instantes. Não feche a página." });
+
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        // Data validation could be added here
+
+        // Clear existing local storage data unrelated to supabase
+        localStorage.removeItem('barmate_counterSaleOrderItems_v2');
+        localStorage.removeItem('barmate_closedCashSessions_v2');
+
+        // Save all data to supabase/localStorage
+        await Promise.all([
+            saveProducts(data.products || []),
+            saveProductCategories(data.productCategories || []),
+            saveSales(data.sales || []),
+            saveOpenOrders(data.openOrders || []),
+            saveFinancialEntries(data.financialEntries || []),
+            saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] }),
+            saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 }),
+            saveBankAccount(data.bankAccount || { balance: 0 }),
+            saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 }),
+        ]);
+
+        if (data.barName) {
+            localStorage.setItem('barName', data.barName);
+        }
+
+        toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados com sucesso. A página será recarregada." });
+
+        // Reload the page to reflect all changes
+        setTimeout(() => window.location.reload(), 2000);
+
+    } catch (error) {
+        console.error("Import error:", error);
+        toast({ title: "Erro na Importação", description: "O arquivo selecionado é inválido ou está corrompido.", variant: "destructive" });
+        setIsImporting(false);
+    }
+  };
+
 
   if (!isMounted) {
     return (
@@ -376,13 +466,29 @@ export default function SettingsClient() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Gerenciamento de Dados na Nuvem</CardTitle>
-            <CardDescription>
-              Seus dados agora são salvos automaticamente e com segurança no Supabase. A funcionalidade de importação/exportação local foi desativada para garantir a integridade dos dados na nuvem.
-            </CardDescription>
-          </CardHeader>
+            <CardHeader>
+                <CardTitle>Gerenciamento de Dados</CardTitle>
+                <CardDescription>
+                Exporte todos os dados do seu aplicativo para um arquivo de backup ou importe um backup para restaurar seus dados.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-4">
+                <Button onClick={handleExportData}>
+                    <Download className="mr-2 h-4 w-4" /> Exportar Backup
+                </Button>
+                <Button variant="destructive" onClick={handleTriggerImport} disabled={isImporting}>
+                    <Upload className="mr-2 h-4 w-4" /> Importar Backup
+                </Button>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".json"
+                    className="hidden"
+                />
+            </CardContent>
         </Card>
+
 
         <Card>
           <CardHeader>
@@ -418,7 +524,7 @@ export default function SettingsClient() {
                         <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>
                           <Edit3 className="mr-2 h-4 w-4" /> Renomear
                         </Button>
-                        <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={INITIAL_PRODUCT_CATEGORIES.some(cat => cat.id === category.id)}>
+                        <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1}>
                           <Trash2 className="mr-2 h-4 w-4" /> Remover
                         </Button>
                       </TableCell>
@@ -446,6 +552,30 @@ export default function SettingsClient() {
         onSave={handleAddNewCategory}
       />
 
+       <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Atenção: Importar Backup</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta ação irá **substituir todos os dados atuais** (produtos, vendas, caixa, etc.) pelos dados do arquivo de backup. 
+                        Esta operação não pode ser desfeita. Exporte um backup dos seus dados atuais antes de continuar.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={() => {
+                            setImportAlertOpen(false);
+                            fileInputRef.current?.click();
+                        }}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
+                        Entendi, continuar com a importação
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+
       {categoryToDelete && (
         <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
           <AlertDialogContent>
@@ -472,3 +602,5 @@ export default function SettingsClient() {
     </>
   );
 }
+
+    
