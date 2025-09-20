@@ -193,7 +193,7 @@ export default function SettingsClient() {
         setBarName(storedName);
         setInitialBarName(storedName);
         setProductCategories(await getProductCategories());
-        setTransactionFees(await getTransactionFees());
+        setTransactionFees(getTransactionFees());
         setIsMounted(true);
     }
     fetchData();
@@ -221,7 +221,7 @@ export default function SettingsClient() {
 
   const handleSaveTransactionFees = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    await saveTransactionFees(transactionFees);
+    saveTransactionFees(transactionFees);
     toast({
         title: "Taxas Salvas!",
         description: "As taxas de transação foram atualizadas.",
@@ -287,10 +287,10 @@ export default function SettingsClient() {
             sales: await getSales(),
             openOrders: await getOpenOrders(),
             financialEntries: await getFinancialEntries(),
-            cashRegisterStatus: await getCashRegisterStatus(),
-            secondaryCashBox: await getSecondaryCashBox(),
-            bankAccount: await getBankAccount(),
-            transactionFees: await getTransactionFees(),
+            cashRegisterStatus: getCashRegisterStatus(),
+            secondaryCashBox: getSecondaryCashBox(),
+            bankAccount: getBankAccount(),
+            transactionFees: getTransactionFees(),
             barName: localStorage.getItem('barName') || 'BarMate',
             version: '1.0',
             exportedAt: new Date().toISOString(),
@@ -329,30 +329,21 @@ export default function SettingsClient() {
         const data = JSON.parse(text);
 
         // Data validation could be added here
+        
+        // Save local storage data
+        localStorage.setItem('barName', data.barName || 'BarMate');
+        saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] });
+        saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 });
+        saveBankAccount(data.bankAccount || { balance: 0 });
+        saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 });
 
-        // Clear existing local storage data unrelated to supabase
-        localStorage.removeItem('barmate_counterSaleOrderItems_v2');
-        localStorage.removeItem('barmate_closedCashSessions_v2');
-
-        // Save data sequentially
+        // Clear and save supabase data sequentially
         await saveProductCategories(data.productCategories || []);
         await saveProducts(data.products || []);
         await saveSales(data.sales || []);
         await saveOpenOrders(data.openOrders || []);
         await saveFinancialEntries(data.financialEntries || []);
         
-        // These save to a single record, so they can run in parallel
-        await Promise.all([
-            saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] }),
-            saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 }),
-            saveBankAccount(data.bankAccount || { balance: 0 }),
-            saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 }),
-        ]);
-
-        if (data.barName) {
-            localStorage.setItem('barName', data.barName);
-        }
-
         toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
 
         // Reload the page to reflect all changes

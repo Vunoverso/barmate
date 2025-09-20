@@ -3,7 +3,7 @@ import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, Sec
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
-// --- Generic LocalStorage/Supabase Helpers ---
+// --- Generic LocalStorage Helpers ---
 
 const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     if (typeof window === 'undefined') return defaultValue;
@@ -23,50 +23,6 @@ const saveToLocalStorage = <T,>(key: string, value: T) => {
         window.dispatchEvent(new Event('storage'));
     } catch (error) {
         console.error(`Error saving to localStorage key "${key}":`, error);
-    }
-};
-
-const APP_DATA_ID = 'app_data';
-
-const getAppData = async () => {
-    if (!supabase) return null;
-    const { data, error } = await supabase.from('balances').select('*').eq('id', APP_DATA_ID).limit(1);
-    
-    if (error) {
-        console.error("Error fetching app_data:", error);
-        return null;
-    }
-    return data?.[0] || null;
-}
-
-const getJsonData = async <T,>(key: keyof import('@/types/supabase').Database['public']['Tables']['balances']['Row'], defaultValue: T): Promise<T> => {
-    if (!supabase) {
-        return getFromLocalStorage(String(key), defaultValue);
-    }
-    try {
-        const appData = await getAppData();
-        if (!appData || appData[key] === null || typeof appData[key] === 'undefined') {
-            return defaultValue;
-        }
-        return appData[key] as T;
-    } catch (error) {
-        console.error(`Error in getJsonData for key "${String(key)}":`, error);
-        return defaultValue;
-    }
-};
-
-
-const saveJsonData = async (key: keyof import('@/types/supabase').Database['public']['Tables']['balances']['Row'], value: any) => {
-    window.dispatchEvent(new Event('storage')); // Optimistic update
-    if (!supabase) {
-        saveToLocalStorage(String(key), value);
-        return;
-    }
-    try {
-        const { error } = await supabase.from('balances').upsert({ id: APP_DATA_ID, [key]: value }, { onConflict: 'id' });
-        if (error) throw error;
-    } catch (error) {
-        console.error(`Error saving to Supabase column "${String(key)}":`, error);
     }
 };
 
@@ -335,7 +291,7 @@ export const addSale = async (sale: Omit<Sale, 'id'> & { id?: string }) => {
         if (error) console.error("Error adding sale:", error);
 
          // Add fee entries if applicable
-        const fees = await getTransactionFees();
+        const fees = getTransactionFees();
         for (const payment of newSale.payments) {
             let feeRate = 0;
             if (payment.method === 'debit') feeRate = fees.debitRate;
@@ -362,11 +318,25 @@ export const addSale = async (sale: Omit<Sale, 'id'> & { id?: string }) => {
 };
 export const removeSale = async (saleId: string) => {
     const allSales = await getSales();
-    const updatedSales = allSales.filter(s => s.id !== saleId);
+    const saleToRemove = allSales.find(s => s.id === saleId);
+    if (saleToRemove && supabase) {
+        // Revert financial entries associated with this sale
+        const entries = await getFinancialEntries();
+        const saleFeeEntries = entries.filter(e => e.saleId === saleId && e.type === 'expense');
 
+        for (const feeEntry of saleFeeEntries) {
+            await removeFinancialEntry(feeEntry.id);
+            // Optionally, refund the bank account if source was bank_account
+            if (feeEntry.source === 'bank_account') {
+                const bankAccount = getBankAccount();
+                saveBankAccount({ balance: bankAccount.balance + feeEntry.amount });
+            }
+        }
+    }
+
+    const updatedSales = allSales.filter(s => s.id !== saleId);
     if (supabase) {
         await supabase.from('sales').delete().eq('id', saleId);
-        await supabase.from('financial_entries').delete().eq('saleId', saleId);
     }
     
     saveToLocalStorage(SALES_KEY, updatedSales);
@@ -440,7 +410,7 @@ export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id'> & {id?
         const { error } = await supabase.from('financial_entries').insert(newEntry as any);
         if (error) console.error("Error adding financial entry:", error);
     }
-    const allEntries = getFromLocalStorage(FINANCIAL_ENTRIES_KEY, []);
+    const allEntries = await getFinancialEntries();
     const updatedEntries = [...allEntries, newEntry];
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
     window.dispatchEvent(new Event('storage'));
@@ -468,17 +438,21 @@ export const saveFinancialEntries = async (entries: FinancialEntry[]) => {
 
 
 // Balances
-export const getSecondaryCashBox = (): Promise<SecondaryCashBox> => getJsonData('secondary_cash_data', { balance: 0 });
-export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveJsonData('secondary_cash_data', box);
+const SECONDARY_CASH_KEY = 'barmate_secondaryCashBox_v2';
+export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(SECONDARY_CASH_KEY, { balance: 0 });
+export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToLocalStorage(SECONDARY_CASH_KEY, box);
 
-export const getBankAccount = (): Promise<BankAccount> => getJsonData('bank_account_data', { balance: 0 });
-export const saveBankAccount = (account: BankAccount) => saveJsonData('bank_account_data', account);
+const BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
+export const getBankAccount = (): BankAccount => getFromLocalStorage(BANK_ACCOUNT_KEY, { balance: 0 });
+export const saveBankAccount = (account: BankAccount) => saveToLocalStorage(BANK_ACCOUNT_KEY, account);
 
 
 // Cash Register Status
-export const getCashRegisterStatus = (): Promise<CashRegisterStatus> => getJsonData('cash_register_status_data', { status: 'closed', adjustments: [] });
-export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveJsonData('cash_register_status_data', status);
+const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus_v2';
+export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(CASH_REGISTER_STATUS_KEY, { status: 'closed', adjustments: [] });
+export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveToLocalStorage(CASH_REGISTER_STATUS_KEY, status);
 
 // Transaction Fees
-export const getTransactionFees = (): Promise<TransactionFees> => getJsonData('fees_data', { debitRate: 0, creditRate: 0, pixRate: 0 });
-export const saveTransactionFees = (fees: TransactionFees) => saveJsonData('fees_data', fees);
+const FEES_KEY = 'barmate_transactionFees_v2';
+export const getTransactionFees = (): TransactionFees => getFromLocalStorage(FEES_KEY, { debitRate: 0, creditRate: 0, pixRate: 0 });
+export const saveTransactionFees = (fees: TransactionFees) => saveToLocalStorage(FEES_KEY, fees);

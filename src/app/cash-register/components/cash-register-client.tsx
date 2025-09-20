@@ -75,19 +75,13 @@ export default function CashRegisterClient() {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-        const [salesData, secondaryCashData, bankAccountData, cashRegisterStatusData] = await Promise.all([
-            getSales(),
-            getSecondaryCashBox(),
-            getBankAccount(),
-            getCashRegisterStatus(),
-        ]);
-        setSales(salesData);
-        setSecondaryCashBox(secondaryCashData);
-        setBankAccount(bankAccountData);
-        setCashStatus(cashRegisterStatusData);
+        setSales(await getSales());
+        setSecondaryCashBox(getSecondaryCashBox());
+        setBankAccount(getBankAccount());
+        setCashStatus(getCashRegisterStatus());
     } catch (e) {
         console.error("Failed to load cash register data", e);
-        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar dados da nuvem.", variant: "destructive" });
+        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados.", variant: "destructive" });
     } finally {
         setIsLoading(false);
     }
@@ -108,7 +102,7 @@ export default function CashRegisterClient() {
 
 
   const handleOpenCashRegister = async (openingBalance: number) => {
-    const currentSecondaryBox = await getSecondaryCashBox();
+    const currentSecondaryBox = getSecondaryCashBox();
 
     if (currentSecondaryBox.balance < openingBalance) {
       toast({
@@ -119,7 +113,7 @@ export default function CashRegisterClient() {
       return;
     }
     
-    await saveSecondaryCashBox({ balance: currentSecondaryBox.balance - openingBalance });
+    saveSecondaryCashBox({ balance: currentSecondaryBox.balance - openingBalance });
 
     const newStatus: CashRegisterStatus = {
       status: 'open',
@@ -127,7 +121,7 @@ export default function CashRegisterClient() {
       openingTime: new Date().toISOString(),
       adjustments: [],
     };
-    await saveCashRegisterStatus(newStatus);
+    saveCashRegisterStatus(newStatus);
     setCashStatus(newStatus);
     setIsOpeningDialog(false);
     toast({
@@ -137,7 +131,7 @@ export default function CashRegisterClient() {
   };
 
   const handleSaveAdjustment = async (details: { amount: number; description: string; destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => {
-    let currentCashStatus = await getCashRegisterStatus();
+    let currentCashStatus = getCashRegisterStatus();
     if (currentCashStatus.status !== 'open') return;
 
     if (idToUpdate) { // Editing existing adjustment
@@ -151,7 +145,7 @@ export default function CashRegisterClient() {
         await applyAdjustment(updatedAdjustment);
 
         const newAdjustments = currentCashStatus.adjustments?.map(adj => adj.id === idToUpdate ? updatedAdjustment : adj) || [];
-        await saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
         toast({ title: "Movimentação Atualizada!" });
 
     } else { // Creating new adjustment
@@ -166,7 +160,7 @@ export default function CashRegisterClient() {
         
         await applyAdjustment(newAdjustment);
         const newAdjustments = [...(currentCashStatus.adjustments || []), newAdjustment];
-        await saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
         
         toast({ title: `Movimentação Registrada!`, description: `${adjustmentType === 'in' ? 'Suprimento' : 'Sangria'} de ${formatCurrency(details.amount)} adicionado.` });
     }
@@ -178,11 +172,11 @@ export default function CashRegisterClient() {
   const applyAdjustment = async (adjustment: CashAdjustment) => {
     if (adjustment.type === 'out') { // Sangria
         if (adjustment.destination === 'secondary_cash') {
-            const currentBox = await getSecondaryCashBox();
-            await saveSecondaryCashBox({ balance: currentBox.balance + adjustment.amount });
+            const currentBox = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: currentBox.balance + adjustment.amount });
         } else if (adjustment.destination === 'bank_account') {
-            const currentAccount = await getBankAccount();
-            await saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
+            const currentAccount = getBankAccount();
+            saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
         }
     }
   }
@@ -192,70 +186,70 @@ export default function CashRegisterClient() {
 
     if (type === 'out') { // Sangria reversal
       if (destination === 'secondary_cash') {
-        const currentBox = await getSecondaryCashBox();
-        await saveSecondaryCashBox({ balance: currentBox.balance - amount });
+        const currentBox = getSecondaryCashBox();
+        saveSecondaryCashBox({ balance: currentBox.balance - amount });
       } else if (destination === 'bank_account') {
-        const currentAccount = await getBankAccount();
-        await saveBankAccount({ balance: currentAccount.balance - amount });
+        const currentAccount = getBankAccount();
+        saveBankAccount({ balance: currentAccount.balance - amount });
       }
     } 
     else if (type === 'in') { // Suprimento reversal
       if (source === 'secondary_cash') {
-        const currentBox = await getSecondaryCashBox();
-        await saveSecondaryCashBox({ balance: currentBox.balance + amount });
+        const currentBox = getSecondaryCashBox();
+        saveSecondaryCashBox({ balance: currentBox.balance + amount });
       }
     }
   }
 
   const handleDeleteAdjustment = async () => {
     if (!adjustmentToDelete) return;
-    const currentCashStatus = await getCashRegisterStatus();
+    const currentCashStatus = getCashRegisterStatus();
     if (currentCashStatus.status !== 'open') return;
 
     await revertAdjustment(adjustmentToDelete);
     const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-    await saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+    saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
     toast({ title: "Movimentação Removida", variant: "destructive" });
     setAdjustmentToDelete(null);
   };
 
   const handleEditInitialBalance = async (newBalance: number) => {
-    const currentCashStatus = await getCashRegisterStatus();
+    const currentCashStatus = getCashRegisterStatus();
     if (currentCashStatus.status !== 'open') return;
     const newStatus = { ...currentCashStatus, openingBalance: newBalance };
-    await saveCashRegisterStatus(newStatus);
+    saveCashRegisterStatus(newStatus);
     toast({ title: "Saldo Inicial Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditInitialBalanceDialogOpen(false);
   };
 
   const handleTransfer = async (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
     const { amount, destination } = details;
-    const currentSecondaryBox = await getSecondaryCashBox();
-    const currentCashStatus = await getCashRegisterStatus();
+    const currentSecondaryBox = getSecondaryCashBox();
+    const currentCashStatus = getCashRegisterStatus();
 
     if (currentSecondaryBox.balance < amount) {
         toast({ title: "Saldo Insuficiente", description: "O Caixa 02 não possui saldo suficiente para esta transferência.", variant: "destructive" });
         return;
     }
     
-    await saveSecondaryCashBox({ balance: currentSecondaryBox.balance - amount });
+    saveSecondaryCashBox({ balance: currentSecondaryBox.balance - amount });
 
     if (destination === 'daily_cash') {
       if (currentCashStatus.status !== 'open') {
         toast({ title: "Caixa Fechado", description: "Não é possível transferir para o caixa diário pois ele está fechado.", variant: "destructive" });
-        await saveSecondaryCashBox({ balance: currentSecondaryBox.balance }); // Rollback
+        saveSecondaryCashBox({ balance: currentSecondaryBox.balance }); // Rollback
         return;
       }
       const transferAdjustment: CashAdjustment = {
           id: `adj-transfer-${Date.now()}`, amount, type: 'in', description: `Transferência do Caixa 02`, timestamp: new Date().toISOString(), source: 'secondary_cash'
       };
       const newAdjustments = [...(currentCashStatus.adjustments || []), transferAdjustment];
-      await saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+      saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
       toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o Caixa Diário.` });
 
     } else if (destination === 'bank_account') {
-      const currentAccount = await getBankAccount();
-      await saveBankAccount({ balance: currentAccount.balance + amount });
+      const currentAccount = getBankAccount();
+      saveBankAccount({ balance: currentAccount.balance + amount });
       toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para a Conta Bancária.` });
     }
 
@@ -263,13 +257,13 @@ export default function CashRegisterClient() {
   }
 
   const handleEditCaixa02 = async (newBalance: number) => {
-    await saveSecondaryCashBox({ balance: newBalance });
+    saveSecondaryCashBox({ balance: newBalance });
     toast({ title: "Caixa 02 Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditCaixa02DialogOpen(false);
   }
 
   const handleEditBankAccount = async (newBalance: number) => {
-    await saveBankAccount({ balance: newBalance });
+    saveBankAccount({ balance: newBalance });
     toast({ title: "Conta Bancária Atualizada", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditBankAccountDialogOpen(false);
   }
@@ -278,8 +272,8 @@ export default function CashRegisterClient() {
     const finalCashAmount = sessionSummary.expectedCash;
 
     if (finalCashAmount > 0) {
-        const currentSecondaryBox = await getSecondaryCashBox();
-        await saveSecondaryCashBox({ balance: currentSecondaryBox.balance + finalCashAmount });
+        const currentSecondaryBox = getSecondaryCashBox();
+        saveSecondaryCashBox({ balance: currentSecondaryBox.balance + finalCashAmount });
     }
 
     const closedSession = {
@@ -295,7 +289,7 @@ export default function CashRegisterClient() {
     localStorage.setItem(CLOSED_SESSIONS_KEY, JSON.stringify(allClosedSessions));
 
     const newStatus = { status: 'closed' as 'closed', adjustments: [] };
-    await saveCashRegisterStatus(newStatus);
+    saveCashRegisterStatus(newStatus);
     setIsClosingDialog(false);
     toast({ title: "Caixa Fechado!", description: `O valor de ${formatCurrency(finalCashAmount)} foi transferido para o Caixa 02.`, variant: 'default' });
   };

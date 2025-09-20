@@ -126,18 +126,11 @@ export default function FinancialClient() {
   });
 
   const loadData = async () => {
-    const [entriesData, secondaryCashData, bankAccountData, cashStatusData, salesData] = await Promise.all([
-      getFinancialEntries(),
-      getSecondaryCashBox(),
-      getBankAccount(),
-      getCashRegisterStatus(),
-      getSales()
-    ]);
-    setEntries(entriesData);
-    setSecondaryCashBox(secondaryCashData);
-    setBankAccount(bankAccountData);
-    setCashStatus(cashStatusData);
-    setSales(salesData);
+      setEntries(await getFinancialEntries());
+      setSecondaryCashBox(getSecondaryCashBox());
+      setBankAccount(getBankAccount());
+      setCashStatus(getCashRegisterStatus());
+      setSales(await getSales());
   };
   
   useEffect(() => {
@@ -372,7 +365,7 @@ export default function FinancialClient() {
       saveBankAccount({ balance: bankAccount.balance - data.amount });
     }
 
-    await removeFinancialEntry(newEntry as FinancialEntry);
+    await addFinancialEntry(newEntry as FinancialEntry);
     
     toast({ title: "Despesa Adicionada", description: "Sua nova despesa foi registrada com sucesso." });
     setIsExpenseDialogOpen(false);

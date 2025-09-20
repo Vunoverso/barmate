@@ -4,7 +4,7 @@
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { 
   getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
-  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale
+  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale, removeFinancialEntry
 } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -73,26 +73,11 @@ export default function ReportsClient() {
     const loadData = async () => {
         setIsMounted(false);
         try {
-            const [
-                salesData,
-                entriesData,
-                secondaryCashData,
-                bankAccountData,
-                cashStatusData,
-            ] = await Promise.all([
-                getSales(),
-                getFinancialEntries(),
-                getSecondaryCashBox(),
-                getBankAccount(),
-                getCashRegisterStatus(),
-            ]);
-
-            setSales(salesData);
-            setFinancialEntries(entriesData);
-            setSecondaryCashBox(secondaryCashData);
-            setBankAccount(bankAccountData);
-            setCashStatus(cashStatusData);
-
+            setSales(await getSales());
+            setFinancialEntries(await getFinancialEntries());
+            setSecondaryCashBox(getSecondaryCashBox());
+            setBankAccount(getBankAccount());
+            setCashStatus(getCashRegisterStatus());
         } catch (error) {
             console.error("Failed to load report data:", error);
             toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os dados para os relatórios.", variant: "destructive" });
@@ -212,9 +197,9 @@ export default function ReportsClient() {
 
   const confirmDeleteSale = (sale: Sale) => setSaleToDelete(sale);
 
-  const handleDeleteSale = () => {
+  const handleDeleteSale = async () => {
     if (!saleToDelete) return;
-    removeSale(saleToDelete.id);
+    await removeSale(saleToDelete.id);
     toast({
       title: "Venda Removida",
       description: "A venda e seu impacto financeiro foram revertidos.",

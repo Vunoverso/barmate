@@ -34,30 +34,6 @@ export type Database = {
         }
         Relationships: []
       }
-      balances: {
-        Row: {
-          id: string
-          secondary_cash_data: Json | null
-          bank_account_data: Json | null
-          cash_register_status_data: Json | null
-          fees_data: Json | null
-        }
-        Insert: {
-          id: string
-          secondary_cash_data?: Json | null
-          bank_account_data?: Json | null
-          cash_register_status_data?: Json | null
-          fees_data?: Json | null
-        }
-        Update: {
-          id?: string
-          secondary_cash_data?: Json | null
-          bank_account_data?: Json | null
-          cash_register_status_data?: Json | null
-          fees_data?: Json | null
-        }
-        Relationships: []
-      }
       financial_entries: {
         Row: {
           id: string
