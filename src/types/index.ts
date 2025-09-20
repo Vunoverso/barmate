@@ -1,18 +1,14 @@
 
 import type { LucideIcon } from 'lucide-react';
+import type { Database } from './supabase';
 
-export interface ProductCategory {
-  id: string; // Identificador único e estável
-  name: string; // Nome de exibição, editável
-  iconName: string; // Nome da string do ícone Lucide para mapeamento dinâmico
-}
+export type { Database } from './supabase';
 
-export interface Product {
-  id: string;
-  name: string;
-  price: number;
-  categoryId: string; // Referencia ProductCategory.id
-  stock?: number; // Optional: for inventory management
+export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
+
+export interface ProductCategory extends Tables<'product_categories'> {}
+
+export interface Product extends Tables<'products'> {
   isCombo?: boolean;
   comboItems?: number;
 }
@@ -21,9 +17,9 @@ export interface OrderItem extends Product {
   quantity: number;
   categoryName?: string; 
   categoryIconName?: string;
-  claimedQuantity?: number; // Para controlar itens de combo entregues
-  isClaim?: boolean; // Para marcar um item como uma liberação de combo
-  claimedFromId?: string; // ID do item do combo original
+  claimedQuantity?: number; 
+  isClaim?: boolean; 
+  claimedFromId?: string;
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';
@@ -36,12 +32,12 @@ export interface Payment {
 export interface Sale {
   id: string;
   items: OrderItem[];
-  totalAmount: number; // This is the final amount after discount
-  originalAmount: number; // The pre-discount total
-  discountAmount: number; // The discount amount
+  totalAmount: number; 
+  originalAmount: number; 
+  discountAmount: number; 
   payments: Payment[];
-  cashTendered?: number; // Total cash provided by customer
-  changeGiven?: number; // For cash transactions
+  cashTendered?: number; 
+  changeGiven?: number; 
   timestamp: Date;
   status: 'completed' | 'pending' | 'cancelled';
   leaveChangeAsCredit?: boolean;
@@ -85,12 +81,12 @@ export interface FinancialEntry {
   id: string;
   description: string;
   amount: number;
-  type: 'expense' | 'income'; // For now, only 'expense' but can be extended
+  type: 'expense' | 'income'; 
   source: 'daily_cash' | 'secondary_cash' | 'bank_account';
   timestamp: Date;
   adjustmentId?: string;
   saleId?: string;
-  isAdjustment?: boolean; // Flag to link financial entry to a cash adjustment
+  isAdjustment?: boolean; 
 }
 
 export interface TransactionFees {

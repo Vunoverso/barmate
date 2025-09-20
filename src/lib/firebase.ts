@@ -1,3 +1,7 @@
+
+// This file is no longer the primary data source but kept for reference or potential future use.
+// All data logic is being migrated to Supabase.
+
 // Importa as funções necessárias dos SDKs que você precisa
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -31,5 +35,3 @@ if (!getApps().length) {
 const db = app ? getFirestore(app) : null as any;
 
 export { app, db };
-
-    

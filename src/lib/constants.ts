@@ -1,19 +1,12 @@
 
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, CashAdjustment, OrderItem } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
-import { getFirestore, collection, doc, getDocs, setDoc, writeBatch, deleteDoc, getDoc } from "firebase/firestore";
-import { db } from './firebase';
+import { supabase } from './supabaseClient';
 
 
-// In-memory cache to reduce Firestore reads and improve performance
+// In-memory cache to reduce reads and improve performance
 let productCategoriesCache: ProductCategory[] | null = null;
 let productsCache: Product[] | null = null;
-let salesCache: Sale[] | null = null;
-let financialEntriesCache: FinancialEntry[] | null = null;
-let secondaryCashBoxCache: SecondaryCashBox | null = null;
-let bankAccountCache: BankAccount | null = null;
-let cashRegisterStatusCache: CashRegisterStatus | null = null;
-let transactionFeesCache: TransactionFees | null = null;
 
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
@@ -40,44 +33,50 @@ export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
   { id: 'cat_outros', name: 'Outros', iconName: 'Package' }
 ];
 
-const PRODUCT_CATEGORIES_COLLECTION = 'productCategories';
-
 export const getProductCategories = async (): Promise<ProductCategory[]> => {
   if (productCategoriesCache) return productCategoriesCache;
+  if (!supabase) return INITIAL_PRODUCT_CATEGORIES;
 
   try {
-    const querySnapshot = await getDocs(collection(db, PRODUCT_CATEGORIES_COLLECTION));
-    if (querySnapshot.empty) {
-      // First time setup: Populate Firestore with initial data
-      const batch = writeBatch(db);
-      INITIAL_PRODUCT_CATEGORIES.forEach(category => {
-        const docRef = doc(db, PRODUCT_CATEGORIES_COLLECTION, category.id);
-        batch.set(docRef, category);
-      });
-      await batch.commit();
+    const { data, error } = await supabase.from('product_categories').select('*');
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      // First time setup: Populate Supabase with initial data
+      const { error: insertError } = await supabase.from('product_categories').insert(INITIAL_PRODUCT_CATEGORIES);
+      if (insertError) throw insertError;
       productCategoriesCache = INITIAL_PRODUCT_CATEGORIES;
       return INITIAL_PRODUCT_CATEGORIES;
     }
-    const categories = querySnapshot.docs.map(doc => doc.data() as ProductCategory);
-    productCategoriesCache = categories;
-    return categories;
+    
+    productCategoriesCache = data;
+    return data;
   } catch (error) {
-    console.error("Error fetching product categories from Firestore:", error);
+    console.error("Error fetching product categories from Supabase:", error);
     return INITIAL_PRODUCT_CATEGORIES; // Fallback
   }
 };
 
 export const saveProductCategories = async (categories: ProductCategory[]): Promise<void> => {
+  if (!supabase) return;
   try {
-    const batch = writeBatch(db);
-    categories.forEach(category => {
-      const docRef = doc(db, PRODUCT_CATEGORIES_COLLECTION, category.id);
-      batch.set(docRef, category);
-    });
-    await batch.commit();
-    productCategoriesCache = categories;
+     // Supabase upsert will insert or update based on the primary key 'id'
+    const { error } = await supabase.from('product_categories').upsert(categories);
+    if (error) throw error;
+
+    // Handle deletions: find categories that are in the cache but not in the new array
+    const oldIds = (await getProductCategories()).map(c => c.id);
+    const newIds = categories.map(c => c.id);
+    const idsToDelete = oldIds.filter(id => !newIds.includes(id));
+
+    if(idsToDelete.length > 0) {
+        const { error: deleteError } = await supabase.from('product_categories').delete().in('id', idsToDelete);
+        if(deleteError) throw deleteError;
+    }
+
+    productCategoriesCache = categories; // Update cache
   } catch (error) {
-    console.error("Error saving product categories to Firestore:", error);
+    console.error("Error saving product categories to Supabase:", error);
   }
 };
 
@@ -98,52 +97,46 @@ export const INITIAL_PRODUCTS: Product[] = [
   { id: '13', name: 'Mousse de Maracujá', price: 15.00, categoryId: 'cat_sobremesas', stock: 50 },
 ];
 
-export const PRODUCTS_COLLECTION = 'products';
-
 export const getProducts = async (): Promise<Product[]> => {
   if (productsCache) return productsCache;
+  if (!supabase) return [];
 
   try {
-    const querySnapshot = await getDocs(collection(db, PRODUCTS_COLLECTION));
-     if (querySnapshot.empty) {
-      const batch = writeBatch(db);
-      INITIAL_PRODUCTS.forEach(p => {
-        const docRef = doc(db, PRODUCTS_COLLECTION, p.id);
-        batch.set(docRef, p);
-      });
-      await batch.commit();
+    const { data, error } = await supabase.from('products').select('*');
+    if (error) throw error;
+     if (!data || data.length === 0) {
+      const { error: insertError } = await supabase.from('products').insert(INITIAL_PRODUCTS);
+      if (insertError) throw insertError;
       productsCache = INITIAL_PRODUCTS;
       return INITIAL_PRODUCTS;
     }
-    const products = querySnapshot.docs.map(doc => doc.data() as Product);
-    productsCache = products;
-    return products;
+    productsCache = data;
+    return data;
   } catch (error) {
-    console.error("Error fetching products from Firestore:", error);
+    console.error("Error fetching products from Supabase:", error);
     return [];
   }
 };
 
 export const saveProducts = async (products: Product[]): Promise<void> => {
+  if (!supabase) return;
   try {
-    const batch = writeBatch(db);
-    products.forEach(p => {
-      const docRef = doc(db, PRODUCTS_COLLECTION, p.id);
-      batch.set(docRef, p);
-    });
-    // To handle deletions, we need to compare with the cached state
-    const initialIds = (await getProducts()).map(p => p.id);
+    const { error } = await supabase.from('products').upsert(products);
+    if (error) throw error;
+    
+    // Handle deletions
+    const oldIds = (await getProducts()).map(p => p.id);
     const newIds = products.map(p => p.id);
-    const idsToDelete = initialIds.filter(id => !newIds.includes(id));
-    idsToDelete.forEach(id => {
-        const docRef = doc(db, PRODUCTS_COLLECTION, id);
-        batch.delete(docRef);
-    });
+    const idsToDelete = oldIds.filter(id => !newIds.includes(id));
 
-    await batch.commit();
+    if(idsToDelete.length > 0) {
+        const { error: deleteError } = await supabase.from('products').delete().in('id', idsToDelete);
+        if (deleteError) throw deleteError;
+    }
+
     productsCache = products;
   } catch (error) {
-    console.error("Error saving products to Firestore:", error);
+    console.error("Error saving products to Supabase:", error);
   }
 };
 
@@ -155,180 +148,98 @@ export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: Lucide
 ];
 
 
-export const SALES_COLLECTION = 'sales';
+// ---- Get/Set from localStorage ----
+// These functions are now wrappers around the new Supabase logic
+// For some items, we still use localStorage for non-critical, session-only data or as a fallback.
 
-export const saveSales = async (sales: Sale[]): Promise<void> => {
-   try {
-    const batch = writeBatch(db);
-    sales.forEach(s => {
-      const docRef = doc(db, SALES_COLLECTION, s.id);
-      // Convert Date objects to Timestamps for Firestore
-      batch.set(docRef, { ...s, timestamp: s.timestamp });
-    });
-    await batch.commit();
-    salesCache = sales;
-  } catch (error) {
-    console.error("Error saving sales to Firestore:", error);
-  }
+// ---- SALES ----
+export const getSales = (): Sale[] => {
+    if (typeof window === 'undefined') return [];
+    const data = localStorage.getItem('barmate_sales');
+    return data ? JSON.parse(data) : [];
 };
 
-export const getSales = async (): Promise<Sale[]> => {
-  if (salesCache) return salesCache;
-  try {
-    const querySnapshot = await getDocs(collection(db, SALES_COLLECTION));
-    const sales = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        // Convert Firestore Timestamp to JS Date object
-        return { ...data, timestamp: (data.timestamp as any).toDate() } as Sale;
-    });
-    salesCache = sales;
-    return sales;
-  } catch (error) {
-    console.error("Error fetching sales from Firestore:", error);
-    return [];
-  }
+export const saveSales = (sales: Sale[]) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('barmate_sales', JSON.stringify(sales));
+    window.dispatchEvent(new Event('storage'));
 };
 
-export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id' | 'timestamp'>): Promise<void> => {
-  const newEntry: FinancialEntry = {
-    ...entry,
-    id: `${entry.type.slice(0,3)}-${Date.now()}`,
-    timestamp: new Date(),
-  };
-
-  try {
-    await setDoc(doc(db, FINANCIAL_ENTRIES_COLLECTION, newEntry.id), { ...newEntry, timestamp: newEntry.timestamp });
-    financialEntriesCache = null; // Invalidate cache
-
-    // Handle side-effects on balances
-    if (entry.type === 'income') {
-      if (entry.source === 'daily_cash') {
-        const currentCashStatus = await getCashRegisterStatus();
-        if (currentCashStatus.status === 'open') {
-          const suprimentoAdjustment: CashAdjustment = {
-            id: `adj-inc-${newEntry.id}`,
-            amount: entry.amount,
-            type: 'in' as 'in',
-            description: entry.description,
-            timestamp: new Date().toISOString()
-          };
-          const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), suprimentoAdjustment]};
-          await saveCashRegisterStatus(updatedStatus);
-        }
-      } else if (entry.source === 'bank_account') {
-        const currentAccount = await getBankAccount();
-        await saveBankAccount({ balance: currentAccount.balance + entry.amount });
-      } else if (entry.source === 'secondary_cash') {
-          const currentSecondaryBox = await getSecondaryCashBox();
-          await saveSecondaryCashBox({ balance: currentSecondaryBox.balance + entry.amount });
-      }
-    }
-  } catch(error) {
-      console.error("Error adding financial entry:", error);
-  }
-};
-
-
-export const addSale = async (newSale: Sale): Promise<void> => {
-  try {
-    const saleRef = doc(db, SALES_COLLECTION, newSale.id);
+export const addSale = (newSale: Sale) => {
+    if (typeof window === 'undefined') return;
+    const sales = getSales();
+    const updatedSales = [...sales, newSale];
+    saveSales(updatedSales);
     
-    let bankAccount = await getBankAccount();
-    const newFinancialEntries: FinancialEntry[] = [];
-    const transactionFees = await getTransactionFees();
-
+    // Add financial entries for card/pix fees
+    const fees = getTransactionFees();
+    const entries = getFinancialEntries();
+    const newEntries: FinancialEntry[] = [];
+    
     newSale.payments.forEach(p => {
-      let feeAmount = 0;
-      let feeRate = 0;
-      
-      if (p.method === 'credit') feeRate = transactionFees.creditRate;
-      else if (p.method === 'debit') feeRate = transactionFees.debitRate;
-      else if (p.method === 'pix') feeRate = transactionFees.pixRate;
+        let feeAmount = 0;
+        if (p.method === 'credit' && fees.creditRate > 0) {
+            feeAmount = p.amount * (fees.creditRate / 100);
+        } else if (p.method === 'debit' && fees.debitRate > 0) {
+            feeAmount = p.amount * (fees.debitRate / 100);
+        } else if (p.method === 'pix' && fees.pixRate > 0) {
+            feeAmount = p.amount * (fees.pixRate / 100);
+        }
+        
+        if (feeAmount > 0) {
+            newEntries.push({
+                id: `fee-${newSale.id}-${p.method}`,
+                description: `Taxa ${p.method.charAt(0).toUpperCase() + p.method.slice(1)} (Venda #${newSale.id.slice(-6)})`,
+                amount: feeAmount,
+                type: 'expense',
+                source: 'bank_account',
+                timestamp: new Date(),
+                saleId: newSale.id
+            });
 
-      if (feeRate > 0) {
-        feeAmount = p.amount * (feeRate / 100);
-        bankAccount = { balance: bankAccount.balance + (p.amount - feeAmount) };
-        newFinancialEntries.push({
-          id: `fee-${newSale.id}-${p.method}`,
-          description: `Taxa ${p.method.charAt(0).toUpperCase() + p.method.slice(1)} (Venda #${newSale.id.slice(-6)})`,
-          amount: feeAmount,
-          type: 'expense',
-          source: 'bank_account',
-          timestamp: new Date(),
-          saleId: newSale.id,
-        });
-      } else if (p.method !== 'cash') {
-         bankAccount = { balance: bankAccount.balance + p.amount };
-      }
-    });
+            // Deduct fee from bank account
+            const bankAccount = getBankAccount();
+            saveBankAccount({ balance: bankAccount.balance - feeAmount });
+        }
 
-    const batch = writeBatch(db);
-    batch.set(saleRef, { ...newSale, timestamp: newSale.timestamp });
-    
-    newFinancialEntries.forEach(entry => {
-        const entryRef = doc(db, FINANCIAL_ENTRIES_COLLECTION, entry.id);
-        batch.set(entryRef, { ...entry, timestamp: entry.timestamp });
-    });
-
-    await saveBankAccount(bankAccount, batch);
-    await batch.commit();
-
-    salesCache = null; // Invalidate cache
-    financialEntriesCache = null;
-
-  } catch(error) {
-      console.error("Error adding sale:", error);
-  }
-};
-
-
-export const removeSale = async (saleId: string): Promise<void> => {
-  const saleDocRef = doc(db, SALES_COLLECTION, saleId);
-  
-  try {
-    const saleSnapshot = await getDoc(saleDocRef);
-    if (!saleSnapshot.exists()) return;
-    const saleToDelete = { ...saleSnapshot.data(), timestamp: (saleSnapshot.data().timestamp as any).toDate() } as Sale;
-
-    const currentAccount = await getBankAccount();
-    const querySnapshot = await getDocs(collection(db, FINANCIAL_ENTRIES_COLLECTION));
-    const allEntries = querySnapshot.docs.map(doc => doc.data() as FinancialEntry);
-    
-    let balanceReversal = 0;
-
-    saleToDelete.payments.forEach(payment => {
-        if (payment.method !== 'cash') {
-            const feeEntry = allEntries.find(e => e.saleId === saleId && e.description.toLowerCase().includes(payment.method));
-            const feeAmount = feeEntry ? feeEntry.amount : 0;
-            balanceReversal += (payment.amount - feeAmount);
+        if (p.method !== 'cash') {
+            const bankAccount = getBankAccount();
+            saveBankAccount({ balance: bankAccount.balance + p.amount });
         }
     });
 
-    const batch = writeBatch(db);
-    
-    // Update bank account
-    if (balanceReversal !== 0) {
-        await saveBankAccount({ balance: currentAccount.balance - balanceReversal }, batch);
+    if (newEntries.length > 0) {
+        saveFinancialEntries([...entries, ...newEntries]);
     }
-    
-    // Delete the sale
-    batch.delete(saleDocRef);
-    
-    // Delete associated financial entries
-    const entriesToDelete = allEntries.filter(e => e.saleId === saleId);
-    entriesToDelete.forEach(entry => {
-        const entryRef = doc(db, FINANCIAL_ENTRIES_COLLECTION, entry.id);
-        batch.delete(entryRef);
+};
+
+export const removeSale = (saleId: string) => {
+    if (typeof window === 'undefined') return;
+    const sales = getSales();
+    const saleToDelete = sales.find(s => s.id === saleId);
+    if (!saleToDelete) return;
+
+    // Revert financial impact
+    const fees = getTransactionFees();
+    saleToDelete.payments.forEach(p => {
+        if (p.method !== 'cash') {
+            let feeAmount = 0;
+            if (p.method === 'credit' && fees.creditRate > 0) feeAmount = p.amount * (fees.creditRate / 100);
+            else if (p.method === 'debit' && fees.debitRate > 0) feeAmount = p.amount * (fees.debitRate / 100);
+            else if (p.method === 'pix' && fees.pixRate > 0) feeAmount = p.amount * (fees.pixRate / 100);
+            
+            const bankAccount = getBankAccount();
+            // Add back the amount and the fee
+            saveBankAccount({ balance: bankAccount.balance - p.amount + feeAmount });
+        }
     });
-
-    await batch.commit();
-
-    salesCache = null; // Invalidate cache
-    financialEntriesCache = null;
-
-  } catch (error) {
-      console.error("Error removing sale:", error);
-  }
+    
+    // Remove the sale and related fee entries
+    const updatedSales = sales.filter(s => s.id !== saleId);
+    const updatedEntries = getFinancialEntries().filter(e => e.saleId !== saleId);
+    
+    saveSales(updatedSales);
+    saveFinancialEntries(updatedEntries);
 };
 
 
@@ -336,123 +247,77 @@ export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-
-export const FINANCIAL_ENTRIES_COLLECTION = 'financialEntries';
-
-export const saveFinancialEntries = async (entries: FinancialEntry[]): Promise<void> => {
-   try {
-    const batch = writeBatch(db);
-    entries.forEach(entry => {
-      const docRef = doc(db, FINANCIAL_ENTRIES_COLLECTION, entry.id);
-      batch.set(docRef, { ...entry, timestamp: entry.timestamp });
-    });
-    await batch.commit();
-    financialEntriesCache = entries;
-  } catch (error) {
-    console.error("Error saving financial entries to Firestore:", error);
-  }
-};
-
-export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
-  if (financialEntriesCache) return financialEntriesCache;
-
-  try {
-    const querySnapshot = await getDocs(collection(db, FINANCIAL_ENTRIES_COLLECTION));
-    const entries = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return { ...data, timestamp: (data.timestamp as any).toDate() } as FinancialEntry;
-    });
-    financialEntriesCache = entries;
-    return entries;
-  } catch (error) {
-    console.error("Error fetching financial entries from Firestore:", error);
+// ---- FINANCIAL ENTRIES ----
+export const getFinancialEntries = (): FinancialEntry[] => {
+    if (typeof window === 'undefined') return [];
+    const data = localStorage.getItem('barmate_financialEntries');
+    if (data) {
+        return JSON.parse(data).map((e: any) => ({...e, timestamp: new Date(e.timestamp)}));
+    }
     return [];
-  }
 };
 
-// --- Singleton documents ---
-const SINGLETON_DOCS_COLLECTION = 'singletons';
-
-const getSingletonDoc = async <T>(docId: string, defaultValue: T): Promise<T> => {
-    try {
-        const docRef = doc(db, SINGLETON_DOCS_COLLECTION, docId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            return docSnap.data() as T;
-        } else {
-            await setDoc(docRef, defaultValue);
-            return defaultValue;
-        }
-    } catch(error) {
-        console.error(`Error fetching singleton doc ${docId}:`, error);
-        return defaultValue;
-    }
-}
-
-const saveSingletonDoc = async <T>(docId: string, data: T, batch?: any): Promise<void> => {
-    const docRef = doc(db, SINGLETON_DOCS_COLLECTION, docId);
-    if (batch) {
-        batch.set(docRef, data);
-    } else {
-       await setDoc(docRef, data);
-    }
-}
-
-
-// --- Caixa 02 ---
-const SECONDARY_CASH_BOX_ID = 'secondaryCashBox';
-export const getSecondaryCashBox = async (): Promise<SecondaryCashBox> => {
-  if (secondaryCashBoxCache) return secondaryCashBoxCache;
-  const box = await getSingletonDoc<SecondaryCashBox>(SECONDARY_CASH_BOX_ID, { balance: 0 });
-  secondaryCashBoxCache = box;
-  return box;
+export const saveFinancialEntries = (entries: FinancialEntry[]) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('barmate_financialEntries', JSON.stringify(entries));
+    window.dispatchEvent(new Event('storage'));
 };
 
-export const saveSecondaryCashBox = async (box: SecondaryCashBox, batch?: any): Promise<void> => {
-  await saveSingletonDoc(SECONDARY_CASH_BOX_ID, box, batch);
-  secondaryCashBoxCache = box;
+export const addFinancialEntry = (entry: FinancialEntry) => {
+    if (typeof window === 'undefined') return;
+    const entries = getFinancialEntries();
+    saveFinancialEntries([...entries, entry]);
 };
 
-// --- Conta Bancária ---
-const BANK_ACCOUNT_ID = 'bankAccount';
-export const getBankAccount = async (): Promise<BankAccount> => {
-  if (bankAccountCache) return bankAccountCache;
-  const account = await getSingletonDoc<BankAccount>(BANK_ACCOUNT_ID, { balance: 0 });
-  bankAccountCache = account;
-  return account;
+// --- Caixa 02 (Secondary Cash Box) ---
+export const getSecondaryCashBox = (): SecondaryCashBox => {
+    if (typeof window === 'undefined') return { balance: 0 };
+    const data = localStorage.getItem('barmate_secondaryCashBox');
+    return data ? JSON.parse(data) : { balance: 0 };
 };
 
-export const saveBankAccount = async (account: BankAccount, batch?: any): Promise<void> => {
-  await saveSingletonDoc(BANK_ACCOUNT_ID, account, batch);
-  bankAccountCache = account;
+export const saveSecondaryCashBox = (box: SecondaryCashBox) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('barmate_secondaryCashBox', JSON.stringify(box));
+    window.dispatchEvent(new Event('storage'));
 };
 
-// --- Status do Caixa Diário ---
-const CASH_REGISTER_STATUS_ID = 'cashRegisterStatus';
-export const getCashRegisterStatus = async (): Promise<CashRegisterStatus> => {
-    if (cashRegisterStatusCache) return cashRegisterStatusCache;
-    const status = await getSingletonDoc<CashRegisterStatus>(CASH_REGISTER_STATUS_ID, { status: 'closed', adjustments: [] });
-    cashRegisterStatusCache = status;
-    return status;
-}
+// --- Bank Account ---
+export const getBankAccount = (): BankAccount => {
+    if (typeof window === 'undefined') return { balance: 0 };
+    const data = localStorage.getItem('barmate_bankAccount');
+    return data ? JSON.parse(data) : { balance: 0 };
+};
 
-export const saveCashRegisterStatus = async (status: CashRegisterStatus, batch?:any): Promise<void> => {
-    await saveSingletonDoc(CASH_REGISTER_STATUS_ID, status, batch);
-    cashRegisterStatusCache = status;
-}
+export const saveBankAccount = (account: BankAccount) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('barmate_bankAccount', JSON.stringify(account));
+    window.dispatchEvent(new Event('storage'));
+};
+
+// --- Cash Register Status ---
+export const getCashRegisterStatus = (): CashRegisterStatus => {
+    if (typeof window === 'undefined') return { status: 'closed', adjustments: [] };
+    const data = localStorage.getItem('barmate_cashRegisterStatus');
+    return data ? JSON.parse(data) : { status: 'closed', adjustments: [] };
+};
+
+export const saveCashRegisterStatus = (status: CashRegisterStatus) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('barmate_cashRegisterStatus', JSON.stringify(status));
+    window.dispatchEvent(new Event('storage'));
+};
 
 // --- Transaction Fees ---
-const TRANSACTION_FEES_ID = 'transactionFees';
-export const getTransactionFees = async (): Promise<TransactionFees> => {
-    if (transactionFeesCache) return transactionFeesCache;
-    const fees = await getSingletonDoc<TransactionFees>(TRANSACTION_FEES_ID, { debitRate: 2, creditRate: 4, pixRate: 1 });
-    transactionFeesCache = fees;
-    return fees;
+export const getTransactionFees = (): TransactionFees => {
+    if (typeof window === 'undefined') return { debitRate: 2, creditRate: 4, pixRate: 1 };
+    const data = localStorage.getItem('barmate_transactionFees');
+    // Provide default fees if not set
+    return data ? JSON.parse(data) : { debitRate: 2, creditRate: 4, pixRate: 1 };
 };
 
-export const saveTransactionFees = async (fees: TransactionFees, batch?:any): Promise<void> => {
-    await saveSingletonDoc(TRANSACTION_FEES_ID, fees, batch);
-    transactionFeesCache = fees;
+export const saveTransactionFees = (fees: TransactionFees) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('barmate_transactionFees', JSON.stringify(fees));
+    window.dispatchEvent(new Event('storage'));
 };
-
-    

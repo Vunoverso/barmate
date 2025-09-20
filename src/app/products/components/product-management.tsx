@@ -55,13 +55,23 @@ export default function ProductManagement() {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
-      setProducts(fetchedProducts);
-      setProductCategories(fetchedCategories);
-      setIsLoading(false);
+      try {
+        const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
+        setProducts(fetchedProducts);
+        setProductCategories(fetchedCategories);
+      } catch (error) {
+        console.error("Failed to fetch data:", error);
+        toast({
+          title: "Erro ao carregar dados",
+          description: "Não foi possível buscar os produtos e categorias. Usando dados locais.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
     };
     fetchData();
-  }, []);
+  }, [toast]);
 
   const handleAddProduct = async (product: Product) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
@@ -110,7 +120,7 @@ export default function ProductManagement() {
   };
 
   if (isLoading) {
-    return <p>Carregando produtos...</p>;
+    return <p>Carregando produtos da nuvem...</p>;
   }
 
   return (
@@ -258,5 +268,3 @@ export default function ProductManagement() {
     </>
   );
 }
-
-    
