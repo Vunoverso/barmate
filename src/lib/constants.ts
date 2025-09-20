@@ -36,8 +36,7 @@ export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
 export const getProductCategories = async (): Promise<ProductCategory[]> => {
   if (productCategoriesCache) return productCategoriesCache;
   if (!supabase) {
-    const localData = localStorage.getItem('barmate_product_categories');
-    return localData ? JSON.parse(localData) : INITIAL_PRODUCT_CATEGORIES;
+    return getFromLocalStorage('barmate_product_categories', INITIAL_PRODUCT_CATEGORIES);
   }
 
   try {
@@ -55,8 +54,8 @@ export const getProductCategories = async (): Promise<ProductCategory[]> => {
     return data;
   } catch (error) {
     console.error("Error fetching product categories:", error);
-    const localData = localStorage.getItem('barmate_product_categories');
-    return localData ? JSON.parse(localData) : INITIAL_PRODUCT_CATEGORIES;
+    // Fallback to local storage if Supabase fails
+    return getFromLocalStorage('barmate_product_categories', INITIAL_PRODUCT_CATEGORIES);
   }
 };
 
@@ -65,7 +64,7 @@ export const saveProductCategories = async (categories: ProductCategory[]): Prom
   window.dispatchEvent(new Event('storage'));
 
   if (!supabase) {
-    localStorage.setItem('barmate_product_categories', JSON.stringify(categories));
+    saveToLocalStorage('barmate_product_categories', categories);
     return;
   }
   try {
@@ -98,8 +97,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 export const getProducts = async (): Promise<Product[]> => {
   if (productsCache) return productsCache;
   if (!supabase) {
-      const localData = localStorage.getItem('barmate_products');
-      return localData ? JSON.parse(localData) : INITIAL_PRODUCTS;
+      return getFromLocalStorage('barmate_products', INITIAL_PRODUCTS);
   }
 
   try {
@@ -123,8 +121,7 @@ export const getProducts = async (): Promise<Product[]> => {
     return productsCache;
   } catch (error) {
     console.error("Error fetching products:", error);
-    const localData = localStorage.getItem('barmate_products');
-    return localData ? JSON.parse(localData) : [];
+    return getFromLocalStorage('barmate_products', []);
   }
 };
 
@@ -133,7 +130,7 @@ export const saveProducts = async (products: Product[]): Promise<void> => {
   window.dispatchEvent(new Event('storage'));
 
   if (!supabase) {
-    localStorage.setItem('barmate_products', JSON.stringify(products));
+    saveToLocalStorage('barmate_products', products);
     return;
   }
   try {
@@ -290,7 +287,7 @@ export const addSale = async (newSale: Omit<Sale, 'id'> & {id?: string}): Promis
     }
     
     // Add financial entries for card/pix fees and revenue
-    const fees = await getTransactionFees();
+    const fees = getTransactionFees();
     
     for (const p of saleWithId.payments) {
         let feeAmount = 0;
@@ -392,11 +389,12 @@ export const getSecondaryCashBox = async (): Promise<SecondaryCashBox> => {
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'secondary_cash').single();
         if (error || !data) {
-          await supabase.from('balances').insert({ id: 'secondary_cash', balance: 0 });
+          await supabase.from('balances').upsert({ id: 'secondary_cash', balance: 0 });
           return { balance: 0 };
         }
         return { balance: data.balance };
     } catch (e) {
+        console.error("Error getting secondary cash box:", e);
         return { balance: 0 };
     }
 };
@@ -420,11 +418,12 @@ export const getBankAccount = async (): Promise<BankAccount> => {
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'bank_account').single();
         if (error || !data) {
-          await supabase.from('balances').insert({ id: 'bank_account', balance: 0 });
+          await supabase.from('balances').upsert({ id: 'bank_account', balance: 0 });
           return { balance: 0 };
         }
         return { balance: data.balance };
     } catch (e) {
+        console.error("Error getting bank account:", e);
         return { balance: 0 };
     }
 };
