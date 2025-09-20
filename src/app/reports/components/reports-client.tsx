@@ -71,6 +71,7 @@ export default function ReportsClient() {
 
   useEffect(() => {
     const loadData = async () => {
+        setIsMounted(false);
         try {
             const [
                 salesData,

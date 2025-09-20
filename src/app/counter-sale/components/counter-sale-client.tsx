@@ -47,6 +47,17 @@ export default function CounterSaleClient() {
             const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
             setProducts(fetchedProducts);
             setProductCategories(fetchedCategories);
+            
+            // Load cart from localStorage after products are loaded
+            const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+            if (storedOrderItems) {
+              try {
+                setCurrentOrderItems(JSON.parse(storedOrderItems));
+              } catch (error) {
+                console.error("Failed to parse counter sale items from localStorage", error);
+                localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+              }
+            }
         } catch (error) {
             console.error("Failed to load products/categories", error);
             toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os produtos.", variant: "destructive" });
@@ -57,16 +68,7 @@ export default function CounterSaleClient() {
     
     loadInitialData();
 
-    // Load cart from localStorage
-    const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    if (storedOrderItems) {
-      try {
-        setCurrentOrderItems(JSON.parse(storedOrderItems));
-      } catch (error) {
-        console.error("Failed to parse counter sale items from localStorage", error);
-        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-      }
-    }
+    // No need to listen for 'storage' change here as this page is more self-contained.
   }, [toast]);
 
   useEffect(() => {

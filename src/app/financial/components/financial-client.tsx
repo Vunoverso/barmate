@@ -125,6 +125,21 @@ export default function FinancialClient() {
     defaultValues: { description: '', amount: 0, source: 'daily_cash' },
   });
 
+  const loadData = async () => {
+    const [entriesData, secondaryCashData, bankAccountData, cashStatusData, salesData] = await Promise.all([
+      getFinancialEntries(),
+      getSecondaryCashBox(),
+      getBankAccount(),
+      getCashRegisterStatus(),
+      getSales()
+    ]);
+    setEntries(entriesData);
+    setSecondaryCashBox(secondaryCashData);
+    setBankAccount(bankAccountData);
+    setCashStatus(cashStatusData);
+    setSales(salesData);
+  };
+  
   useEffect(() => {
     setIsMounted(true);
     setDateRange({
@@ -132,19 +147,12 @@ export default function FinancialClient() {
       to: new Date(),
     });
 
-    const handleStorageChange = async () => {
-      setEntries(await getFinancialEntries());
-      setSecondaryCashBox(await getSecondaryCashBox());
-      setBankAccount(await getBankAccount());
-      setCashStatus(getCashRegisterStatus());
-      setSales(await getSales());
-    };
-    handleStorageChange();
+    loadData();
 
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('storage', loadData);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('storage', loadData);
     };
   }, []);
   

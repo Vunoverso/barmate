@@ -79,14 +79,12 @@ export default function ProductManagement() {
   const handleAddProduct = async (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
-    setProducts(updatedProducts); // Optimistic update
     await saveProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
   const handleEditProduct = async (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-    setProducts(updatedProducts); // Optimistic update
     await saveProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
@@ -104,7 +102,6 @@ export default function ProductManagement() {
   const handleDeleteProduct = async (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
-    setProducts(updatedProducts); // Optimistic update
     setProductToDelete(null);
     await saveProducts(updatedProducts);
     if (productName) {

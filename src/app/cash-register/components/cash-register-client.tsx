@@ -72,28 +72,28 @@ export default function CashRegisterClient() {
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
   const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
 
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    try {
+        const [salesData, secondaryCashData, bankAccountData, cashRegisterStatusData] = await Promise.all([
+            getSales(),
+            getSecondaryCashBox(),
+            getBankAccount(),
+            getCashRegisterStatus(),
+        ]);
+        setSales(salesData);
+        setSecondaryCashBox(secondaryCashData);
+        setBankAccount(bankAccountData);
+        setCashStatus(cashRegisterStatusData);
+    } catch (e) {
+        console.error("Failed to load cash register data", e);
+        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar dados da nuvem.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadInitialData = async () => {
-        setIsLoading(true);
-        try {
-            const [salesData, secondaryCashData, bankAccountData, cashRegisterStatusData] = await Promise.all([
-                getSales(),
-                getSecondaryCashBox(),
-                getBankAccount(),
-                getCashRegisterStatus(),
-            ]);
-            setSales(salesData);
-            setSecondaryCashBox(secondaryCashData);
-            setBankAccount(bankAccountData);
-            setCashStatus(cashRegisterStatusData);
-        } catch (e) {
-            console.error("Failed to load cash register data", e);
-            toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar dados da nuvem.", variant: "destructive" });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
     loadInitialData();
 
     const handleStorageChange = () => {
@@ -104,7 +104,7 @@ export default function CashRegisterClient() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [toast]);
+  }, []); // Empty dependency array ensures this runs only once on mount and sets up the listener
 
 
   const handleOpenCashRegister = async (openingBalance: number) => {
@@ -893,5 +893,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
-
-    

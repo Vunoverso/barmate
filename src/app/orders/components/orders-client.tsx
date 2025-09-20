@@ -75,38 +75,38 @@ export default function OrdersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
- useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [
-          fetchedProducts, 
-          fetchedCategories, 
-          fetchedOrders
-        ] = await Promise.all([
-          getProducts(), 
-          getProductCategories(), 
-          getOpenOrders()
-        ]);
-        
-        setProducts(fetchedProducts);
-        setProductCategories(fetchedCategories);
-        setOpenOrders(fetchedOrders);
+ const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [
+        fetchedProducts, 
+        fetchedCategories, 
+        fetchedOrders
+      ] = await Promise.all([
+        getProducts(), 
+        getProductCategories(), 
+        getOpenOrders()
+      ]);
+      
+      setProducts(fetchedProducts);
+      setProductCategories(fetchedCategories);
+      setOpenOrders(fetchedOrders);
 
-        if (fetchedOrders.length > 0 && !currentOrderId) {
-          setCurrentOrderId(fetchedOrders[0].id);
-        } else if (fetchedOrders.length === 0) {
-          setCurrentOrderId(null);
-        }
-
-      } catch (error) {
-          console.error("Failed to fetch initial data", error);
-          toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados da nuvem.", variant: "destructive" });
-      } finally {
-          setIsLoading(false);
+      if (fetchedOrders.length > 0 && !currentOrderId) {
+        setCurrentOrderId(fetchedOrders[0].id);
+      } else if (fetchedOrders.length === 0) {
+        setCurrentOrderId(null);
       }
-    };
 
+    } catch (error) {
+        console.error("Failed to fetch initial data", error);
+        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados da nuvem.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
 
     const handleStorageChange = () => fetchData();
@@ -1180,5 +1180,3 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
-
-    
