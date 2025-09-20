@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Edit3, Trash2, PlusCircle, Download } from 'lucide-react';
+import { Save, Edit3, Trash2, PlusCircle, Download, Upload } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -426,13 +427,28 @@ export default function SettingsClient() {
         <Card>
           <CardHeader>
             <CardTitle>Gerenciamento de Dados</CardTitle>
-            <CardDescription>Faça o backup de todos os dados da aplicação para um arquivo local.</CardDescription>
+            <CardDescription>Faça o backup dos seus dados locais ou restaure-os em uma nova instalação.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col sm:flex-row gap-4">
             <Button onClick={handleExportAllData}>
               <Download className="mr-2 h-4 w-4" />
               Exportar todos os dados
             </Button>
+             <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button variant="outline" disabled>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Importar dados
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Funcionalidade a ser implementada.<br />Usada para restaurar um backup em uma nova instalação.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </CardContent>
         </Card>
 
@@ -524,5 +540,3 @@ export default function SettingsClient() {
     </>
   );
 }
-
-    
