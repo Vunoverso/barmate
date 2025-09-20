@@ -334,13 +334,15 @@ export default function SettingsClient() {
         localStorage.removeItem('barmate_counterSaleOrderItems_v2');
         localStorage.removeItem('barmate_closedCashSessions_v2');
 
-        // Save all data to supabase/localStorage
+        // Save data sequentially
+        await saveProductCategories(data.productCategories || []);
+        await saveProducts(data.products || []);
+        await saveSales(data.sales || []);
+        await saveOpenOrders(data.openOrders || []);
+        await saveFinancialEntries(data.financialEntries || []);
+        
+        // These save to a single record, so they can run in parallel
         await Promise.all([
-            saveProducts(data.products || []),
-            saveProductCategories(data.productCategories || []),
-            saveSales(data.sales || []),
-            saveOpenOrders(data.openOrders || []),
-            saveFinancialEntries(data.financialEntries || []),
             saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] }),
             saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 }),
             saveBankAccount(data.bankAccount || { balance: 0 }),
@@ -351,7 +353,7 @@ export default function SettingsClient() {
             localStorage.setItem('barName', data.barName);
         }
 
-        toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados com sucesso. A página será recarregada." });
+        toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
 
         // Reload the page to reflect all changes
         setTimeout(() => window.location.reload(), 2000);
@@ -602,5 +604,3 @@ export default function SettingsClient() {
     </>
   );
 }
-
-    
