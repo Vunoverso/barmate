@@ -3,11 +3,12 @@
 
 import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod, CashAdjustment } from '@/types';
 import { 
-  getFinancialEntries, saveFinancialEntries, formatCurrency, 
+  getFinancialEntries, formatCurrency, 
   getSecondaryCashBox, saveSecondaryCashBox, 
   getBankAccount, saveBankAccount,
   getCashRegisterStatus, saveCashRegisterStatus, getSales, saveSales, PAYMENT_METHODS,
-  removeSale
+  removeSale,
+  removeFinancialEntry
 } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -131,12 +132,12 @@ export default function FinancialClient() {
       to: new Date(),
     });
 
-    const handleStorageChange = () => {
-      setEntries(getFinancialEntries());
-      setSecondaryCashBox(getSecondaryCashBox());
-      setBankAccount(getBankAccount());
+    const handleStorageChange = async () => {
+      setEntries(await getFinancialEntries());
+      setSecondaryCashBox(await getSecondaryCashBox());
+      setBankAccount(await getBankAccount());
       setCashStatus(getCashRegisterStatus());
-      setSales(getSales());
+      setSales(await getSales());
     };
     handleStorageChange();
 
@@ -317,7 +318,7 @@ export default function FinancialClient() {
     proceedWithAddExpense(data);
   };
 
-  const proceedWithAddExpense = (data: ExpenseFormData) => {
+  const proceedWithAddExpense = async (data: ExpenseFormData) => {
     // Check for sufficient funds
     if (data.source === 'daily_cash') {
       if (cashStatus.status !== 'open') {
@@ -336,8 +337,7 @@ export default function FinancialClient() {
       return;
     }
 
-    const newEntry: FinancialEntry = {
-      id: `exp-${Date.now()}`,
+    const newEntry: Omit<FinancialEntry, 'id'> = {
       description: data.description,
       amount: data.amount,
       type: 'expense',
@@ -349,13 +349,13 @@ export default function FinancialClient() {
     if (data.source === 'daily_cash' && cashStatus.status === 'open') {
       const currentCashStatus = getCashRegisterStatus();
       const sangriaAdjustment: CashAdjustment = {
-        id: `adj-exp-${newEntry.id}`,
+        id: `adj-exp-${Date.now()}`,
         amount: data.amount,
         type: 'out' as 'out',
         description: `Despesa: ${data.description}`,
         timestamp: new Date().toISOString()
       };
-      newEntry.adjustmentId = sangriaAdjustment.id;
+      (newEntry as FinancialEntry).adjustmentId = sangriaAdjustment.id;
       const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), sangriaAdjustment]};
       saveCashRegisterStatus(updatedStatus);
     } else if (data.source === 'secondary_cash') {
@@ -364,7 +364,7 @@ export default function FinancialClient() {
       saveBankAccount({ balance: bankAccount.balance - data.amount });
     }
 
-    saveFinancialEntries([...entries, newEntry]);
+    await removeFinancialEntry(newEntry as FinancialEntry);
     
     toast({ title: "Despesa Adicionada", description: "Sua nova despesa foi registrada com sucesso." });
     setIsExpenseDialogOpen(false);
@@ -414,7 +414,7 @@ export default function FinancialClient() {
     setIsEditBankAccountDialogOpen(false);
   }
 
-  const handleDeleteEntry = () => {
+  const handleDeleteEntry = async () => {
     if (!entryToDelete) return;
     
     // Do not allow deleting entries linked to sales from here.
@@ -442,8 +442,7 @@ export default function FinancialClient() {
        // This case needs to be defined if income entries can be deleted
     }
 
-    const updatedEntries = entries.filter(e => e.id !== entryToDelete.id);
-    saveFinancialEntries(updatedEntries);
+    await removeFinancialEntry(entryToDelete.id);
     toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
     setEntryToDelete(null);
   };

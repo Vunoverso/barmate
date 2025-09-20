@@ -58,6 +58,7 @@ export type Database = {
           source: "daily_cash" | "secondary_cash" | "bank_account"
           timestamp: string
           saleId: string | null
+          adjustmentId: string | null
         }
         Insert: {
           id: string
@@ -67,6 +68,7 @@ export type Database = {
           source: "daily_cash" | "secondary_cash" | "bank_account"
           timestamp: string
           saleId?: string | null
+          adjustmentId?: string | null
         }
         Update: {
           id?: string
@@ -76,6 +78,7 @@ export type Database = {
           source?: "daily_cash" | "secondary_cash" | "bank_account"
           timestamp?: string
           saleId?: string | null
+          adjustmentId?: string | null
         }
         Relationships: []
       }

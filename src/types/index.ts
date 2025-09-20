@@ -53,7 +53,7 @@ export interface CashAdjustment {
   timestamp: string; // ISO String
   source?: 'secondary_cash' | 'bank_account'; // For 'in' types that are transfers
   destination?: 'secondary_cash' | 'bank_account'; // For 'out' types that are transfers
-  isCorrection?: boolean;
+  isCorrection?: boolean; // To hide manual balance corrections from the UI
 }
 
 export interface CashRegisterStatus {

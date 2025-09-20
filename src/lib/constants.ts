@@ -72,7 +72,8 @@ export const saveProductCategories = async (categories: ProductCategory[]): Prom
     const { error } = await supabase.from('product_categories').upsert(categories, { onConflict: 'id' });
     if (error) throw error;
 
-    const oldIds = (await getProductCategories()).map(c => c.id);
+    const {data: existingCategories} = await supabase.from('product_categories').select('id');
+    const oldIds = existingCategories?.map(c => c.id) || [];
     const newIds = categories.map(c => c.id);
     const idsToDelete = oldIds.filter(id => !newIds.includes(id));
 
@@ -105,13 +106,21 @@ export const getProducts = async (): Promise<Product[]> => {
     const { data, error } = await supabase.from('products').select('*');
     if (error) throw error;
      if (!data || data.length === 0) {
-      const { error: insertError } = await supabase.from('products').insert(INITIAL_PRODUCTS);
+      const { error: insertError } = await supabase.from('products').insert(INITIAL_PRODUCTS.map(p => ({ 
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        categoryId: p.categoryId,
+        stock: p.stock,
+        is_combo: p.isCombo,
+        combo_items: p.comboItems
+      })));
       if (insertError) throw insertError;
       productsCache = INITIAL_PRODUCTS;
       return INITIAL_PRODUCTS;
     }
-    productsCache = data;
-    return data.map(p => ({ ...p, isCombo: p.is_combo, comboItems: p.combo_items }));
+    productsCache = data.map(p => ({ ...p, isCombo: p.is_combo, comboItems: p.combo_items })) as Product[];
+    return productsCache;
   } catch (error) {
     console.error("Error fetching products:", error);
     const localData = localStorage.getItem('barmate_products');
@@ -140,7 +149,8 @@ export const saveProducts = async (products: Product[]): Promise<void> => {
     const { error } = await supabase.from('products').upsert(productsToSave, { onConflict: 'id' });
     if (error) throw error;
     
-    const oldIds = (await getProducts()).map(p => p.id);
+    const {data: existingProducts} = await supabase.from('products').select('id');
+    const oldIds = existingProducts?.map(p => p.id) || [];
     const newIds = products.map(p => p.id);
     const idsToDelete = oldIds.filter(id => !newIds.includes(id));
 
@@ -190,7 +200,7 @@ export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
     try {
         const { data, error } = await supabase.from('active_orders').select('*');
         if (error) throw error;
-        return data.map(o => ({
+        return (data || []).map(o => ({
             ...o,
             createdAt: new Date(o.created_at),
         })) as ActiveOrder[];
@@ -208,7 +218,7 @@ export const saveOpenOrders = async (orders: ActiveOrder[]) => {
         const ordersToSave = orders.map(o => ({
             id: o.id,
             name: o.name,
-            items: o.items,
+            items: o.items as any,
             created_at: o.createdAt.toISOString(),
             status: o.status
         }));
@@ -236,7 +246,7 @@ export const getSales = async (): Promise<Sale[]> => {
     try {
         const { data, error } = await supabase.from('sales').select('*');
         if (error) throw error;
-        return data.map(s => ({
+        return (data || []).map(s => ({
             ...s,
             timestamp: new Date(s.timestamp),
             totalAmount: s.total_amount,
@@ -262,11 +272,11 @@ export const addSale = async (newSale: Omit<Sale, 'id'> & {id?: string}): Promis
        try {
             const { error } = await supabase.from('sales').insert([{
                 id: saleWithId.id,
-                items: saleWithId.items,
+                items: saleWithId.items as any,
                 total_amount: saleWithId.totalAmount,
                 original_amount: saleWithId.originalAmount,
                 discount_amount: saleWithId.discountAmount,
-                payments: saleWithId.payments,
+                payments: saleWithId.payments as any,
                 cash_tendered: saleWithId.cashTendered,
                 change_given: saleWithId.changeGiven,
                 timestamp: saleWithId.timestamp.toISOString(),
@@ -281,7 +291,6 @@ export const addSale = async (newSale: Omit<Sale, 'id'> & {id?: string}): Promis
     
     // Add financial entries for card/pix fees and revenue
     const fees = await getTransactionFees();
-    const newEntries: Omit<FinancialEntry, 'id'>[] = [];
     
     for (const p of saleWithId.payments) {
         let feeAmount = 0;
@@ -317,6 +326,7 @@ export const removeSale = async (saleId: string) => {
         saveToLocalStorage('barmate_sales', sales);
         const entries = getFromLocalStorage('barmate_financialEntries', []).filter((e: FinancialEntry) => e.saleId !== saleId);
         saveToLocalStorage('barmate_financialEntries', entries);
+        window.dispatchEvent(new Event('storage'));
         return;
     }
 
@@ -337,7 +347,7 @@ export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
     try {
         const { data, error } = await supabase.from('financial_entries').select('*');
         if (error) throw error;
-        return data.map(e => ({ ...e, timestamp: new Date(e.timestamp) })) as FinancialEntry[];
+        return (data || []).map(e => ({ ...e, timestamp: new Date(e.timestamp) })) as FinancialEntry[];
     } catch (e) {
         console.error("Error getting financial entries:", e);
         return [];
@@ -345,7 +355,7 @@ export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
 };
 
 export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id'> & {id?:string}): Promise<void> => {
-    const entryWithId: FinancialEntry = { ...entry, id: entry.id || `entry-${Date.now()}` };
+    const entryWithId: FinancialEntry = { ...entry, id: entry.id || `entry-${Date.now()}` } as FinancialEntry;
     if (!supabase) {
         const entries = getFromLocalStorage('barmate_financialEntries', []);
         saveToLocalStorage('barmate_financialEntries', [...entries, entryWithId]);
@@ -363,6 +373,7 @@ export const removeFinancialEntry = async (entryId: string) => {
     if(!supabase) {
         const entries = getFromLocalStorage('barmate_financialEntries', []).filter((e: FinancialEntry) => e.id !== entryId);
         saveToLocalStorage('barmate_financialEntries', entries);
+        window.dispatchEvent(new Event('storage'));
         return;
     }
     try {
@@ -380,7 +391,10 @@ export const getSecondaryCashBox = async (): Promise<SecondaryCashBox> => {
     if(!supabase) return getFromLocalStorage('barmate_secondaryCashBox', { balance: 0 });
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'secondary_cash').single();
-        if (error || !data) return { balance: 0 };
+        if (error || !data) {
+          await supabase.from('balances').insert({ id: 'secondary_cash', balance: 0 });
+          return { balance: 0 };
+        }
         return { balance: data.balance };
     } catch (e) {
         return { balance: 0 };
@@ -405,7 +419,10 @@ export const getBankAccount = async (): Promise<BankAccount> => {
      if(!supabase) return getFromLocalStorage('barmate_bankAccount', { balance: 0 });
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'bank_account').single();
-        if (error || !data) return { balance: 0 };
+        if (error || !data) {
+          await supabase.from('balances').insert({ id: 'bank_account', balance: 0 });
+          return { balance: 0 };
+        }
         return { balance: data.balance };
     } catch (e) {
         return { balance: 0 };
@@ -428,18 +445,18 @@ export const saveBankAccount = async (account: BankAccount) => {
 
 // --- Cash Register Status (always local) ---
 export const getCashRegisterStatus = (): CashRegisterStatus => {
-    return getFromLocalStorage('barmate_cashRegisterStatus', { status: 'closed', adjustments: [] });
+    return getFromLocalStorage('barmate_cashRegisterStatus_v2', { status: 'closed', adjustments: [] });
 };
 
 export const saveCashRegisterStatus = (status: CashRegisterStatus) => {
-    saveToLocalStorage('barmate_cashRegisterStatus', status);
+    saveToLocalStorage('barmate_cashRegisterStatus_v2', status);
 };
 
 // --- Transaction Fees (always local) ---
 export const getTransactionFees = (): TransactionFees => {
-    return getFromLocalStorage('barmate_transactionFees', { debitRate: 2, creditRate: 4, pixRate: 1 });
+    return getFromLocalStorage('barmate_transactionFees_v2', { debitRate: 2, creditRate: 4, pixRate: 1 });
 };
 
 export const saveTransactionFees = (fees: TransactionFees) => {
-    saveToLocalStorage('barmate_transactionFees', fees);
+    saveToLocalStorage('barmate_transactionFees_v2', fees);
 };
