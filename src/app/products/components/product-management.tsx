@@ -48,36 +48,33 @@ export default function ProductManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>(''); // Stores categoryId
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const { toast } = useToast();
 
   useEffect(() => {
-    
-    const handleStorageChange = () => {
-      setProducts(getProducts());
-      setProductCategories(getProductCategories());
+    const fetchData = async () => {
+      setIsLoading(true);
+      const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
+      setProducts(fetchedProducts);
+      setProductCategories(fetchedCategories);
+      setIsLoading(false);
     };
-    
-    handleStorageChange();
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
+    fetchData();
   }, []);
 
-  const handleAddProduct = (product: Product) => {
+  const handleAddProduct = async (product: Product) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
+    await saveProducts(updatedProducts);
     setProducts(updatedProducts);
-    saveProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
-  const handleEditProduct = (updatedProduct: Product) => {
+  const handleEditProduct = async (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+    await saveProducts(updatedProducts);
     setProducts(updatedProducts);
-    saveProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
 
@@ -91,11 +88,11 @@ export default function ProductManagement() {
     setIsDialogOpen(true);
   };
   
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
+    await saveProducts(updatedProducts);
     setProducts(updatedProducts);
-    saveProducts(updatedProducts);
     setProductToDelete(null); 
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
@@ -111,6 +108,10 @@ export default function ProductManagement() {
   const getCategoryNameById = (categoryId: string) => {
     return productCategories.find(cat => cat.id === categoryId)?.name || categoryId;
   };
+
+  if (isLoading) {
+    return <p>Carregando produtos...</p>;
+  }
 
   return (
     <>
@@ -257,3 +258,5 @@ export default function ProductManagement() {
     </>
   );
 }
+
+    

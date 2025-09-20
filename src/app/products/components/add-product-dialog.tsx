@@ -70,7 +70,7 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
 
   useEffect(() => {
     if (isOpen) { 
-      setAvailableCategories(getProductCategories());
+      getProductCategories().then(setAvailableCategories);
     }
   }, [isOpen]);
 
@@ -269,3 +269,5 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
     </Dialog>
   );
 }
+
+    

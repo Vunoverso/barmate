@@ -187,23 +187,15 @@ export default function SettingsClient() {
   const { toast } = useToast();
 
   useEffect(() => {
-    setIsMounted(true);
-
-    const handleStorageChange = () => {
+    const fetchData = async () => {
         const storedName = localStorage.getItem('barName') || 'BarMate';
         setBarName(storedName);
         setInitialBarName(storedName);
-        setProductCategories(getProductCategories());
-        setTransactionFees(getTransactionFees());
-    };
-
-    handleStorageChange();
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-
+        setProductCategories(await getProductCategories());
+        setTransactionFees(await getTransactionFees());
+        setIsMounted(true);
+    }
+    fetchData();
   }, []);
 
   const handleSaveBarName = (e?: React.FormEvent) => {
@@ -226,9 +218,9 @@ export default function SettingsClient() {
     });
   };
 
-  const handleSaveTransactionFees = (e?: React.FormEvent) => {
+  const handleSaveTransactionFees = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    saveTransactionFees(transactionFees);
+    await saveTransactionFees(transactionFees);
     toast({
         title: "Taxas Salvas!",
         description: "As taxas de transação foram atualizadas.",
@@ -345,16 +337,16 @@ export default function SettingsClient() {
     setIsEditCategoryDialogOpen(true);
   };
 
-  const handleSaveCategory = (updatedCategory: ProductCategory) => {
+  const handleSaveCategory = async (updatedCategory: ProductCategory) => {
     const updatedCategories = productCategories.map(cat =>
       cat.id === updatedCategory.id ? updatedCategory : cat
     );
+    await saveProductCategories(updatedCategories);
     setProductCategories(updatedCategories);
-    saveProductCategories(updatedCategories);
     toast({ title: "Categoria Atualizada", description: `Categoria "${updatedCategory.name}" salva com sucesso.`});
   };
 
-  const handleAddNewCategory = (data: { name: string; iconName: string }) => {
+  const handleAddNewCategory = async (data: { name: string; iconName: string }) => {
     const newId = `cat_${data.name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_${Date.now()}`;
     const newCategory: ProductCategory = {
         id: newId,
@@ -362,8 +354,8 @@ export default function SettingsClient() {
         iconName: data.iconName,
     };
     const updatedCategories = [...productCategories, newCategory];
+    await saveProductCategories(updatedCategories);
     setProductCategories(updatedCategories);
-    saveProductCategories(updatedCategories);
     toast({ title: "Categoria Adicionada", description: `A categoria "${data.name}" foi criada com sucesso.`});
   };
 
@@ -371,12 +363,12 @@ export default function SettingsClient() {
     setCategoryToDelete(category);
   };
 
-  const handleDeleteCategory = () => {
+  const handleDeleteCategory = async () => {
     if (!categoryToDelete) return;
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
+    await saveProductCategories(updatedCategories);
     setProductCategories(updatedCategories);
-    saveProductCategories(updatedCategories);
     toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
   };
