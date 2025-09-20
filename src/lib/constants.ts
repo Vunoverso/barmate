@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, CashAdjustment, OrderItem, ActiveOrder } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, OrderItem, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
@@ -26,37 +26,45 @@ const saveToLocalStorage = <T,>(key: string, value: T) => {
     }
 };
 
-const getFromSupabase = async <T,>(table: string, key: string, defaultValue: T): Promise<T> => {
-    if (!supabase) return getFromLocalStorage(key, defaultValue);
-    try {
-        const { data, error } = await supabase.from(table).select('*').eq('id', key).single();
-        if (error && error.code !== 'PGRST116') throw error; // 'PGRST116' is "JSON object requested, but row not found"
-        return data ? (data as any).data : defaultValue;
-    } catch (error) {
-        console.error(`Error fetching from Supabase table "${table}" key "${key}":`, error);
-        return getFromLocalStorage(key, defaultValue); // Fallback
+// This is the single row ID we'll use for storing all app-wide JSON data.
+const APP_DATA_ID = 'app_data';
+
+const getAppData = async () => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('balances').select('*').eq('id', APP_DATA_ID).single();
+    if (error && error.code !== 'PGRST116') {
+        console.error("Error fetching app_data:", error);
+        return null;
     }
+    return data;
 }
 
-const saveToSupabase = async (table: string, key: string, value: any): Promise<void> => {
+const getJsonData = async <T,>(key: keyof import('@/types/supabase').Database['public']['Tables']['balances']['Row'], defaultValue: T): Promise<T> => {
+    if (!supabase) return getFromLocalStorage(String(key), defaultValue);
+    const appData = await getAppData();
+    return appData?.[key] as T ?? defaultValue;
+};
+
+const saveJsonData = async (key: keyof import('@/types/supabase').Database['public']['Tables']['balances']['Row'], value: any) => {
     window.dispatchEvent(new Event('storage')); // Optimistic update
     if (!supabase) {
-        saveToLocalStorage(key, value);
+        saveToLocalStorage(String(key), value);
         return;
     }
     try {
-        const { error } = await supabase.from(table).upsert({ id: key, data: value }, { onConflict: 'id' });
+        const { error } = await supabase.from('balances').upsert({ id: APP_DATA_ID, [key]: value }, { onConflict: 'id' });
         if (error) throw error;
     } catch (error) {
-        console.error(`Error saving to Supabase table "${table}" key "${key}":`, error);
+        console.error(`Error saving to Supabase column "${String(key)}":`, error);
     }
-}
+};
+
 
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
     { id: 'cat_alcoolicas', name: 'Bebidas Alcoólicas', iconName: 'Beer' },
     { id: 'cat_nao_alcoolicas', name: 'Bebidas Não Alcoólicas', iconName: 'Martini' },
     { id: 'cat_cafes', name: 'Outros', iconName: 'Coffee' },
-    { id: 'cat_lanches', name: 'Lanches', iconName: 'UtensilsCrossed' },
+    { id: 'cat_lanches', 'name': 'Lanches', iconName: 'UtensilsCrossed' },
     { id: 'cat_outros', name: 'Doces', iconName: 'Package' },
     { id: 'cat_gelos_1751233766129', name: 'Gelos', iconName: 'Package' },
     { id: 'cat_doses_1756500736217', name: '.Doses', iconName: 'Martini' },
@@ -143,13 +151,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     { id: 'prod-1754230638331', name: 'Red Label Dose', price: 15.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754526694819', name: 'Porção Promocional', price: 25.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
     { id: 'prod-1754610401420', name: 'Chup-Chup', price: 1.00, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
-    { id: 'prod-1754698560258', name: 'Pizza  Pedaço', price: 5.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754698560258', 'name': 'Pizza  Pedaço', price: 5.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754760397301', name: 'Dose Old Red Apple/Honey', price: 6.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754760423970', name: 'Dose Menta', price: 6.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754760448411', name: 'Copão Menta Maçâ Mel 500ml', price: 14.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1754760464595', name: 'Copão Menta Maçã Mel  700ml', price: 16.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754760464595', 'name': 'Copão Menta Maçã Mel  700ml', price: 16.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754779417140', name: 'Copão Red Label 500ml', price: 22.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1754779442181', name: 'Copão  Red Label 700ml', price: 32.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754779442181', 'name': 'Copão  Red Label 700ml', price: 32.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754852919813', name: 'Mini Pastel c/ Cheddar', price: 20.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
     { id: 'prod-1754877400440', name: 'água de coco', price: 3.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
     { id: 'prod-1755213541831', name: 'Meia Porção Calabreza', price: 15.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
@@ -163,7 +171,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     { id: 'prod-1755995597845', name: 'Combo Burguesa', price: 27.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 3 },
     { id: 'prod-1756070296458', name: 'Combo boa 2', price: 28.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 2 },
     { id: 'prod-1756076440939', name: 'Suco Del Vale 450ml', price: 5.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1756328269633', name: 'Bala Lilith Maçã Verde', price: 2.00, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756328269633', 'name': 'Bala Lilith Maçã Verde', price: 2.00, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1756341313637', name: 'Batida Vinho 500ml', price: 10.00, categoryId: 'cat_drinks_1756501505560', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1756515550988', name: 'Pizza Mini', price: 10.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1756684956893', name: 'Torcida', price: 4.50, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
@@ -193,8 +201,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     { id: 'prod-1758243780811', name: 'COM 3 BOA', price: 42.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 3 },
     { id: 'prod-1758248021903', name: 'h2o', price: 7.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1758309928671', name: 'Burguesa Lata', price: 5.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1758322472705', name: 'Caipirinha Menta', price: 16.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1758322472705', name: 'Caipirinha Menta', price: 16.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null }
 ];
+
 
 export const LUCIDE_ICON_MAP: { [key: string]: LucideIcon } = {
     Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, Wallet
@@ -405,23 +414,17 @@ export const removeFinancialEntry = async (entryId: string) => {
 };
 
 // Balances
-const SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox_v2';
-export const getSecondaryCashBox = (): Promise<SecondaryCashBox> => getFromSupabase('balances', 'secondary_cash', { balance: 0 });
-export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToSupabase('balances', 'secondary_cash', box);
+export const getSecondaryCashBox = (): Promise<SecondaryCashBox> => getJsonData('secondary_cash_data', { balance: 0 });
+export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveJsonData('secondary_cash_data', box);
 
-const BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
-export const getBankAccount = (): Promise<BankAccount> => getFromSupabase('balances', 'bank_account', { balance: 0 });
-export const saveBankAccount = (account: BankAccount) => saveToSupabase('balances', 'bank_account', account);
+export const getBankAccount = (): Promise<BankAccount> => getJsonData('bank_account_data', { balance: 0 });
+export const saveBankAccount = (account: BankAccount) => saveJsonData('bank_account_data', account);
 
 
 // Cash Register Status
-const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus_v2';
-export const getCashRegisterStatus = (): Promise<CashRegisterStatus> => getFromSupabase('balances', 'cash_register_status', { status: 'closed', adjustments: [] });
-export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveToSupabase('balances', 'cash_register_status', status);
+export const getCashRegisterStatus = (): Promise<CashRegisterStatus> => getJsonData('cash_register_status_data', { status: 'closed', adjustments: [] });
+export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveJsonData('cash_register_status_data', status);
 
 // Transaction Fees
-const TRANSACTION_FEES_KEY = 'barmate_transactionFees_v2';
-export const getTransactionFees = (): Promise<TransactionFees> => getFromSupabase('balances', 'transaction_fees', { debitRate: 0, creditRate: 0, pixRate: 0 });
-export const saveTransactionFees = (fees: TransactionFees) => saveToSupabase('balances', 'transaction_fees', fees);
-
-    
+export const getTransactionFees = (): Promise<TransactionFees> => getJsonData('fees_data', { debitRate: 0, creditRate: 0, pixRate: 0 });
+export const saveTransactionFees = (fees: TransactionFees) => saveJsonData('fees_data', fees);

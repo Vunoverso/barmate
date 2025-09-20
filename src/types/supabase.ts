@@ -37,20 +37,23 @@ export type Database = {
       balances: {
         Row: {
           id: string
-          balance: number
-          status_data: Json | null
+          secondary_cash_data: Json | null
+          bank_account_data: Json | null
+          cash_register_status_data: Json | null
           fees_data: Json | null
         }
         Insert: {
           id: string
-          balance?: number
-          status_data?: Json | null
+          secondary_cash_data?: Json | null
+          bank_account_data?: Json | null
+          cash_register_status_data?: Json | null
           fees_data?: Json | null
         }
         Update: {
           id?: string
-          balance?: number
-          status_data?: Json | null
+          secondary_cash_data?: Json | null
+          bank_account_data?: Json | null
+          cash_register_status_data?: Json | null
           fees_data?: Json | null
         }
         Relationships: []
