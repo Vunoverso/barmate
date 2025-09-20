@@ -36,7 +36,7 @@ const settingsNavItem: NavItem = { href: '/settings', label: 'Configurações', 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
-  const version = "v1.3.1"; // Version number
+  const version = "v1.3.2"; // Version number
 
   useEffect(() => {
     const handleStorageChange = () => {
