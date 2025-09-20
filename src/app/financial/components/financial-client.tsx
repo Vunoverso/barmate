@@ -8,7 +8,8 @@ import {
   getBankAccount, saveBankAccount,
   getCashRegisterStatus, saveCashRegisterStatus, getSales, saveSales, PAYMENT_METHODS,
   removeSale,
-  removeFinancialEntry
+  removeFinancialEntry,
+  addFinancialEntry
 } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -125,12 +126,13 @@ export default function FinancialClient() {
     defaultValues: { description: '', amount: 0, source: 'daily_cash' },
   });
 
-  const loadData = async () => {
-      setEntries(await getFinancialEntries());
+  const loadData = () => {
       setSecondaryCashBox(getSecondaryCashBox());
       setBankAccount(getBankAccount());
       setCashStatus(getCashRegisterStatus());
-      setSales(await getSales());
+      
+      getFinancialEntries().then(setEntries);
+      getSales().then(setSales);
   };
   
   useEffect(() => {

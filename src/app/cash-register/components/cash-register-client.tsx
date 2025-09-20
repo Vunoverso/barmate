@@ -72,13 +72,13 @@ export default function CashRegisterClient() {
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
   const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
 
-  const loadInitialData = async () => {
+  const loadInitialData = () => {
     setIsLoading(true);
     try {
-        setSales(await getSales());
         setSecondaryCashBox(getSecondaryCashBox());
         setBankAccount(getBankAccount());
         setCashStatus(getCashRegisterStatus());
+        getSales().then(setSales); // Async fetch
     } catch (e) {
         console.error("Failed to load cash register data", e);
         toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados.", variant: "destructive" });
@@ -101,7 +101,7 @@ export default function CashRegisterClient() {
   }, []); // Empty dependency array ensures this runs only once on mount and sets up the listener
 
 
-  const handleOpenCashRegister = async (openingBalance: number) => {
+  const handleOpenCashRegister = (openingBalance: number) => {
     const currentSecondaryBox = getSecondaryCashBox();
 
     if (currentSecondaryBox.balance < openingBalance) {
@@ -130,7 +130,7 @@ export default function CashRegisterClient() {
     });
   };
 
-  const handleSaveAdjustment = async (details: { amount: number; description: string; destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => {
+  const handleSaveAdjustment = (details: { amount: number; description: string; destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => {
     let currentCashStatus = getCashRegisterStatus();
     if (currentCashStatus.status !== 'open') return;
 
@@ -138,11 +138,11 @@ export default function CashRegisterClient() {
         const originalAdjustment = currentCashStatus.adjustments?.find(adj => adj.id === idToUpdate);
         if (!originalAdjustment) return;
         
-        await revertAdjustment(originalAdjustment);
+        revertAdjustment(originalAdjustment);
         
         const updatedAdjustment: CashAdjustment = { ...originalAdjustment, amount: details.amount, description: details.description };
         
-        await applyAdjustment(updatedAdjustment);
+        applyAdjustment(updatedAdjustment);
 
         const newAdjustments = currentCashStatus.adjustments?.map(adj => adj.id === idToUpdate ? updatedAdjustment : adj) || [];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
@@ -158,7 +158,7 @@ export default function CashRegisterClient() {
             destination: details.destination && details.destination !== 'none' ? details.destination : undefined
         };
         
-        await applyAdjustment(newAdjustment);
+        applyAdjustment(newAdjustment);
         const newAdjustments = [...(currentCashStatus.adjustments || []), newAdjustment];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
         
@@ -169,7 +169,7 @@ export default function CashRegisterClient() {
     setEditingAdjustment(null);
   };
   
-  const applyAdjustment = async (adjustment: CashAdjustment) => {
+  const applyAdjustment = (adjustment: CashAdjustment) => {
     if (adjustment.type === 'out') { // Sangria
         if (adjustment.destination === 'secondary_cash') {
             const currentBox = getSecondaryCashBox();
@@ -181,7 +181,7 @@ export default function CashRegisterClient() {
     }
   }
   
-  const revertAdjustment = async (adjustment: CashAdjustment) => {
+  const revertAdjustment = (adjustment: CashAdjustment) => {
     const { type, amount, destination, source } = adjustment;
 
     if (type === 'out') { // Sangria reversal
@@ -201,19 +201,19 @@ export default function CashRegisterClient() {
     }
   }
 
-  const handleDeleteAdjustment = async () => {
+  const handleDeleteAdjustment = () => {
     if (!adjustmentToDelete) return;
     const currentCashStatus = getCashRegisterStatus();
     if (currentCashStatus.status !== 'open') return;
 
-    await revertAdjustment(adjustmentToDelete);
+    revertAdjustment(adjustmentToDelete);
     const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
     saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
     toast({ title: "Movimentação Removida", variant: "destructive" });
     setAdjustmentToDelete(null);
   };
 
-  const handleEditInitialBalance = async (newBalance: number) => {
+  const handleEditInitialBalance = (newBalance: number) => {
     const currentCashStatus = getCashRegisterStatus();
     if (currentCashStatus.status !== 'open') return;
     const newStatus = { ...currentCashStatus, openingBalance: newBalance };
@@ -222,7 +222,7 @@ export default function CashRegisterClient() {
     setIsEditInitialBalanceDialogOpen(false);
   };
 
-  const handleTransfer = async (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
+  const handleTransfer = (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
     const { amount, destination } = details;
     const currentSecondaryBox = getSecondaryCashBox();
     const currentCashStatus = getCashRegisterStatus();
@@ -256,19 +256,19 @@ export default function CashRegisterClient() {
     setIsTransferDialogOpen(false);
   }
 
-  const handleEditCaixa02 = async (newBalance: number) => {
+  const handleEditCaixa02 = (newBalance: number) => {
     saveSecondaryCashBox({ balance: newBalance });
     toast({ title: "Caixa 02 Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditCaixa02DialogOpen(false);
   }
 
-  const handleEditBankAccount = async (newBalance: number) => {
+  const handleEditBankAccount = (newBalance: number) => {
     saveBankAccount({ balance: newBalance });
     toast({ title: "Conta Bancária Atualizada", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditBankAccountDialogOpen(false);
   }
 
-  const handleCloseCashRegister = async () => {
+  const handleCloseCashRegister = () => {
     const finalCashAmount = sessionSummary.expectedCash;
 
     if (finalCashAmount > 0) {

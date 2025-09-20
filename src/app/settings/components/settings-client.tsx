@@ -188,15 +188,16 @@ export default function SettingsClient() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchData = async () => {
-        const storedName = localStorage.getItem('barName') || 'BarMate';
-        setBarName(storedName);
-        setInitialBarName(storedName);
-        setProductCategories(await getProductCategories());
-        setTransactionFees(getTransactionFees());
-        setIsMounted(true);
-    }
-    fetchData();
+    // Local storage data is loaded synchronously
+    const storedName = localStorage.getItem('barName') || 'BarMate';
+    setBarName(storedName);
+    setInitialBarName(storedName);
+    setTransactionFees(getTransactionFees());
+
+    // Cloud data is loaded asynchronously
+    getProductCategories().then(setProductCategories);
+    
+    setIsMounted(true);
   }, []);
 
   const handleSaveBarName = (e?: React.FormEvent) => {
@@ -219,7 +220,7 @@ export default function SettingsClient() {
     });
   };
 
-  const handleSaveTransactionFees = async (e?: React.FormEvent) => {
+  const handleSaveTransactionFees = (e?: React.FormEvent) => {
     e?.preventDefault();
     saveTransactionFees(transactionFees);
     toast({
@@ -328,8 +329,6 @@ export default function SettingsClient() {
         const text = await file.text();
         const data = JSON.parse(text);
 
-        // Data validation could be added here
-        
         // Save local storage data
         localStorage.setItem('barName', data.barName || 'BarMate');
         saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] });
@@ -337,7 +336,7 @@ export default function SettingsClient() {
         saveBankAccount(data.bankAccount || { balance: 0 });
         saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 });
 
-        // Clear and save supabase data sequentially
+        // Save supabase data sequentially
         await saveProductCategories(data.productCategories || []);
         await saveProducts(data.products || []);
         await saveSales(data.sales || []);
