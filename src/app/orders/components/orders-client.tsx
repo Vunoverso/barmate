@@ -40,7 +40,7 @@ import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/componentsui/select';
 
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   if (!categories.length) return {};
@@ -75,7 +75,7 @@ export default function OrdersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
-  useEffect(() => {
+ useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
@@ -91,23 +91,14 @@ export default function OrdersClient() {
         
         setProducts(fetchedProducts);
         setProductCategories(fetchedCategories);
+        setOpenOrders(fetchedOrders);
 
-        const ordersWithDetails = fetchedOrders.map(order => ({
-            ...order,
-            items: order.items.map(item => {
-                const productDetails = fetchedProducts.find(p => p.id === item.id);
-                const category = fetchedCategories.find(c => c.id === productDetails?.categoryId);
-                return { ...item, categoryName: category?.name, categoryIconName: category?.iconName };
-            })
-        }));
-        
-        setOpenOrders(ordersWithDetails);
-
-        if (ordersWithDetails.length > 0 && !ordersWithDetails.some(o => o.id === currentOrderId)) {
-            setCurrentOrderId(ordersWithDetails[0].id);
-        } else if (ordersWithDetails.length === 0) {
-            setCurrentOrderId(null);
+        if (fetchedOrders.length > 0 && !currentOrderId) {
+          setCurrentOrderId(fetchedOrders[0].id);
+        } else if (fetchedOrders.length === 0) {
+          setCurrentOrderId(null);
         }
+
       } catch (error) {
           console.error("Failed to fetch initial data", error);
           toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados da nuvem.", variant: "destructive" });
@@ -117,14 +108,11 @@ export default function OrdersClient() {
     };
 
     fetchData();
-    window.addEventListener('storage', fetchData);
-    return () => window.removeEventListener('storage', fetchData);
-  }, [currentOrderId, toast]);
 
-  useEffect(() => {
-    if (isLoading) return; // Don't save while loading
-    saveOpenOrders(openOrders);
-  }, [openOrders, isLoading]);
+    const handleStorageChange = () => fetchData();
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   const filteredOpenOrders = useMemo(() => {
     return openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase()));
@@ -144,8 +132,22 @@ export default function OrdersClient() {
   }, [openOrders]);
 
   const currentOrderItems = useMemo(() => {
-    return currentOrder?.items || [];
-  }, [currentOrder]);
+    if (!currentOrder) return [];
+    
+    // Enrich items with details from products and categories for display
+    return currentOrder.items.map(item => {
+        const productDetails = products.find(p => p.id === item.id);
+        if (!productDetails) return item; // Return item as is if product not found
+
+        const category = productCategories.find(c => c.id === productDetails.categoryId);
+        return { 
+            ...item, 
+            categoryName: category?.name, 
+            categoryIconName: category?.iconName 
+        };
+    });
+  }, [currentOrder, products, productCategories]);
+
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
@@ -169,7 +171,7 @@ export default function OrdersClient() {
     setIsCreateOrderDialogOpen(true);
   };
 
-  const handleCreateNewOrder = (orderName: string) => {
+  const handleCreateNewOrder = async (orderName: string) => {
     const newOrderId = `order-${Date.now()}`;
     const newOrder: ActiveOrder = {
       id: newOrderId,
@@ -177,7 +179,9 @@ export default function OrdersClient() {
       items: [],
       createdAt: new Date(),
     };
-    setOpenOrders(prev => [...prev, newOrder]);
+    const updatedOrders = [...openOrders, newOrder];
+    setOpenOrders(updatedOrders);
+    await saveOpenOrders(updatedOrders);
     setCurrentOrderId(newOrderId);
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
   };
@@ -193,10 +197,12 @@ export default function OrdersClient() {
     }
   };
   
-  const handleSaveOrderName = (orderId: string, newName: string) => {
-      setOpenOrders(prevOrders => prevOrders.map(order => 
+  const handleSaveOrderName = async (orderId: string, newName: string) => {
+      const updatedOrders = openOrders.map(order => 
           order.id === orderId ? { ...order, name: newName } : order
-      ));
+      );
+      setOpenOrders(updatedOrders);
+      await saveOpenOrders(updatedOrders);
       toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
       setOrderToEdit(null);
   };
@@ -205,7 +211,7 @@ export default function OrdersClient() {
     setOrderToDelete(order);
   };
 
-  const handleDeleteOrder = () => {
+  const handleDeleteOrder = async () => {
     if (!orderToDelete) return;
     
     const orderIdToDelete = orderToDelete.id;
@@ -224,11 +230,12 @@ export default function OrdersClient() {
     }
     
     setOpenOrders(updatedOrders);
+    await saveOpenOrders(updatedOrders);
     setOrderToDelete(null);
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
   };
   
-  const handleMergeOrders = (sourceOrderIds: string[]) => {
+  const handleMergeOrders = async (sourceOrderIds: string[]) => {
     if (!currentOrderId || sourceOrderIds.length === 0) return;
 
     let destinationOrder = openOrders.find(o => o.id === currentOrderId);
@@ -255,6 +262,7 @@ export default function OrdersClient() {
         .map(o => o.id === currentOrderId ? updatedOrder : o);
             
     setOpenOrders(finalOrders);
+    await saveOpenOrders(finalOrders);
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
     setIsMergeDialogOpen(false);
   };
@@ -275,13 +283,15 @@ export default function OrdersClient() {
         price: -amount, // Negative price for credit
         quantity: 1,
         categoryId: 'cat_outros',
-        categoryName: 'Outros',
-        categoryIconName: 'Wallet',
+        isCombo: false, // Ensure these are set for type consistency
+        comboItems: null
     };
 
     const newName = `${orderToUpdate.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)`;
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
-    setOpenOrders(openOrders.map(order => order.id === currentOrderId ? updatedOrder : order));
+    const newOpenOrders = openOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
+    setOpenOrders(newOpenOrders);
+    await saveOpenOrders(newOpenOrders);
 
     if (source !== 'permuta') {
         await addFinancialEntry({
@@ -300,98 +310,87 @@ export default function OrdersClient() {
   };
 
 
-  const addToOrder = (product: Product) => {
+  const addToOrder = async (product: Product) => {
     if (!currentOrderId) {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
       return;
     }
-    setOpenOrders(prevOrders =>
-      prevOrders.map(order => {
+    const updatedOrders = openOrders.map(order => {
         if (order.id === currentOrderId) {
+          const newItems = [...order.items];
           if (product.isCombo) {
-             const category = productCategories.find(c => c.id === product.categoryId);
              const newComboItem: OrderItem = {
                ...product,
                id: `combo-${product.id}-${Date.now()}`, 
                quantity: 1,
                claimedQuantity: 0,
-               categoryName: category?.name,
-               categoryIconName: category?.iconName
              };
-             return { ...order, items: [...order.items, newComboItem] };
+             newItems.push(newComboItem);
+          } else {
+            const existingItemIndex = newItems.findIndex(item => item.id === product.id && !item.isCombo && !item.id.startsWith('combo-'));
+            if (existingItemIndex > -1) {
+              newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newItems[existingItemIndex].quantity + 1 };
+            } else {
+              newItems.push({ ...product, quantity: 1 });
+            }
           }
-
-          const existingItem = order.items.find(item => item.id === product.id && !item.isCombo && !item.id.startsWith('combo-'));
-          if (existingItem) {
-            return {
-              ...order,
-              items: order.items.map(item =>
-                item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-              ),
-            };
-          }
-          const category = productCategories.find(c => c.id === product.categoryId);
-          return { ...order, items: [...order.items, { 
-            ...product, 
-            quantity: 1,
-            categoryName: category?.name,
-            categoryIconName: category?.iconName
-          }] };
+          return { ...order, items: newItems };
         }
         return order;
-      })
-    );
+      });
+    
+    setOpenOrders(updatedOrders);
+    await saveOpenOrders(updatedOrders);
   };
 
-  const handleClaimComboItem = (comboItemId: string) => {
-    setOpenOrders(prevOrders => {
-        let newOrders = [...prevOrders];
-        const orderIndex = newOrders.findIndex(o => o.id === currentOrderId);
-        if (orderIndex === -1) return prevOrders;
+  const handleClaimComboItem = async (comboItemId: string) => {
+    const orderIndex = openOrders.findIndex(o => o.id === currentOrderId);
+    if (orderIndex === -1) return;
+    
+    const order = openOrders[orderIndex];
+    const comboItemIndex = order.items.findIndex(item => item.id === comboItemId);
+    if (comboItemIndex === -1) return;
 
-        const order = newOrders[orderIndex];
-        const comboItemIndex = order.items.findIndex(item => item.id === comboItemId);
-        if (comboItemIndex === -1) return prevOrders;
+    const comboItem = order.items[comboItemIndex];
+    if (!comboItem.isCombo || (comboItem.claimedQuantity ?? 0) >= (comboItem.comboItems ?? 0)) {
+        return;
+    }
 
-        const comboItem = order.items[comboItemIndex];
-        if (!comboItem.isCombo || (comboItem.claimedQuantity ?? 0) >= (comboItem.comboItems ?? 0)) {
-            return prevOrders;
-        }
+    const newClaimedQuantity = (comboItem.claimedQuantity ?? 0) + 1;
+    const updatedComboItem = { ...comboItem, claimedQuantity: newClaimedQuantity };
+    
+    let updatedItems = [...order.items];
+    updatedItems[comboItemIndex] = updatedComboItem;
+    
+    const updatedOrder = { ...order, items: updatedItems };
 
-        const newClaimedQuantity = (comboItem.claimedQuantity ?? 0) + 1;
-        const updatedComboItem = { ...comboItem, claimedQuantity: newClaimedQuantity };
-        
-        const updatedItems = [...order.items];
-        updatedItems[comboItemIndex] = updatedComboItem;
-        
-        const updatedOrder = { ...order, items: updatedItems };
+    const allCombosClaimed = updatedOrder.items
+        .filter(item => item.isCombo)
+        .every(item => (item.claimedQuantity ?? 0) >= (item.comboItems ?? 1));
 
-        const allCombosClaimed = updatedOrder.items
-            .filter(item => item.isCombo)
-            .every(item => (item.claimedQuantity ?? 0) >= (item.comboItems ?? 1));
+    if (updatedOrder.status === 'paid' && allCombosClaimed) {
+        const newOrders = openOrders.filter(o => o.id !== currentOrderId);
+        setOpenOrders(newOrders);
+        await saveOpenOrders(newOrders);
+        toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${order.name}" foram entregues.` });
 
-        if (updatedOrder.status === 'paid' && allCombosClaimed) {
-            newOrders.splice(orderIndex, 1);
-            toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${order.name}" foram entregues.` });
-
-            if (newOrders.length > 0) {
-              const nextIndex = orderIndex < newOrders.length ? orderIndex : newOrders.length - 1;
-              setCurrentOrderId(newOrders[nextIndex].id);
-            } else {
-              setCurrentOrderId(null);
-            }
+        if (newOrders.length > 0) {
+          const nextIndex = orderIndex < newOrders.length ? orderIndex : newOrders.length - 1;
+          setCurrentOrderId(newOrders[nextIndex]?.id || null);
         } else {
-            newOrders[orderIndex] = updatedOrder;
+          setCurrentOrderId(null);
         }
-        
-        return newOrders;
-    });
+    } else {
+        const newOrders = [...openOrders];
+        newOrders[orderIndex] = updatedOrder;
+        setOpenOrders(newOrders);
+        await saveOpenOrders(newOrders);
+    }
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = async (productId: string, quantity: number) => {
     if (!currentOrderId) return;
-    setOpenOrders(prevOrders =>
-      prevOrders.map(order => {
+    const updatedOrders = openOrders.map(order => {
         if (order.id === currentOrderId) {
           if (quantity <= 0) {
             return { ...order, items: order.items.filter(item => item.id !== productId) };
@@ -404,26 +403,27 @@ export default function OrdersClient() {
           };
         }
         return order;
-      })
-    );
+      });
+    setOpenOrders(updatedOrders);
+    await saveOpenOrders(updatedOrders);
   };
 
-  const removeFromOrder = (productId: string) => {
+  const removeFromOrder = async (productId: string) => {
     if (!currentOrderId) return;
-    setOpenOrders(prevOrders =>
-      prevOrders.map(order =>
+    const updatedOrders = openOrders.map(order =>
         order.id === currentOrderId
           ? { ...order, items: order.items.filter(item => item.id !== productId) }
           : order
-      )
-    );
+      );
+    setOpenOrders(updatedOrders);
+    await saveOpenOrders(updatedOrders);
   };
 
   const orderTotal = useMemo(() => {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
   
-  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
+  const handlePayment = async (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -434,34 +434,22 @@ export default function OrdersClient() {
 
     if (totalPaid < effectiveOrderTotal) {
         const paymentItems: OrderItem[] = details.payments.map(p => ({
-            id: `payment-${p.method}-${Date.now()}`,
-            name: `Pagamento Parcial (${p.method})`,
-            price: -p.amount,
-            quantity: 1,
-            categoryId: 'cat_outros',
-            categoryName: 'Pagamento',
-            categoryIconName: 'Banknote',
+            id: `payment-${p.method}-${Date.now()}`, name: `Pagamento Parcial (${p.method})`, price: -p.amount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null
         }));
 
         if (details.discountAmount > 0) {
             paymentItems.push({
-                id: `discount-${Date.now()}`, name: `Desconto Aplicado`, price: -details.discountAmount, quantity: 1, categoryId: 'cat_outros', categoryName: 'Pagamento', categoryIconName: 'Banknote',
+                id: `discount-${Date.now()}`, name: `Desconto Aplicado`, price: -details.discountAmount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null
             });
         }
         
         const updatedOrder: ActiveOrder = { ...currentOrder, items: [...currentOrder.items, ...paymentItems] };
-        setOpenOrders(openOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
+        const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
+        setOpenOrders(newOpenOrders);
+        await saveOpenOrders(newOpenOrders);
 
-        addSale({
-            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})),
-            originalAmount: totalPaid,
-            discountAmount: details.discountAmount,
-            totalAmount: totalPaid - details.discountAmount,
-            payments: details.payments,
-            changeGiven: 0,
-            timestamp: new Date(),
-            status: 'completed',
-            cashTendered: details.cashTendered
+        await addSale({
+            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), originalAmount: totalPaid, discountAmount: details.discountAmount, totalAmount: totalPaid - details.discountAmount, payments: details.payments, changeGiven: 0, timestamp: new Date(), status: 'completed', cashTendered: details.cashTendered
         });
         
         toast({ title: "Pagamento Parcial Registrado", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
@@ -469,17 +457,8 @@ export default function OrdersClient() {
         return;
     }
     
-    addSale({
-      items: currentOrderItems,
-      originalAmount: currentOrderItems.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0),
-      discountAmount: details.discountAmount,
-      totalAmount: effectiveOrderTotal,
-      payments: details.payments,
-      changeGiven: details.changeGiven,
-      timestamp: new Date(),
-      status: 'completed',
-      cashTendered: details.cashTendered,
-      leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
+    await addSale({
+      items: currentOrderItems, originalAmount: currentOrderItems.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0), discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, timestamp: new Date(), status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
     });
 
     const hasUnclaimedCombos = currentOrder.items.some(item => 
@@ -490,11 +469,13 @@ export default function OrdersClient() {
       const paidOrder: ActiveOrder = {
         ...currentOrder,
         items: [...currentOrder.items, {
-            id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -effectiveOrderTotal, quantity: 1, categoryId: 'cat_outros', categoryIconName: 'Banknote'
+            id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -effectiveOrderTotal, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
         }],
         status: 'paid'
       };
-      setOpenOrders(openOrders.map(o => o.id === currentOrderId ? paidOrder : o));
+      const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? paidOrder : o);
+      setOpenOrders(newOpenOrders);
+      await saveOpenOrders(newOpenOrders);
       toast({ title: "Comanda Paga!", description: `A comanda "${currentOrder.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
       setIsPaymentDialogOpen(false);
       return;
@@ -505,12 +486,9 @@ export default function OrdersClient() {
     
     if (details.leaveChangeAsCredit && details.changeGiven > 0) {
         const newCreditOrder: ActiveOrder = {
-            id: `order-credit-${Date.now()}`,
-            name: `${currentOrder.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`,
-            items: [{
-                id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -details.changeGiven, quantity: 1, categoryId: 'cat_outros', categoryIconName: 'Banknote'
-            }],
-            createdAt: new Date(),
+            id: `order-credit-${Date.now()}`, name: `${currentOrder.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
+                id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -details.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+            }], createdAt: new Date(),
         };
         nextOrdersState.push(newCreditOrder);
         nextSelectedOrderId = newCreditOrder.id;
@@ -529,6 +507,7 @@ export default function OrdersClient() {
          }
     }
     setOpenOrders(nextOrdersState);
+    await saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
   };
@@ -536,7 +515,7 @@ export default function OrdersClient() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p>Carregando comandas da nuvem...</p>
+        <p>Carregando dados da nuvem...</p>
       </div>
     );
   }
@@ -1201,3 +1180,5 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
+
+    

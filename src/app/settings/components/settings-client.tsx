@@ -181,8 +181,6 @@ export default function SettingsClient() {
   const [initialBarName, setInitialBarName] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
-  const [isImportConfirmationOpen, setIsImportConfirmationOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
 
@@ -227,103 +225,6 @@ export default function SettingsClient() {
         action: <Save className="text-green-500" />,
     });
   };
-  
-  const handleExportAllData = () => {
-    try {
-      const allData: Record<string, any> = {};
-      const keysToExport = Object.keys(localStorage);
-
-      keysToExport.forEach(key => {
-        if (key.startsWith('barmate_') || key === 'barName' || key === 'theme') {
-            const data = localStorage.getItem(key);
-            if (data) {
-                try {
-                    allData[key] = JSON.parse(data);
-                } catch {
-                    allData[key] = data; // Store as string if not valid JSON
-                }
-            }
-        }
-      });
-      
-      const jsonData = JSON.stringify(allData, null, 2);
-      const blob = new Blob([jsonData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const formattedDate = format(new Date(), 'yyyy-MM-dd');
-      link.download = `barmate_dados_${formattedDate}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      toast({
-        title: "Exportação Concluída",
-        description: "Todos os seus dados foram exportados com sucesso. Guarde bem este arquivo!",
-      });
-
-    } catch (error) {
-      console.error("Falha ao exportar dados:", error);
-      toast({
-        title: "Erro na Exportação",
-        description: "Ocorreu um erro ao tentar exportar os dados. Verifique o console para mais detalhes.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleImportFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result;
-        if (typeof text !== 'string') {
-            throw new Error("Ocorreu um erro ao ler o arquivo.");
-        }
-        
-        const importedData = JSON.parse(text);
-        
-        // Clear existing data before import for a clean slate
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('barmate_') || key === 'barName' || key === 'theme') {
-            localStorage.removeItem(key);
-          }
-        });
-
-        // Import new data
-        Object.keys(importedData).forEach(key => {
-          const value = importedData[key];
-          localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
-        });
-
-        toast({
-          title: "Importação Concluída!",
-          description: "Os dados foram restaurados. Por favor, recarregue a página para aplicar as alterações.",
-        });
-
-      } catch (err) {
-        console.error("Falha ao importar dados:", err);
-        toast({
-          title: "Erro na Importação",
-          description: `O arquivo de backup é inválido ou está corrompido. ${(err as Error).message}`,
-          variant: "destructive",
-        });
-      } finally {
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-      }
-    };
-    reader.readAsText(file);
-  };
-
 
   const isBarNameChanged = barName !== initialBarName;
 
@@ -476,26 +377,11 @@ export default function SettingsClient() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Gerenciamento de Dados</CardTitle>
-            <CardDescription>Faça o backup dos seus dados locais ou restaure-os de um arquivo.</CardDescription>
+            <CardTitle>Gerenciamento de Dados na Nuvem</CardTitle>
+            <CardDescription>
+              Seus dados agora são salvos automaticamente e com segurança no Supabase. A funcionalidade de importação/exportação local foi desativada para garantir a integridade dos dados na nuvem.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row gap-4">
-            <Button onClick={handleExportAllData}>
-              <Download className="mr-2 h-4 w-4" />
-              Exportar todos os dados
-            </Button>
-            <Button variant="outline" onClick={() => setIsImportConfirmationOpen(true)}>
-                <Upload className="mr-2 h-4 w-4" />
-                Importar dados
-            </Button>
-            <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept=".json"
-                onChange={handleImportFileSelect}
-            />
-          </CardContent>
         </Card>
 
         <Card>
@@ -559,31 +445,6 @@ export default function SettingsClient() {
         onOpenChange={setIsAddCategoryDialogOpen}
         onSave={handleAddNewCategory}
       />
-      
-      <AlertDialog open={isImportConfirmationOpen} onOpenChange={setIsImportConfirmationOpen}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Confirmar Importação de Dados?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Atenção! Esta ação irá **sobrescrever todos os dados atuais** do aplicativo neste navegador com as informações do arquivo de backup. 
-                    <br/><br/>
-                    Continue apenas se você tem certeza que deseja restaurar um backup. Esta ação não pode ser desfeita.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction 
-                    className="bg-destructive hover:bg-destructive/90"
-                    onClick={() => {
-                        fileInputRef.current?.click();
-                        setIsImportConfirmationOpen(false);
-                    }}
-                >
-                    Confirmar e Importar
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {categoryToDelete && (
         <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
@@ -591,7 +452,7 @@ export default function SettingsClient() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar Remoção de Categoria</AlertDialogTitle>
               <AlertDialogDescription>
-                Tem certeza que deseja remover a categoria "{categoryToDelete.name}"? 
+                Tem certeza que deseja remover la categoria "{categoryToDelete.name}"? 
                 Produtos que utilizam esta categoria podem precisar ser reatribuídos manualmente a uma nova categoria.
                 Esta ação não pode ser desfeita.
               </AlertDialogDescription>
