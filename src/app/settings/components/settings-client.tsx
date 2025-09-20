@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Edit3, Trash2, PlusCircle } from 'lucide-react';
+import { Save, Edit3, Trash2, PlusCircle, Download } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format } from 'date-fns';
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -233,6 +234,63 @@ export default function SettingsClient() {
         action: <Save className="text-green-500" />,
     });
   };
+  
+  const handleExportAllData = () => {
+    try {
+      const allData: Record<string, any> = {};
+      const keysToExport = [
+        'barmate_productCategories',
+        'barmate_products',
+        'barmate_sales',
+        'barmate_financialEntries',
+        'barmate_secondaryCashBox',
+        'barmate_bankAccount',
+        'barmate_cashRegisterStatus',
+        'barmate_transactionFees',
+        'barName',
+        'barmate_openOrders',
+        'barmate_counterSaleOrderItems',
+        'barmate_closedCashSessions',
+      ];
+
+      keysToExport.forEach(key => {
+        const data = localStorage.getItem(key);
+        if (data) {
+          try {
+            allData[key] = JSON.parse(data);
+          } catch {
+            allData[key] = data; // Store as string if not valid JSON
+          }
+        }
+      });
+      
+      const jsonData = JSON.stringify(allData, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const formattedDate = format(new Date(), 'yyyy-MM-dd');
+      link.download = `barmate_dados_${formattedDate}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Exportação Concluída",
+        description: "Todos os seus dados foram exportados com sucesso. Guarde bem este arquivo!",
+      });
+
+    } catch (error) {
+      console.error("Falha ao exportar dados:", error);
+      toast({
+        title: "Erro na Exportação",
+        description: "Ocorreu um erro ao tentar exportar os dados. Verifique o console para mais detalhes.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   const isBarNameChanged = barName !== initialBarName;
 
@@ -367,6 +425,19 @@ export default function SettingsClient() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Gerenciamento de Dados</CardTitle>
+            <CardDescription>Faça o backup de todos os dados da aplicação para um arquivo local.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleExportAllData}>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar todos os dados
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Gerenciar Categorias de Produtos</CardTitle>
@@ -453,3 +524,5 @@ export default function SettingsClient() {
     </>
   );
 }
+
+    
