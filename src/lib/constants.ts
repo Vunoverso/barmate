@@ -97,31 +97,21 @@ export const INITIAL_PRODUCTS: Product[] = [
 export const getProducts = async (): Promise<Product[]> => {
   if (productsCache) return productsCache;
   if (!supabase) {
-      return getFromLocalStorage('barmate_products', INITIAL_PRODUCTS);
+      return getFromLocalStorage('barmate_products_v2', []);
   }
 
   try {
     const { data, error } = await supabase.from('products').select('*');
     if (error) throw error;
      if (!data || data.length === 0) {
-      const { error: insertError } = await supabase.from('products').insert(INITIAL_PRODUCTS.map(p => ({ 
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        categoryId: p.categoryId,
-        stock: p.stock,
-        is_combo: p.isCombo,
-        combo_items: p.comboItems
-      })));
-      if (insertError) throw insertError;
-      productsCache = INITIAL_PRODUCTS;
-      return INITIAL_PRODUCTS;
+      productsCache = [];
+      return [];
     }
     productsCache = data.map(p => ({ ...p, isCombo: p.is_combo, comboItems: p.combo_items })) as Product[];
     return productsCache;
   } catch (error) {
     console.error("Error fetching products:", error);
-    return getFromLocalStorage('barmate_products', []);
+    return getFromLocalStorage('barmate_products_v2', []);
   }
 };
 
@@ -130,7 +120,7 @@ export const saveProducts = async (products: Product[]): Promise<void> => {
   window.dispatchEvent(new Event('storage'));
 
   if (!supabase) {
-    saveToLocalStorage('barmate_products', products);
+    saveToLocalStorage('barmate_products_v2', products);
     return;
   }
   try {
@@ -193,10 +183,13 @@ const saveToLocalStorage = <T>(key: string, data: T) => {
 
 // --- Open Orders ---
 export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
-    if (!supabase) return getFromLocalStorage('barmate_openOrders', []);
+    if (!supabase) return getFromLocalStorage('barmate_openOrders_v2', []);
     try {
         const { data, error } = await supabase.from('active_orders').select('*');
-        if (error) throw error;
+        if (error) {
+            console.error("Error getting open orders:", error);
+            return [];
+        };
         return (data || []).map(o => ({
             ...o,
             createdAt: new Date(o.created_at),
@@ -208,7 +201,7 @@ export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
 }
 export const saveOpenOrders = async (orders: ActiveOrder[]) => {
     if (!supabase) {
-        saveToLocalStorage('barmate_openOrders', orders);
+        saveToLocalStorage('barmate_openOrders_v2', orders);
         return;
     }
     try {
@@ -239,10 +232,13 @@ export const saveOpenOrders = async (orders: ActiveOrder[]) => {
 
 // ---- SALES ----
 export const getSales = async (): Promise<Sale[]> => {
-    if (!supabase) return getFromLocalStorage('barmate_sales', []);
+    if (!supabase) return getFromLocalStorage('barmate_sales_v2', []);
     try {
         const { data, error } = await supabase.from('sales').select('*');
-        if (error) throw error;
+        if (error) {
+            console.error("Error getting sales:", error);
+            return [];
+        };
         return (data || []).map(s => ({
             ...s,
             timestamp: new Date(s.timestamp),
@@ -263,8 +259,8 @@ export const addSale = async (newSale: Omit<Sale, 'id'> & {id?: string}): Promis
     const saleWithId: Sale = { ...newSale, id: newSale.id || `sale-${Date.now()}` };
 
     if (!supabase) {
-        const sales = getFromLocalStorage('barmate_sales', []);
-        saveToLocalStorage('barmate_sales', [...sales, saleWithId]);
+        const sales = getFromLocalStorage('barmate_sales_v2', []);
+        saveToLocalStorage('barmate_sales_v2', [...sales, saleWithId]);
     } else {
        try {
             const { error } = await supabase.from('sales').insert([{
@@ -287,7 +283,7 @@ export const addSale = async (newSale: Omit<Sale, 'id'> & {id?: string}): Promis
     }
     
     // Add financial entries for card/pix fees and revenue
-    const fees = getTransactionFees();
+    const fees = await getTransactionFees();
     
     for (const p of saleWithId.payments) {
         let feeAmount = 0;
@@ -319,10 +315,10 @@ export const addSale = async (newSale: Omit<Sale, 'id'> & {id?: string}): Promis
 
 export const removeSale = async (saleId: string) => {
     if (!supabase) {
-        const sales = getFromLocalStorage('barmate_sales', []).filter((s: Sale) => s.id !== saleId);
-        saveToLocalStorage('barmate_sales', sales);
-        const entries = getFromLocalStorage('barmate_financialEntries', []).filter((e: FinancialEntry) => e.saleId !== saleId);
-        saveToLocalStorage('barmate_financialEntries', entries);
+        const sales = getFromLocalStorage('barmate_sales_v2', []).filter((s: Sale) => s.id !== saleId);
+        saveToLocalStorage('barmate_sales_v2', sales);
+        const entries = getFromLocalStorage('barmate_financialEntries_v2', []).filter((e: FinancialEntry) => e.saleId !== saleId);
+        saveToLocalStorage('barmate_financialEntries_v2', entries);
         window.dispatchEvent(new Event('storage'));
         return;
     }
@@ -340,10 +336,13 @@ export const removeSale = async (saleId: string) => {
 
 // ---- FINANCIAL ENTRIES ----
 export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
-    if (!supabase) return getFromLocalStorage('barmate_financialEntries', []);
+    if (!supabase) return getFromLocalStorage('barmate_financialEntries_v2', []);
     try {
         const { data, error } = await supabase.from('financial_entries').select('*');
-        if (error) throw error;
+        if (error) {
+            console.error("Error getting financial entries:", error);
+            return [];
+        };
         return (data || []).map(e => ({ ...e, timestamp: new Date(e.timestamp) })) as FinancialEntry[];
     } catch (e) {
         console.error("Error getting financial entries:", e);
@@ -354,8 +353,8 @@ export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
 export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id'> & {id?:string}): Promise<void> => {
     const entryWithId: FinancialEntry = { ...entry, id: entry.id || `entry-${Date.now()}` } as FinancialEntry;
     if (!supabase) {
-        const entries = getFromLocalStorage('barmate_financialEntries', []);
-        saveToLocalStorage('barmate_financialEntries', [...entries, entryWithId]);
+        const entries = getFromLocalStorage('barmate_financialEntries_v2', []);
+        saveToLocalStorage('barmate_financialEntries_v2', [...entries, entryWithId]);
     } else {
         try {
             await supabase.from('financial_entries').insert([{ ...entryWithId, timestamp: entryWithId.timestamp.toISOString() }]);
@@ -368,8 +367,8 @@ export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id'> & {id?
 
 export const removeFinancialEntry = async (entryId: string) => {
     if(!supabase) {
-        const entries = getFromLocalStorage('barmate_financialEntries', []).filter((e: FinancialEntry) => e.id !== entryId);
-        saveToLocalStorage('barmate_financialEntries', entries);
+        const entries = getFromLocalStorage('barmate_financialEntries_v2', []).filter((e: FinancialEntry) => e.id !== entryId);
+        saveToLocalStorage('barmate_financialEntries_v2', entries);
         window.dispatchEvent(new Event('storage'));
         return;
     }
@@ -385,12 +384,10 @@ export const removeFinancialEntry = async (entryId: string) => {
 
 // --- Balances (Caixa 02, Bank Account) are stored in one table ---
 export const getSecondaryCashBox = async (): Promise<SecondaryCashBox> => {
-    if(!supabase) return getFromLocalStorage('barmate_secondaryCashBox', { balance: 0 });
+    if(!supabase) return getFromLocalStorage('barmate_secondaryCashBox_v2', { balance: 0 });
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'secondary_cash').single();
-        // If no row is found (error code PGRST116), create it.
         if (error && error.code === 'PGRST116') {
-          console.log('No secondary_cash balance found, creating one...');
           await supabase.from('balances').insert({ id: 'secondary_cash', balance: 0 });
           return { balance: 0 };
         }
@@ -405,7 +402,7 @@ export const getSecondaryCashBox = async (): Promise<SecondaryCashBox> => {
 
 export const saveSecondaryCashBox = async (box: SecondaryCashBox) => {
     if (!supabase) {
-        saveToLocalStorage('barmate_secondaryCashBox', box);
+        saveToLocalStorage('barmate_secondaryCashBox_v2', box);
         return;
     }
     try {
@@ -418,12 +415,10 @@ export const saveSecondaryCashBox = async (box: SecondaryCashBox) => {
 };
 
 export const getBankAccount = async (): Promise<BankAccount> => {
-     if(!supabase) return getFromLocalStorage('barmate_bankAccount', { balance: 0 });
+     if(!supabase) return getFromLocalStorage('barmate_bankAccount_v2', { balance: 0 });
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'bank_account').single();
-        // If no row is found (error code PGRST116), create it.
         if (error && error.code === 'PGRST116') {
-          console.log('No bank_account balance found, creating one...');
           await supabase.from('balances').insert({ id: 'bank_account', balance: 0 });
           return { balance: 0 };
         }
@@ -438,7 +433,7 @@ export const getBankAccount = async (): Promise<BankAccount> => {
 
 export const saveBankAccount = async (account: BankAccount) => {
     if (!supabase) {
-        saveToLocalStorage('barmate_bankAccount', account);
+        saveToLocalStorage('barmate_bankAccount_v2', account);
         return;
     }
     try {
@@ -450,20 +445,70 @@ export const saveBankAccount = async (account: BankAccount) => {
     }
 };
 
-// --- Cash Register Status (always local) ---
-export const getCashRegisterStatus = (): CashRegisterStatus => {
-    return getFromLocalStorage('barmate_cashRegisterStatus_v2', { status: 'closed', adjustments: [] });
+// --- Cash Register Status (can be local or synced) ---
+export const getCashRegisterStatus = async (): Promise<CashRegisterStatus> => {
+    if(!supabase) return getFromLocalStorage('barmate_cashRegisterStatus_v2', { status: 'closed', adjustments: [] });
+    try {
+        const { data, error } = await supabase.from('balances').select('status_data').eq('id', 'cash_register_status').single();
+        
+        if (error && error.code === 'PGRST116') {
+          const defaultStatus: CashRegisterStatus = { status: 'closed', adjustments: [] };
+          await supabase.from('balances').insert({ id: 'cash_register_status', status_data: defaultStatus });
+          return defaultStatus;
+        }
+        if (error) throw error;
+
+        return data.status_data as CashRegisterStatus || { status: 'closed', adjustments: [] };
+    } catch (e) {
+        console.error("Error getting cash register status:", e);
+        return { status: 'closed', adjustments: [] };
+    }
 };
 
-export const saveCashRegisterStatus = (status: CashRegisterStatus) => {
-    saveToLocalStorage('barmate_cashRegisterStatus_v2', status);
+export const saveCashRegisterStatus = async (status: CashRegisterStatus) => {
+    if (!supabase) {
+        saveToLocalStorage('barmate_cashRegisterStatus_v2', status);
+        return;
+    }
+    try {
+        await supabase.from('balances').upsert({ id: 'cash_register_status', status_data: status as any });
+    } catch (e) {
+        console.error("Error saving cash register status:", e);
+    } finally {
+        window.dispatchEvent(new Event('storage'));
+    }
 };
 
-// --- Transaction Fees (always local) ---
-export const getTransactionFees = (): TransactionFees => {
-    return getFromLocalStorage('barmate_transactionFees_v2', { debitRate: 2, creditRate: 4, pixRate: 1 });
+// --- Transaction Fees (can be local or synced) ---
+export const getTransactionFees = async (): Promise<TransactionFees> => {
+    if(!supabase) return getFromLocalStorage('barmate_transactionFees_v2', { debitRate: 2, creditRate: 4, pixRate: 1 });
+    try {
+        const { data, error } = await supabase.from('balances').select('fees_data').eq('id', 'transaction_fees').single();
+
+        if (error && error.code === 'PGRST116') {
+          const defaultFees: TransactionFees = { debitRate: 2, creditRate: 4, pixRate: 1 };
+          await supabase.from('balances').insert({ id: 'transaction_fees', fees_data: defaultFees });
+          return defaultFees;
+        }
+        if (error) throw error;
+
+        return data.fees_data as TransactionFees || { debitRate: 2, creditRate: 4, pixRate: 1 };
+    } catch (e) {
+        console.error("Error getting transaction fees:", e);
+        return { debitRate: 2, creditRate: 4, pixRate: 1 };
+    }
 };
 
-export const saveTransactionFees = (fees: TransactionFees) => {
-    saveToLocalStorage('barmate_transactionFees_v2', fees);
+export const saveTransactionFees = async (fees: TransactionFees) => {
+    if (!supabase) {
+        saveToLocalStorage('barmate_transactionFees_v2', fees);
+        return;
+    }
+     try {
+        await supabase.from('balances').upsert({ id: 'transaction_fees', fees_data: fees as any });
+    } catch (e) {
+        console.error("Error saving transaction fees:", e);
+    } finally {
+        window.dispatchEvent(new Event('storage'));
+    }
 };

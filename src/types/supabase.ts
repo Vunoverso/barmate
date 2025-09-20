@@ -38,14 +38,20 @@ export type Database = {
         Row: {
           id: string
           balance: number
+          status_data: Json | null
+          fees_data: Json | null
         }
         Insert: {
           id: string
           balance?: number
+          status_data?: Json | null
+          fees_data?: Json | null
         }
         Update: {
           id?: string
           balance?: number
+          status_data?: Json | null
+          fees_data?: Json | null
         }
         Relationships: []
       }

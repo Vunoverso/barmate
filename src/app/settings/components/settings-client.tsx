@@ -437,6 +437,7 @@ export default function SettingsClient() {
                         <Input
                             id="debitRate"
                             type="number"
+                            step="0.01"
                             value={transactionFees.debitRate}
                             onChange={(e) => setTransactionFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))}
                             placeholder="Ex: 1.99"
@@ -447,6 +448,7 @@ export default function SettingsClient() {
                         <Input
                             id="creditRate"
                             type="number"
+                            step="0.01"
                             value={transactionFees.creditRate}
                             onChange={(e) => setTransactionFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))}
                             placeholder="Ex: 4.99"
@@ -457,6 +459,7 @@ export default function SettingsClient() {
                         <Input
                             id="pixRate"
                             type="number"
+                            step="0.01"
                             value={transactionFees.pixRate}
                             onChange={(e) => setTransactionFees(prev => ({ ...prev, pixRate: parseFloat(e.target.value) || 0 }))}
                             placeholder="Ex: 0.99"

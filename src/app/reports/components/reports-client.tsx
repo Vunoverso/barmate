@@ -70,29 +70,48 @@ export default function ReportsClient() {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-    // Set initial date range on client-side to avoid hydration mismatch
+    const loadData = async () => {
+        try {
+            const [
+                salesData,
+                entriesData,
+                secondaryCashData,
+                bankAccountData,
+                cashStatusData,
+            ] = await Promise.all([
+                getSales(),
+                getFinancialEntries(),
+                getSecondaryCashBox(),
+                getBankAccount(),
+                getCashRegisterStatus(),
+            ]);
+
+            setSales(salesData);
+            setFinancialEntries(entriesData);
+            setSecondaryCashBox(secondaryCashData);
+            setBankAccount(bankAccountData);
+            setCashStatus(cashStatusData);
+
+        } catch (error) {
+            console.error("Failed to load report data:", error);
+            toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os dados para os relatórios.", variant: "destructive" });
+        } finally {
+            setIsMounted(true);
+        }
+    };
+    
+    loadData();
     setDateRange({
       from: addDays(new Date(), -30),
       to: new Date(),
     });
 
-    const handleStorageChange = () => {
-      setSales(getSales());
-      setFinancialEntries(getFinancialEntries());
-      setSecondaryCashBox(getSecondaryCashBox());
-      setBankAccount(getBankAccount());
-      setCashStatus(getCashRegisterStatus());
-    };
-    
-    handleStorageChange();
-
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('storage', loadData);
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('storage', loadData);
     };
-  }, []);
+  }, [toast]);
 
   const filterByDate = (items: (Sale | FinancialEntry)[]) => {
     if (!dateRange || !dateRange.from) return items;
