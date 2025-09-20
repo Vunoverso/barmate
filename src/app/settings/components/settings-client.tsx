@@ -188,15 +188,11 @@ export default function SettingsClient() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Local storage data is loaded synchronously
     const storedName = localStorage.getItem('barName') || 'BarMate';
     setBarName(storedName);
     setInitialBarName(storedName);
     setTransactionFees(getTransactionFees());
-
-    // Cloud data is loaded asynchronously
-    getProductCategories().then(setProductCategories);
-    
+    setProductCategories(getProductCategories());
     setIsMounted(true);
   }, []);
 
@@ -242,16 +238,16 @@ export default function SettingsClient() {
     setIsEditCategoryDialogOpen(true);
   };
 
-  const handleSaveCategory = async (updatedCategory: ProductCategory) => {
+  const handleSaveCategory = (updatedCategory: ProductCategory) => {
     const updatedCategories = productCategories.map(cat =>
       cat.id === updatedCategory.id ? updatedCategory : cat
     );
-    await saveProductCategories(updatedCategories);
+    saveProductCategories(updatedCategories);
     setProductCategories(updatedCategories);
     toast({ title: "Categoria Atualizada", description: `Categoria "${updatedCategory.name}" salva com sucesso.`});
   };
 
-  const handleAddNewCategory = async (data: { name: string; iconName: string }) => {
+  const handleAddNewCategory = (data: { name: string; iconName: string }) => {
     const newId = `cat_${data.name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_${Date.now()}`;
     const newCategory: ProductCategory = {
         id: newId,
@@ -259,7 +255,7 @@ export default function SettingsClient() {
         iconName: data.iconName,
     };
     const updatedCategories = [...productCategories, newCategory];
-    await saveProductCategories(updatedCategories);
+    saveProductCategories(updatedCategories);
     setProductCategories(updatedCategories);
     toast({ title: "Categoria Adicionada", description: `A categoria "${data.name}" foi criada com sucesso.`});
   };
@@ -268,26 +264,26 @@ export default function SettingsClient() {
     setCategoryToDelete(category);
   };
 
-  const handleDeleteCategory = async () => {
+  const handleDeleteCategory = () => {
     if (!categoryToDelete) return;
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
     // You'd also need to handle products that use this category, maybe reassign to 'Outros'
-    await saveProductCategories(updatedCategories);
+    saveProductCategories(updatedCategories);
     setProductCategories(updatedCategories);
     toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
   };
 
-  const handleExportData = async () => {
+  const handleExportData = () => {
     toast({ title: "Exportando dados...", description: "Aguarde enquanto preparamos seu backup." });
     try {
         const backupData = {
-            products: await getProducts(),
-            productCategories: await getProductCategories(),
-            sales: await getSales(),
-            openOrders: await getOpenOrders(),
-            financialEntries: await getFinancialEntries(),
+            products: getProducts(),
+            productCategories: getProductCategories(),
+            sales: getSales(),
+            openOrders: getOpenOrders(),
+            financialEntries: getFinancialEntries(),
             cashRegisterStatus: getCashRegisterStatus(),
             secondaryCashBox: getSecondaryCashBox(),
             bankAccount: getBankAccount(),
@@ -318,7 +314,7 @@ export default function SettingsClient() {
     setImportAlertOpen(true);
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -326,31 +322,38 @@ export default function SettingsClient() {
     toast({ title: "Importando dados...", description: "Isso pode levar alguns instantes. Não feche a página." });
 
     try {
-        const text = await file.text();
-        const data = JSON.parse(text);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target?.result as string;
+                const data = JSON.parse(text);
 
-        // Save local storage data
-        localStorage.setItem('barName', data.barName || 'BarMate');
-        saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] });
-        saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 });
-        saveBankAccount(data.bankAccount || { balance: 0 });
-        saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 });
+                // Save data to localStorage
+                saveProductCategories(data.productCategories || []);
+                saveProducts(data.products || []);
+                saveSales(data.sales || []);
+                saveOpenOrders(data.openOrders || []);
+                saveFinancialEntries(data.financialEntries || []);
+                localStorage.setItem('barName', data.barName || 'BarMate');
+                saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] });
+                saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 });
+                saveBankAccount(data.bankAccount || { balance: 0 });
+                saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 });
+                
+                toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
 
-        // Save supabase data sequentially
-        await saveProductCategories(data.productCategories || []);
-        await saveProducts(data.products || []);
-        await saveSales(data.sales || []);
-        await saveOpenOrders(data.openOrders || []);
-        await saveFinancialEntries(data.financialEntries || []);
-        
-        toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
-
-        // Reload the page to reflect all changes
-        setTimeout(() => window.location.reload(), 2000);
-
+                // Reload the page to reflect all changes
+                setTimeout(() => window.location.reload(), 2000);
+            } catch (innerError) {
+                console.error("Import processing error:", innerError);
+                toast({ title: "Erro ao Processar Arquivo", description: "O arquivo JSON é inválido ou está corrompido.", variant: "destructive" });
+                setIsImporting(false);
+            }
+        };
+        reader.readAsText(file);
     } catch (error) {
-        console.error("Import error:", error);
-        toast({ title: "Erro na Importação", description: "O arquivo selecionado é inválido ou está corrompido.", variant: "destructive" });
+        console.error("Import file reading error:", error);
+        toast({ title: "Erro na Importação", description: "Não foi possível ler o arquivo selecionado.", variant: "destructive" });
         setIsImporting(false);
     }
   };

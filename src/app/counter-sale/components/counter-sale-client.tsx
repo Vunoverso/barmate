@@ -14,13 +14,12 @@ import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle,
 import PaymentDialog from '@/app/orders/components/payment-dialog'; 
 import { useToast } from '@/hooks/use-toast';
 
-const LOCAL_STORAGE_COUNTER_SALE_KEY = 'barmate_counterSaleOrderItems_v2'; // Use a different key to avoid conflicts
+const LOCAL_STORAGE_COUNTER_SALE_KEY = 'barmate_counterSaleOrderItems_v2';
 
-// Group products by category
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   return products.reduce((acc, product) => {
     const category = categories.find(c => c.id === product.categoryId);
-    const categoryName = category ? category.name : 'Outros'; // Fallback category name
+    const categoryName = category ? category.name : 'Outros'; 
     if (!acc[categoryName]) {
       acc[categoryName] = [];
     }
@@ -41,14 +40,12 @@ export default function CounterSaleClient() {
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
   useEffect(() => {
-    const loadInitialData = async () => {
+    const loadInitialData = () => {
         setIsLoading(true);
         try {
-            const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
-            setProducts(fetchedProducts);
-            setProductCategories(fetchedCategories);
+            setProducts(getProducts());
+            setProductCategories(getProductCategories());
             
-            // Load cart from localStorage after products are loaded
             const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
             if (storedOrderItems) {
               try {
@@ -68,11 +65,12 @@ export default function CounterSaleClient() {
     
     loadInitialData();
 
-    // No need to listen for 'storage' change here as this page is more self-contained.
+    const handleStorageChange = () => loadInitialData();
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [toast]);
 
   useEffect(() => {
-    // Save cart to localStorage whenever it changes
     localStorage.setItem(LOCAL_STORAGE_COUNTER_SALE_KEY, JSON.stringify(currentOrderItems));
   }, [currentOrderItems]);
 
@@ -131,10 +129,10 @@ export default function CounterSaleClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = async (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
+  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     const finalTotal = orderTotal - details.discountAmount;
     
-    await addSale({
+    addSale({
       items: currentOrderItems,
       originalAmount: orderTotal,
       discountAmount: details.discountAmount,

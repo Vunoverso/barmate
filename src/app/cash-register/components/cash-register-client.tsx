@@ -78,7 +78,7 @@ export default function CashRegisterClient() {
         setSecondaryCashBox(getSecondaryCashBox());
         setBankAccount(getBankAccount());
         setCashStatus(getCashRegisterStatus());
-        getSales().then(setSales); // Async fetch
+        setSales(getSales());
     } catch (e) {
         console.error("Failed to load cash register data", e);
         toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados.", variant: "destructive" });
@@ -90,7 +90,8 @@ export default function CashRegisterClient() {
   useEffect(() => {
     loadInitialData();
 
-    const handleStorageChange = () => {
+    const handleStorageChange = (event: StorageEvent) => {
+        // We can be more specific here if needed, e.g. event.key === '..._v2'
         loadInitialData();
     };
 
@@ -122,7 +123,6 @@ export default function CashRegisterClient() {
       adjustments: [],
     };
     saveCashRegisterStatus(newStatus);
-    setCashStatus(newStatus);
     setIsOpeningDialog(false);
     toast({
       title: "Caixa Diário Aberto!",

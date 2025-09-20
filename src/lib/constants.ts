@@ -12,6 +12,7 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
         return storedValue ? JSON.parse(storedValue) : defaultValue;
     } catch (error) {
         console.error(`Error parsing localStorage key "${key}":`, error);
+        window.localStorage.removeItem(key); // Remove corrupted data
         return defaultValue;
     }
 };
@@ -19,8 +20,10 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
 const saveToLocalStorage = <T,>(key: string, value: T) => {
     if (typeof window === 'undefined') return;
     try {
-        window.localStorage.setItem(key, JSON.stringify(value));
-        window.dispatchEvent(new Event('storage'));
+        const serializedValue = JSON.stringify(value);
+        window.localStorage.setItem(key, serializedValue);
+        // Dispara um evento para notificar outras abas/componentes da mudança
+        window.dispatchEvent(new StorageEvent('storage', { key }));
     } catch (error) {
         console.error(`Error saving to localStorage key "${key}":`, error);
     }
@@ -31,7 +34,7 @@ export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
     { id: 'cat_alcoolicas', name: 'Bebidas Alcoólicas', iconName: 'Beer' },
     { id: 'cat_nao_alcoolicas', name: 'Bebidas Não Alcoólicas', iconName: 'Martini' },
     { id: 'cat_cafes', name: 'Outros', iconName: 'Coffee' },
-    { id: 'cat_lanches', 'name': 'Lanches', iconName: 'UtensilsCrossed' },
+    { id: 'cat_lanches', name: 'Lanches', iconName: 'UtensilsCrossed' },
     { id: 'cat_outros', name: 'Doces', iconName: 'Package' },
     { id: 'cat_gelos_1751233766129', name: 'Gelos', iconName: 'Package' },
     { id: 'cat_doses_1756500736217', name: '.Doses', iconName: 'Martini' },
@@ -191,253 +194,111 @@ export const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-
 // --- Data Functions ---
 
 // Product Categories
 const PRODUCT_CATEGORIES_KEY = 'barmate_productCategories_v2';
-export const getProductCategories = async (): Promise<ProductCategory[]> => {
-    if (supabase) {
-        const { data, error } = await supabase.from('product_categories').select('*');
-        if (error) {
-            console.error("Error fetching product categories:", error);
-            return getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
-        }
-        if (!data || data.length === 0) {
-            await saveProductCategories(INITIAL_PRODUCT_CATEGORIES);
-            return INITIAL_PRODUCT_CATEGORIES;
-        }
-        return data;
-    }
+export const getProductCategories = (): ProductCategory[] => {
     return getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
 };
-export const saveProductCategories = async (categories: ProductCategory[]) => {
-    if (supabase) {
-        await supabase.from('product_categories').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
-        if (categories.length > 0) {
-            const { error } = await supabase.from('product_categories').upsert(categories, { onConflict: 'id' });
-            if (error) console.error("Error saving product categories:", error);
-        }
-    }
+export const saveProductCategories = (categories: ProductCategory[]) => {
     saveToLocalStorage(PRODUCT_CATEGORIES_KEY, categories);
-    window.dispatchEvent(new Event('storage'));
 };
 
 // Products
 const PRODUCTS_KEY = 'barmate_products_v2';
-export const getProducts = async (): Promise<Product[]> => {
-    if (supabase) {
-        const { data, error } = await supabase.from('products').select('*');
-        if (error) {
-            console.error("Error fetching products:", error);
-            return getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
-        }
-        if (!data || data.length === 0) {
-            await saveProducts(INITIAL_PRODUCTS);
-            return INITIAL_PRODUCTS;
-        }
-        return data.map(p => ({...p, isCombo: p.is_combo, comboItems: p.combo_items}));
-    }
+export const getProducts = (): Product[] => {
     return getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
 };
-export const saveProducts = async (products: Product[]) => {
-    if (supabase) {
-        await supabase.from('products').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
-        if (products.length > 0) {
-            const productsToSave = products.map(p => ({
-                id: p.id,
-                name: p.name,
-                price: p.price,
-                categoryId: p.categoryId,
-                stock: p.stock,
-                is_combo: p.isCombo,
-                combo_items: p.comboItems,
-            }));
-            const { error } = await supabase.from('products').upsert(productsToSave, { onConflict: 'id' });
-            if (error) console.error("Error saving products:", error);
-        }
-    }
+export const saveProducts = (products: Product[]) => {
     saveToLocalStorage(PRODUCTS_KEY, products);
-    window.dispatchEvent(new Event('storage'));
 };
 
 // Sales
 const SALES_KEY = 'barmate_sales_v2';
-export const getSales = async (): Promise<Sale[]> => {
-    if (supabase) {
-        const { data, error } = await supabase.from('sales').select('*');
-        if (error) {
-            console.error("Error fetching sales:", error);
-            return getFromLocalStorage(SALES_KEY, []);
-        }
-        return (data || []).map((s: any) => ({ ...s, timestamp: new Date(s.timestamp) }));
-    }
-    return getFromLocalStorage(SALES_KEY, []);
+export const getSales = (): Sale[] => {
+    const sales = getFromLocalStorage<Sale[]>(SALES_KEY, []);
+    return sales.map(s => ({ ...s, timestamp: new Date(s.timestamp) }));
 };
 export const addSale = async (sale: Omit<Sale, 'id'> & { id?: string }) => {
     const newSale = { ...sale, id: sale.id || `sale-${Date.now()}` };
-    
-    if (supabase) {
-        const saleToSave = { 
-            ...newSale,
-            total_amount: newSale.totalAmount,
-            original_amount: newSale.originalAmount,
-            discount_amount: newSale.discountAmount,
-            cash_tendered: newSale.cashTendered,
-            change_given: newSale.changeGiven,
-            leave_change_as_credit: newSale.leaveChangeAsCredit
-        };
-        const { error } = await supabase.from('sales').insert(saleToSave as any);
-        if (error) console.error("Error adding sale:", error);
-
-         // Add fee entries if applicable
-        const fees = getTransactionFees();
-        for (const payment of newSale.payments) {
-            let feeRate = 0;
-            if (payment.method === 'debit') feeRate = fees.debitRate;
-            else if (payment.method === 'credit') feeRate = fees.creditRate;
-            else if (payment.method === 'pix') feeRate = fees.pixRate;
-
-            if (feeRate > 0) {
-                await addFinancialEntry({
-                    description: `Taxa ${payment.method.toUpperCase()} da venda #${newSale.id.slice(-6)}`,
-                    amount: payment.amount * (feeRate / 100),
-                    type: 'expense',
-                    source: 'bank_account',
-                    timestamp: new Date(),
-                    saleId: newSale.id
-                });
-            }
-        }
-    }
-    
-    const allSales = getFromLocalStorage(SALES_KEY, []);
+    const allSales = getSales();
     const updatedSales = [...allSales, newSale];
     saveToLocalStorage(SALES_KEY, updatedSales);
-    window.dispatchEvent(new Event('storage'));
-};
-export const removeSale = async (saleId: string) => {
-    const allSales = await getSales();
-    const saleToRemove = allSales.find(s => s.id === saleId);
-    if (saleToRemove && supabase) {
-        // Revert financial entries associated with this sale
-        const entries = await getFinancialEntries();
-        const saleFeeEntries = entries.filter(e => e.saleId === saleId && e.type === 'expense');
+    
+    // Add fee entries if applicable
+    const fees = getTransactionFees();
+    for (const payment of newSale.payments) {
+        let feeRate = 0;
+        if (payment.method === 'debit') feeRate = fees.debitRate;
+        else if (payment.method === 'credit') feeRate = fees.creditRate;
+        else if (payment.method === 'pix') feeRate = fees.pixRate;
 
-        for (const feeEntry of saleFeeEntries) {
-            await removeFinancialEntry(feeEntry.id);
-            // Optionally, refund the bank account if source was bank_account
-            if (feeEntry.source === 'bank_account') {
-                const bankAccount = getBankAccount();
-                saveBankAccount({ balance: bankAccount.balance + feeEntry.amount });
-            }
+        if (feeRate > 0) {
+            addFinancialEntry({
+                description: `Taxa ${payment.method.toUpperCase()} da venda #${newSale.id.slice(-6)}`,
+                amount: payment.amount * (feeRate / 100),
+                type: 'expense',
+                source: 'bank_account',
+                timestamp: new Date(),
+                saleId: newSale.id
+            });
+        }
+    }
+};
+export const removeSale = (saleId: string) => {
+    const allSales = getSales();
+    const saleToRemove = allSales.find(s => s.id === saleId);
+    if (!saleToRemove) return;
+
+    const entries = getFinancialEntries();
+    const saleFeeEntries = entries.filter(e => e.saleId === saleId && e.type === 'expense');
+    for (const feeEntry of saleFeeEntries) {
+        removeFinancialEntry(feeEntry.id);
+        if (feeEntry.source === 'bank_account') {
+            const bankAccount = getBankAccount();
+            saveBankAccount({ balance: bankAccount.balance + feeEntry.amount });
         }
     }
 
     const updatedSales = allSales.filter(s => s.id !== saleId);
-    if (supabase) {
-        await supabase.from('sales').delete().eq('id', saleId);
-    }
-    
     saveToLocalStorage(SALES_KEY, updatedSales);
-    window.dispatchEvent(new Event('storage'));
 };
-export const saveSales = async (sales: Sale[]) => {
-    if (supabase) {
-        await supabase.from('sales').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
-        if (sales.length > 0) {
-            const salesToSave = sales.map(s => ({
-                ...s,
-                total_amount: s.totalAmount,
-                original_amount: s.originalAmount,
-                discount_amount: s.discountAmount,
-                cash_tendered: s.cashTendered,
-                change_given: s.changeGiven,
-                leave_change_as_credit: s.leaveChangeAsCredit
-            }));
-            const { error } = await supabase.from('sales').insert(salesToSave as any);
-            if (error) console.error("Error saving sales:", error);
-        }
-    }
+export const saveSales = (sales: Sale[]) => {
     saveToLocalStorage(SALES_KEY, sales);
-    window.dispatchEvent(new Event('storage'));
 };
 
 // Active Orders
 const OPEN_ORDERS_KEY = 'barmate_openOrders_v2';
-export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
-    if (supabase) {
-        const { data, error } = await supabase.from('active_orders').select('*');
-        if (error) {
-            console.error("Error fetching open orders:", error);
-            return getFromLocalStorage(OPEN_ORDERS_KEY, []);
-        }
-        return (data || []).map((o: any) => ({ ...o, createdAt: new Date(o.created_at) }));
-    }
+export const getOpenOrders = (): ActiveOrder[] => {
     return getFromLocalStorage(OPEN_ORDERS_KEY, []);
 };
-export const saveOpenOrders = async (orders: ActiveOrder[]) => {
-     if (supabase) {
-        await supabase.from('active_orders').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
-        if (orders.length > 0) {
-            const ordersToSave = orders.map(o => ({...o, created_at: o.createdAt.toISOString() }));
-            const { error } = await supabase.from('active_orders').insert(ordersToSave as any);
-            if (error) console.error("Error saving open orders:", error);
-        }
-    }
+export const saveOpenOrders = (orders: ActiveOrder[]) => {
     saveToLocalStorage(OPEN_ORDERS_KEY, orders);
-    window.dispatchEvent(new Event('storage'));
 };
 
-// --- Financial Data ---
-
+// Financial Data
 const FINANCIAL_ENTRIES_KEY = 'barmate_financialEntries_v2';
-export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
-    if (supabase) {
-        const { data, error } = await supabase.from('financial_entries').select('*');
-        if (error) {
-            console.error("Error fetching financial entries:", error);
-            return getFromLocalStorage(FINANCIAL_ENTRIES_KEY, []);
-        }
-        return (data || []).map((e: any) => ({ ...e, timestamp: new Date(e.timestamp) }));
-    }
-    return getFromLocalStorage(FINANCIAL_ENTRIES_KEY, []);
+export const getFinancialEntries = (): FinancialEntry[] => {
+    const entries = getFromLocalStorage<FinancialEntry[]>(FINANCIAL_ENTRIES_KEY, []);
+    return entries.map(e => ({...e, timestamp: new Date(e.timestamp) }));
 };
-export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id'> & {id?: string}) => {
+export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id'> & {id?: string}) => {
     const newEntry = { ...entry, id: entry.id || `fin-${Date.now()}` };
-    
-    if (supabase) {
-        const { error } = await supabase.from('financial_entries').insert(newEntry as any);
-        if (error) console.error("Error adding financial entry:", error);
-    }
-    const allEntries = await getFinancialEntries();
+    const allEntries = getFinancialEntries();
     const updatedEntries = [...allEntries, newEntry];
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
-    window.dispatchEvent(new Event('storage'));
 };
-export const removeFinancialEntry = async (entryId: string) => {
-    const allEntries = await getFinancialEntries();
+export const removeFinancialEntry = (entryId: string) => {
+    const allEntries = getFinancialEntries();
     const updatedEntries = allEntries.filter(e => e.id !== entryId);
-    if (supabase) {
-        await supabase.from('financial_entries').delete().eq('id', entryId);
-    }
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
-    window.dispatchEvent(new Event('storage'));
 };
-export const saveFinancialEntries = async (entries: FinancialEntry[]) => {
-    if (supabase) {
-        await supabase.from('financial_entries').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
-        if (entries.length > 0) {
-            const { error } = await supabase.from('financial_entries').insert(entries as any);
-            if (error) console.error("Error saving financial entries:", error);
-        }
-    }
+export const saveFinancialEntries = (entries: FinancialEntry[]) => {
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, entries);
-    window.dispatchEvent(new Event('storage'));
 };
 
-
-// Balances
+// Balances and Status (Local only)
 const SECONDARY_CASH_KEY = 'barmate_secondaryCashBox_v2';
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(SECONDARY_CASH_KEY, { balance: 0 });
 export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToLocalStorage(SECONDARY_CASH_KEY, box);
@@ -446,13 +307,10 @@ const BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
 export const getBankAccount = (): BankAccount => getFromLocalStorage(BANK_ACCOUNT_KEY, { balance: 0 });
 export const saveBankAccount = (account: BankAccount) => saveToLocalStorage(BANK_ACCOUNT_KEY, account);
 
-
-// Cash Register Status
 const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus_v2';
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(CASH_REGISTER_STATUS_KEY, { status: 'closed', adjustments: [] });
 export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveToLocalStorage(CASH_REGISTER_STATUS_KEY, status);
 
-// Transaction Fees
 const FEES_KEY = 'barmate_transactionFees_v2';
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(FEES_KEY, { debitRate: 0, creditRate: 0, pixRate: 0 });
 export const saveTransactionFees = (fees: TransactionFees) => saveToLocalStorage(FEES_KEY, fees);

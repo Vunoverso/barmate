@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, ProductCategory } from '@/types';
-import { getProducts, saveProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
+import { getProducts, saveProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, saveProductCategories } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,13 +52,11 @@ export default function ProductManagement() {
 
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = () => {
       setIsLoading(true);
       try {
-        const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
-        setProducts(fetchedProducts);
-        setProductCategories(fetchedCategories);
+        setProducts(getProducts());
+        setProductCategories(getProductCategories());
       } catch (error) {
         console.error("Failed to fetch data:", error);
         toast({
@@ -71,21 +69,22 @@ export default function ProductManagement() {
       }
     };
 
+  useEffect(() => {
     fetchData();
-    window.addEventListener('storage', fetchData); // Refresca os dados quando há uma mudança
+    window.addEventListener('storage', fetchData); 
     return () => window.removeEventListener('storage', fetchData);
-  }, [toast]);
+  }, []);
 
-  const handleAddProduct = async (product: Omit<Product, 'id'>) => {
+  const handleAddProduct = (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
-    await saveProducts(updatedProducts);
+    saveProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
-  const handleEditProduct = async (updatedProduct: Product) => {
+  const handleEditProduct = (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-    await saveProducts(updatedProducts);
+    saveProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
 
@@ -99,11 +98,11 @@ export default function ProductManagement() {
     setIsDialogOpen(true);
   };
   
-  const handleDeleteProduct = async (productId: string) => {
+  const handleDeleteProduct = (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
     setProductToDelete(null);
-    await saveProducts(updatedProducts);
+    saveProducts(updatedProducts);
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
     }
@@ -120,7 +119,7 @@ export default function ProductManagement() {
   };
 
   if (isLoading) {
-    return <p>Carregando produtos da nuvem...</p>;
+    return <p>Carregando produtos...</p>;
   }
 
   return (

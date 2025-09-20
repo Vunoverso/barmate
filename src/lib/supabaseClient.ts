@@ -2,16 +2,11 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 
+// As variáveis de ambiente são mantidas para possível reintegração futura,
+// mas o cliente não será mais inicializado por padrão.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-let supabase: ReturnType<typeof createClient<Database>> | null = null;
-
-if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
-} else {
-  console.warn("Supabase URL or Anon Key is missing. Make sure to set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file. Data will be saved to localStorage as a fallback.");
-}
-
-
-export { supabase };
+// O cliente Supabase é inicializado como nulo para desativar a conectividade em nuvem.
+// O aplicativo funcionará em modo 100% localStorage.
+export const supabase: ReturnType<typeof createClient<Database>> | null = null;

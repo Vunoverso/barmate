@@ -75,18 +75,12 @@ export default function OrdersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
- const fetchData = async () => {
+ const fetchData = () => {
     setIsLoading(true);
     try {
-      const [
-        fetchedProducts, 
-        fetchedCategories, 
-        fetchedOrders
-      ] = await Promise.all([
-        getProducts(), 
-        getProductCategories(), 
-        getOpenOrders()
-      ]);
+      const fetchedProducts = getProducts();
+      const fetchedCategories = getProductCategories();
+      const fetchedOrders = getOpenOrders();
       
       setProducts(fetchedProducts);
       setProductCategories(fetchedCategories);
@@ -96,11 +90,14 @@ export default function OrdersClient() {
         setCurrentOrderId(fetchedOrders[0].id);
       } else if (fetchedOrders.length === 0) {
         setCurrentOrderId(null);
+      } else if (currentOrderId && !fetchedOrders.some(o => o.id === currentOrderId)) {
+        // If current order was deleted from another tab, select first one
+        setCurrentOrderId(fetchedOrders.length > 0 ? fetchedOrders[0].id : null);
       }
 
     } catch (error) {
         console.error("Failed to fetch initial data", error);
-        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados da nuvem.", variant: "destructive" });
+        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados.", variant: "destructive" });
     } finally {
         setIsLoading(false);
     }
@@ -108,11 +105,10 @@ export default function OrdersClient() {
 
   useEffect(() => {
     fetchData();
-
     const handleStorageChange = () => fetchData();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
   const filteredOpenOrders = useMemo(() => {
     return openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase()));
@@ -134,10 +130,9 @@ export default function OrdersClient() {
   const currentOrderItems = useMemo(() => {
     if (!currentOrder) return [];
     
-    // Enrich items with details from products and categories for display
     return currentOrder.items.map(item => {
         const productDetails = products.find(p => p.id === item.id);
-        if (!productDetails) return item; // Return item as is if product not found
+        if (!productDetails) return item; 
 
         const category = productCategories.find(c => c.id === productDetails.categoryId);
         return { 
@@ -171,7 +166,7 @@ export default function OrdersClient() {
     setIsCreateOrderDialogOpen(true);
   };
 
-  const handleCreateNewOrder = async (orderName: string) => {
+  const handleCreateNewOrder = (orderName: string) => {
     const newOrderId = `order-${Date.now()}`;
     const newOrder: ActiveOrder = {
       id: newOrderId,
@@ -180,8 +175,7 @@ export default function OrdersClient() {
       createdAt: new Date(),
     };
     const updatedOrders = [...openOrders, newOrder];
-    setOpenOrders(updatedOrders);
-    await saveOpenOrders(updatedOrders);
+    saveOpenOrders(updatedOrders);
     setCurrentOrderId(newOrderId);
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
   };
@@ -197,12 +191,11 @@ export default function OrdersClient() {
     }
   };
   
-  const handleSaveOrderName = async (orderId: string, newName: string) => {
+  const handleSaveOrderName = (orderId: string, newName: string) => {
       const updatedOrders = openOrders.map(order => 
           order.id === orderId ? { ...order, name: newName } : order
       );
-      setOpenOrders(updatedOrders);
-      await saveOpenOrders(updatedOrders);
+      saveOpenOrders(updatedOrders);
       toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
       setOrderToEdit(null);
   };
@@ -211,7 +204,7 @@ export default function OrdersClient() {
     setOrderToDelete(order);
   };
 
-  const handleDeleteOrder = async () => {
+  const handleDeleteOrder = () => {
     if (!orderToDelete) return;
     
     const orderIdToDelete = orderToDelete.id;
@@ -229,13 +222,12 @@ export default function OrdersClient() {
         setCurrentOrderId(nextSelectedId);
     }
     
-    setOpenOrders(updatedOrders);
-    await saveOpenOrders(updatedOrders);
+    saveOpenOrders(updatedOrders);
     setOrderToDelete(null);
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
   };
   
-  const handleMergeOrders = async (sourceOrderIds: string[]) => {
+  const handleMergeOrders = (sourceOrderIds: string[]) => {
     if (!currentOrderId || sourceOrderIds.length === 0) return;
 
     let destinationOrder = openOrders.find(o => o.id === currentOrderId);
@@ -261,14 +253,13 @@ export default function OrdersClient() {
         .filter(o => !sourceOrderIds.includes(o.id))
         .map(o => o.id === currentOrderId ? updatedOrder : o);
             
-    setOpenOrders(finalOrders);
-    await saveOpenOrders(finalOrders);
+    saveOpenOrders(finalOrders);
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
     setIsMergeDialogOpen(false);
   };
 
 
-  const handleAddCredit = async ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
+  const handleAddCredit = ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
     if (!currentOrderId) {
         toast({ title: "Nenhuma comanda selecionada", variant: "destructive" });
         return;
@@ -283,18 +274,17 @@ export default function OrdersClient() {
         price: -amount, // Negative price for credit
         quantity: 1,
         categoryId: 'cat_outros',
-        isCombo: false, // Ensure these are set for type consistency
+        isCombo: false, 
         comboItems: null
     };
 
     const newName = `${orderToUpdate.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)`;
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
     const newOpenOrders = openOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
-    setOpenOrders(newOpenOrders);
-    await saveOpenOrders(newOpenOrders);
+    saveOpenOrders(newOpenOrders);
 
     if (source !== 'permuta') {
-        await addFinancialEntry({
+        addFinancialEntry({
             description: `Crédito para ${orderToUpdate.name}: ${description}`,
             amount: amount,
             type: 'income',
@@ -310,7 +300,7 @@ export default function OrdersClient() {
   };
 
 
-  const addToOrder = async (product: Product) => {
+  const addToOrder = (product: Product) => {
     if (!currentOrderId) {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
       return;
@@ -339,11 +329,10 @@ export default function OrdersClient() {
         return order;
       });
     
-    setOpenOrders(updatedOrders);
-    await saveOpenOrders(updatedOrders);
+    saveOpenOrders(updatedOrders);
   };
 
-  const handleClaimComboItem = async (comboItemId: string) => {
+  const handleClaimComboItem = (comboItemId: string) => {
     const orderIndex = openOrders.findIndex(o => o.id === currentOrderId);
     if (orderIndex === -1) return;
     
@@ -370,8 +359,7 @@ export default function OrdersClient() {
 
     if (updatedOrder.status === 'paid' && allCombosClaimed) {
         const newOrders = openOrders.filter(o => o.id !== currentOrderId);
-        setOpenOrders(newOrders);
-        await saveOpenOrders(newOrders);
+        saveOpenOrders(newOrders);
         toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${order.name}" foram entregues.` });
 
         if (newOrders.length > 0) {
@@ -383,12 +371,11 @@ export default function OrdersClient() {
     } else {
         const newOrders = [...openOrders];
         newOrders[orderIndex] = updatedOrder;
-        setOpenOrders(newOrders);
-        await saveOpenOrders(newOrders);
+        saveOpenOrders(newOrders);
     }
   };
 
-  const updateQuantity = async (productId: string, quantity: number) => {
+  const updateQuantity = (productId: string, quantity: number) => {
     if (!currentOrderId) return;
     const updatedOrders = openOrders.map(order => {
         if (order.id === currentOrderId) {
@@ -404,26 +391,24 @@ export default function OrdersClient() {
         }
         return order;
       });
-    setOpenOrders(updatedOrders);
-    await saveOpenOrders(updatedOrders);
+    saveOpenOrders(updatedOrders);
   };
 
-  const removeFromOrder = async (productId: string) => {
+  const removeFromOrder = (productId: string) => {
     if (!currentOrderId) return;
     const updatedOrders = openOrders.map(order =>
         order.id === currentOrderId
           ? { ...order, items: order.items.filter(item => item.id !== productId) }
           : order
       );
-    setOpenOrders(updatedOrders);
-    await saveOpenOrders(updatedOrders);
+    saveOpenOrders(updatedOrders);
   };
 
   const orderTotal = useMemo(() => {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
   
-  const handlePayment = async (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
+  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -445,10 +430,9 @@ export default function OrdersClient() {
         
         const updatedOrder: ActiveOrder = { ...currentOrder, items: [...currentOrder.items, ...paymentItems] };
         const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
-        setOpenOrders(newOpenOrders);
-        await saveOpenOrders(newOpenOrders);
+        saveOpenOrders(newOpenOrders);
 
-        await addSale({
+        addSale({
             items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), originalAmount: totalPaid, discountAmount: details.discountAmount, totalAmount: totalPaid - details.discountAmount, payments: details.payments, changeGiven: 0, timestamp: new Date(), status: 'completed', cashTendered: details.cashTendered
         });
         
@@ -457,7 +441,7 @@ export default function OrdersClient() {
         return;
     }
     
-    await addSale({
+    addSale({
       items: currentOrderItems, originalAmount: currentOrderItems.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0), discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, timestamp: new Date(), status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
     });
 
@@ -474,8 +458,7 @@ export default function OrdersClient() {
         status: 'paid'
       };
       const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? paidOrder : o);
-      setOpenOrders(newOpenOrders);
-      await saveOpenOrders(newOpenOrders);
+      saveOpenOrders(newOpenOrders);
       toast({ title: "Comanda Paga!", description: `A comanda "${currentOrder.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
       setIsPaymentDialogOpen(false);
       return;
@@ -506,8 +489,7 @@ export default function OrdersClient() {
             });
          }
     }
-    setOpenOrders(nextOrdersState);
-    await saveOpenOrders(nextOrdersState);
+    saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
   };
@@ -515,7 +497,7 @@ export default function OrdersClient() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p>Carregando dados da nuvem...</p>
+        <p>Carregando dados...</p>
       </div>
     );
   }
