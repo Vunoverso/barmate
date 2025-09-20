@@ -187,13 +187,21 @@ export default function SettingsClient() {
   
   const { toast } = useToast();
 
-  useEffect(() => {
+  const loadData = () => {
     const storedName = localStorage.getItem('barName') || 'BarMate';
     setBarName(storedName);
     setInitialBarName(storedName);
     setTransactionFees(getTransactionFees());
     setProductCategories(getProductCategories());
+  }
+
+  useEffect(() => {
+    loadData();
     setIsMounted(true);
+    window.addEventListener('storage', loadData);
+    return () => {
+      window.removeEventListener('storage', loadData);
+    }
   }, []);
 
   const handleSaveBarName = (e?: React.FormEvent) => {
@@ -208,7 +216,7 @@ export default function SettingsClient() {
     }
     localStorage.setItem('barName', barName);
     setInitialBarName(barName);
-    window.dispatchEvent(new Event('barNameChanged'));
+    window.dispatchEvent(new Event('storage'));
     toast({
       title: "Sucesso!",
       description: "Nome do bar atualizado.",
@@ -321,41 +329,50 @@ export default function SettingsClient() {
     setIsImporting(true);
     toast({ title: "Importando dados...", description: "Isso pode levar alguns instantes. Não feche a página." });
 
-    try {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const text = e.target?.result as string;
-                const data = JSON.parse(text);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const text = e.target?.result as string;
+            const data = JSON.parse(text);
 
-                // Save data to localStorage
-                saveProductCategories(data.productCategories || []);
-                saveProducts(data.products || []);
-                saveSales(data.sales || []);
-                saveOpenOrders(data.openOrders || []);
-                saveFinancialEntries(data.financialEntries || []);
-                localStorage.setItem('barName', data.barName || 'BarMate');
-                saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] });
-                saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 });
-                saveBankAccount(data.bankAccount || { balance: 0 });
-                saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 });
-                
-                toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
-
-                // Reload the page to reflect all changes
-                setTimeout(() => window.location.reload(), 2000);
-            } catch (innerError) {
-                console.error("Import processing error:", innerError);
-                toast({ title: "Erro ao Processar Arquivo", description: "O arquivo JSON é inválido ou está corrompido.", variant: "destructive" });
-                setIsImporting(false);
+            // Validate data object
+            if (typeof data !== 'object' || data === null) {
+              throw new Error("Arquivo de backup inválido.");
             }
-        };
-        reader.readAsText(file);
-    } catch (error) {
-        console.error("Import file reading error:", error);
-        toast({ title: "Erro na Importação", description: "Não foi possível ler o arquivo selecionado.", variant: "destructive" });
-        setIsImporting(false);
-    }
+
+            // Save data to localStorage
+            saveProductCategories(data.productCategories || []);
+            saveProducts(data.products || []);
+            saveSales(data.sales || []);
+            saveOpenOrders(data.openOrders || []);
+            saveFinancialEntries(data.financialEntries || []);
+            localStorage.setItem('barName', data.barName || 'BarMate');
+            saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] });
+            saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 });
+            saveBankAccount(data.bankAccount || { balance: 0 });
+            saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 });
+            
+            toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
+
+            // Reload the page to reflect all changes
+            setTimeout(() => window.location.reload(), 2000);
+        } catch (innerError) {
+            console.error("Import processing error:", innerError);
+            toast({ title: "Erro ao Processar Arquivo", description: "O arquivo JSON é inválido ou está corrompido.", variant: "destructive" });
+            setIsImporting(false);
+        } finally {
+           // Reset file input so the same file can be selected again if needed
+           if (fileInputRef.current) {
+               fileInputRef.current.value = "";
+           }
+        }
+    };
+    reader.onerror = (error) => {
+      console.error("Import file reading error:", error);
+      toast({ title: "Erro na Importação", description: "Não foi possível ler o arquivo selecionado.", variant: "destructive" });
+      setIsImporting(false);
+    };
+    reader.readAsText(file);
   };
 
 

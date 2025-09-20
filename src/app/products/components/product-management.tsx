@@ -53,23 +53,23 @@ export default function ProductManagement() {
   const { toast } = useToast();
 
   const fetchData = () => {
-      setIsLoading(true);
-      try {
-        setProducts(getProducts());
-        setProductCategories(getProductCategories());
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-        toast({
-          title: "Erro ao carregar dados",
-          description: "Não foi possível buscar os produtos e categorias.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    try {
+      setProducts(getProducts());
+      setProductCategories(getProductCategories());
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível buscar os produtos e categorias.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
+    setIsLoading(true);
     fetchData();
     window.addEventListener('storage', fetchData); 
     return () => window.removeEventListener('storage', fetchData);

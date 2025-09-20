@@ -1,15 +1,21 @@
 
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, OrderItem, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
-import { supabase } from './supabaseClient';
 
 // --- Generic LocalStorage Helpers ---
 
 const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-    if (typeof window === 'undefined') return defaultValue;
+    if (typeof window === 'undefined') {
+      return defaultValue;
+    }
     const storedValue = window.localStorage.getItem(key);
+    if (storedValue === null) {
+        // If nothing is in localStorage, save the default value for next time.
+        saveToLocalStorage(key, defaultValue);
+        return defaultValue;
+    }
     try {
-        return storedValue ? JSON.parse(storedValue) : defaultValue;
+        return JSON.parse(storedValue);
     } catch (error) {
         console.error(`Error parsing localStorage key "${key}":`, error);
         window.localStorage.removeItem(key); // Remove corrupted data
@@ -194,7 +200,7 @@ export const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-// --- Data Functions ---
+// --- Data Functions (100% LocalStorage) ---
 
 // Product Categories
 const PRODUCT_CATEGORIES_KEY = 'barmate_productCategories_v2';
@@ -220,13 +226,12 @@ export const getSales = (): Sale[] => {
     const sales = getFromLocalStorage<Sale[]>(SALES_KEY, []);
     return sales.map(s => ({ ...s, timestamp: new Date(s.timestamp) }));
 };
-export const addSale = async (sale: Omit<Sale, 'id'> & { id?: string }) => {
+export const addSale = (sale: Omit<Sale, 'id'> & { id?: string }) => {
     const newSale = { ...sale, id: sale.id || `sale-${Date.now()}` };
     const allSales = getSales();
     const updatedSales = [...allSales, newSale];
     saveToLocalStorage(SALES_KEY, updatedSales);
     
-    // Add fee entries if applicable
     const fees = getTransactionFees();
     for (const payment of newSale.payments) {
         let feeRate = 0;
@@ -298,7 +303,7 @@ export const saveFinancialEntries = (entries: FinancialEntry[]) => {
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, entries);
 };
 
-// Balances and Status (Local only)
+// Balances and Status
 const SECONDARY_CASH_KEY = 'barmate_secondaryCashBox_v2';
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(SECONDARY_CASH_KEY, { balance: 0 });
 export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToLocalStorage(SECONDARY_CASH_KEY, box);

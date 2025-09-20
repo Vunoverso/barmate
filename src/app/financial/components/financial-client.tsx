@@ -127,22 +127,25 @@ export default function FinancialClient() {
   });
 
   const loadData = () => {
+    try {
       setSecondaryCashBox(getSecondaryCashBox());
       setBankAccount(getBankAccount());
       setCashStatus(getCashRegisterStatus());
-      
-      getFinancialEntries().then(setEntries);
-      getSales().then(setSales);
+      setEntries(getFinancialEntries());
+      setSales(getSales());
+    } catch(e) {
+      console.error("Error loading data from localStorage", e);
+      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível ler os dados do armazenamento local.", variant: "destructive" });
+    }
   };
   
   useEffect(() => {
-    setIsMounted(true);
+    loadData();
     setDateRange({
       from: addDays(new Date(), -30),
       to: new Date(),
     });
-
-    loadData();
+    setIsMounted(true);
 
     window.addEventListener('storage', loadData);
 
@@ -321,7 +324,7 @@ export default function FinancialClient() {
     proceedWithAddExpense(data);
   };
 
-  const proceedWithAddExpense = async (data: ExpenseFormData) => {
+  const proceedWithAddExpense = (data: ExpenseFormData) => {
     // Check for sufficient funds
     if (data.source === 'daily_cash') {
       if (cashStatus.status !== 'open') {
@@ -367,7 +370,7 @@ export default function FinancialClient() {
       saveBankAccount({ balance: bankAccount.balance - data.amount });
     }
 
-    await addFinancialEntry(newEntry as FinancialEntry);
+    addFinancialEntry(newEntry as FinancialEntry);
     
     toast({ title: "Despesa Adicionada", description: "Sua nova despesa foi registrada com sucesso." });
     setIsExpenseDialogOpen(false);
@@ -417,7 +420,7 @@ export default function FinancialClient() {
     setIsEditBankAccountDialogOpen(false);
   }
 
-  const handleDeleteEntry = async () => {
+  const handleDeleteEntry = () => {
     if (!entryToDelete) return;
     
     // Do not allow deleting entries linked to sales from here.
@@ -445,7 +448,7 @@ export default function FinancialClient() {
        // This case needs to be defined if income entries can be deleted
     }
 
-    await removeFinancialEntry(entryToDelete.id);
+    removeFinancialEntry(entryToDelete.id);
     toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
     setEntryToDelete(null);
   };
