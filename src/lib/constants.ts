@@ -31,7 +31,8 @@ const APP_DATA_ID = 'app_data';
 
 const getAppData = async () => {
     if (!supabase) return null;
-    const { data, error } = await supabase.from('balances').select('*').eq('id', APP_DATA_ID).single();
+    // Use .limit(1).single() to ensure it never returns more than one row, preventing the 406 error.
+    const { data, error } = await supabase.from('balances').select('*').eq('id', APP_DATA_ID).limit(1).single();
     if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is not a critical error here.
         console.error("Error fetching app_data:", error);
         return null;
@@ -64,6 +65,8 @@ const saveJsonData = async (key: keyof import('@/types/supabase').Database['publ
         return;
     }
     try {
+        // Use upsert to either create the row if it doesn't exist, or update it if it does.
+        // This prevents creating duplicate rows and is the key to fixing the 406 error.
         const { error } = await supabase.from('balances').upsert({ id: APP_DATA_ID, [key]: value }, { onConflict: 'id' });
         if (error) throw error;
     } catch (error) {
@@ -213,8 +216,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     { id: 'prod-1758243780811', name: 'COM 3 BOA', price: 42.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 3 },
     { id: 'prod-1758248021903', name: 'h2o', price: 7.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1758309928671', name: 'Burguesa Lata', price: 5.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1758322472705', name: 'Caipirinha Menta', price: 16.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null }
+    { id: 'prod-1758322472705', name: 'Caipirinha Menta', price: 16.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
 ];
+
 
 
 export const LUCIDE_ICON_MAP: { [key: string]: LucideIcon } = {
@@ -440,5 +444,3 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveJsonDa
 // Transaction Fees
 export const getTransactionFees = (): Promise<TransactionFees> => getJsonData('fees_data', { debitRate: 0, creditRate: 0, pixRate: 0 });
 export const saveTransactionFees = (fees: TransactionFees) => saveJsonData('fees_data', fees);
-
-    
