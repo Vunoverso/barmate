@@ -32,7 +32,7 @@ const APP_DATA_ID = 'app_data';
 const getAppData = async () => {
     if (!supabase) return null;
     const { data, error } = await supabase.from('balances').select('*').eq('id', APP_DATA_ID).single();
-    if (error && error.code !== 'PGRST116') {
+    if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is not a critical error here.
         console.error("Error fetching app_data:", error);
         return null;
     }
@@ -40,10 +40,22 @@ const getAppData = async () => {
 }
 
 const getJsonData = async <T,>(key: keyof import('@/types/supabase').Database['public']['Tables']['balances']['Row'], defaultValue: T): Promise<T> => {
-    if (!supabase) return getFromLocalStorage(String(key), defaultValue);
-    const appData = await getAppData();
-    return appData?.[key] as T ?? defaultValue;
+    if (!supabase) {
+        return getFromLocalStorage(String(key), defaultValue);
+    }
+    try {
+        const appData = await getAppData();
+        // If appData is null or the specific key is null/undefined, return the default value.
+        if (!appData || appData[key] === null || typeof appData[key] === 'undefined') {
+            return defaultValue;
+        }
+        return appData[key] as T;
+    } catch (error) {
+        console.error(`Error in getJsonData for key "${String(key)}":`, error);
+        return defaultValue;
+    }
 };
+
 
 const saveJsonData = async (key: keyof import('@/types/supabase').Database['public']['Tables']['balances']['Row'], value: any) => {
     window.dispatchEvent(new Event('storage')); // Optimistic update
@@ -151,13 +163,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     { id: 'prod-1754230638331', name: 'Red Label Dose', price: 15.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754526694819', name: 'Porção Promocional', price: 25.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
     { id: 'prod-1754610401420', name: 'Chup-Chup', price: 1.00, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
-    { id: 'prod-1754698560258', 'name': 'Pizza  Pedaço', price: 5.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754698560258', name: 'Pizza Pedaço', price: 5.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754760397301', name: 'Dose Old Red Apple/Honey', price: 6.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754760423970', name: 'Dose Menta', price: 6.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754760448411', name: 'Copão Menta Maçâ Mel 500ml', price: 14.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1754760464595', 'name': 'Copão Menta Maçã Mel  700ml', price: 16.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754760464595', name: 'Copão Menta Maçã Mel 700ml', price: 16.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754779417140', name: 'Copão Red Label 500ml', price: 22.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1754779442181', 'name': 'Copão  Red Label 700ml', price: 32.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754779442181', name: 'Copão Red Label 700ml', price: 32.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1754852919813', name: 'Mini Pastel c/ Cheddar', price: 20.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
     { id: 'prod-1754877400440', name: 'água de coco', price: 3.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
     { id: 'prod-1755213541831', name: 'Meia Porção Calabreza', price: 15.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
@@ -171,7 +183,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     { id: 'prod-1755995597845', name: 'Combo Burguesa', price: 27.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 3 },
     { id: 'prod-1756070296458', name: 'Combo boa 2', price: 28.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 2 },
     { id: 'prod-1756076440939', name: 'Suco Del Vale 450ml', price: 5.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
-    { id: 'prod-1756328269633', 'name': 'Bala Lilith Maçã Verde', price: 2.00, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756328269633', name: 'Bala Lilith Maçã Verde', price: 2.00, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1756341313637', name: 'Batida Vinho 500ml', price: 10.00, categoryId: 'cat_drinks_1756501505560', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1756515550988', name: 'Pizza Mini', price: 10.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
     { id: 'prod-1756684956893', name: 'Torcida', price: 4.50, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
@@ -428,3 +440,5 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveJsonDa
 // Transaction Fees
 export const getTransactionFees = (): Promise<TransactionFees> => getJsonData('fees_data', { debitRate: 0, creditRate: 0, pixRate: 0 });
 export const saveTransactionFees = (fees: TransactionFees) => saveJsonData('fees_data', fees);
+
+    
