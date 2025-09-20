@@ -87,7 +87,6 @@ export default function OrdersClient() {
         setProductCategories(allCategories);
 
         const storedOrdersJSON = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
-        // Previne loop infinito checando se o valor em storage é diferente do estado atual
         if (storedOrdersJSON && storedOrdersJSON !== JSON.stringify(openOrders)) {
             try {
                 const parsedOrders: ActiveOrder[] = JSON.parse(storedOrdersJSON).map((order: ActiveOrder) => ({
@@ -130,6 +129,31 @@ export default function OrdersClient() {
       localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(openOrders));
     }
   }, [openOrders, isMounted]);
+
+  // Effect to automatically clean up credit labels from order names
+  useEffect(() => {
+    if (!openOrders.length) return;
+
+    let wasChanged = false;
+    const cleanedOrders = openOrders.map(order => {
+        const total = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+        const hasCreditText = order.name.includes('(Com Crédito)') || order.name.includes('(Crédito de Troco)');
+
+        if (total >= 0 && hasCreditText) {
+            wasChanged = true;
+            return {
+                ...order,
+                name: order.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')
+            };
+        }
+        return order;
+    });
+
+    // Only update state if a change was actually made, to prevent infinite loops.
+    if (wasChanged) {
+        setOpenOrders(cleanedOrders);
+    }
+  }, [openOrders]);
 
 
   const filteredOpenOrders = useMemo(() => {
@@ -285,8 +309,7 @@ export default function OrdersClient() {
 
     const orderToUpdate = openOrders.find(o => o.id === currentOrderId);
     if (!orderToUpdate) return;
-
-    // 1. Calculate the new state
+    
     const creditItem: OrderItem = {
         id: `credit-${Date.now()}`,
         name: `Crédito: ${description}`,
@@ -298,6 +321,8 @@ export default function OrdersClient() {
     };
 
     const newName = `${orderToUpdate.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)`;
+    
+    // 1. Calculate the new state
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
     const newOrdersState = openOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
 
@@ -321,7 +346,7 @@ export default function OrdersClient() {
     }
 
     setIsCreditDialogOpen(false);
-};
+  };
 
 
   const addToOrder = (product: Product) => {
@@ -1274,3 +1299,4 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
