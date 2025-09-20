@@ -388,10 +388,14 @@ export const getSecondaryCashBox = async (): Promise<SecondaryCashBox> => {
     if(!supabase) return getFromLocalStorage('barmate_secondaryCashBox', { balance: 0 });
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'secondary_cash').single();
-        if (error || !data) {
-          await supabase.from('balances').upsert({ id: 'secondary_cash', balance: 0 });
+        // If no row is found (error code PGRST116), create it.
+        if (error && error.code === 'PGRST116') {
+          console.log('No secondary_cash balance found, creating one...');
+          await supabase.from('balances').insert({ id: 'secondary_cash', balance: 0 });
           return { balance: 0 };
         }
+        if (error) throw error;
+        
         return { balance: data.balance };
     } catch (e) {
         console.error("Error getting secondary cash box:", e);
@@ -417,10 +421,14 @@ export const getBankAccount = async (): Promise<BankAccount> => {
      if(!supabase) return getFromLocalStorage('barmate_bankAccount', { balance: 0 });
     try {
         const { data, error } = await supabase.from('balances').select('balance').eq('id', 'bank_account').single();
-        if (error || !data) {
-          await supabase.from('balances').upsert({ id: 'bank_account', balance: 0 });
+        // If no row is found (error code PGRST116), create it.
+        if (error && error.code === 'PGRST116') {
+          console.log('No bank_account balance found, creating one...');
+          await supabase.from('balances').insert({ id: 'bank_account', balance: 0 });
           return { balance: 0 };
         }
+        if (error) throw error;
+
         return { balance: data.balance };
     } catch (e) {
         console.error("Error getting bank account:", e);
