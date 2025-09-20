@@ -3,512 +3,425 @@ import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, Sec
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
+// --- Generic LocalStorage/Supabase Helpers ---
 
-// In-memory cache to reduce reads and improve performance
-let productCategoriesCache: ProductCategory[] | null = null;
-let productsCache: Product[] | null = null;
-
-
-export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
-  Beer,
-  Wine,
-  Martini,
-  Coffee,
-  UtensilsCrossed,
-  CakeSlice,
-  CircleDollarSign,
-  CreditCard,
-  QrCode,
-  Package,
-  Banknote,
-  Wallet,
-};
-
-export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
-  { id: 'cat_alcoolicas', name: 'Bebidas Alcoólicas', iconName: 'Beer' },
-  { id: 'cat_nao_alcoolicas', name: 'Bebidas Não Alcoólicas', iconName: 'Martini' },
-  { id: 'cat_cafes', name: 'Cafés', iconName: 'Coffee' },
-  { id: 'cat_lanches', name: 'Lanches', iconName: 'UtensilsCrossed' },
-  { id: 'cat_sobremesas', name: 'Sobremesas', iconName: 'CakeSlice' },
-  { id: 'cat_outros', name: 'Outros', iconName: 'Package' }
-];
-
-export const getProductCategories = async (): Promise<ProductCategory[]> => {
-  if (productCategoriesCache) return productCategoriesCache;
-  if (!supabase) {
-    return getFromLocalStorage('barmate_product_categories', INITIAL_PRODUCT_CATEGORIES);
-  }
-
-  try {
-    const { data, error } = await supabase.from('product_categories').select('*');
-    if (error) throw error;
-    
-    if (!data || data.length === 0) {
-      const { error: insertError } = await supabase.from('product_categories').insert(INITIAL_PRODUCT_CATEGORIES);
-      if (insertError) throw insertError;
-      productCategoriesCache = INITIAL_PRODUCT_CATEGORIES;
-      return INITIAL_PRODUCT_CATEGORIES;
-    }
-    
-    productCategoriesCache = data;
-    return data;
-  } catch (error) {
-    console.error("Error fetching product categories:", error);
-    // Fallback to local storage if Supabase fails
-    return getFromLocalStorage('barmate_product_categories', INITIAL_PRODUCT_CATEGORIES);
-  }
-};
-
-export const saveProductCategories = async (categories: ProductCategory[]): Promise<void> => {
-  productCategoriesCache = categories; // Update cache immediately for UI responsiveness
-  window.dispatchEvent(new Event('storage'));
-
-  if (!supabase) {
-    saveToLocalStorage('barmate_product_categories', categories);
-    return;
-  }
-  try {
-    const { error } = await supabase.from('product_categories').upsert(categories, { onConflict: 'id' });
-    if (error) throw error;
-
-    const {data: existingCategories} = await supabase.from('product_categories').select('id');
-    const oldIds = existingCategories?.map(c => c.id) || [];
-    const newIds = categories.map(c => c.id);
-    const idsToDelete = oldIds.filter(id => !newIds.includes(id));
-
-    if(idsToDelete.length > 0) {
-        const { error: deleteError } = await supabase.from('product_categories').delete().in('id', idsToDelete);
-        if(deleteError) throw deleteError;
-    }
-  } catch (error) {
-    console.error("Error saving product categories:", error);
-  }
-};
-
-
-export const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', name: 'Cerveja Pilsen Long Neck', price: 12.00, categoryId: 'cat_alcoolicas', stock: 100 },
-  { id: '2', name: 'Taça de Vinho Tinto Seco', price: 25.00, categoryId: 'cat_alcoolicas', stock: 50 },
-  { id: '3', name: 'Caipirinha de Limão', price: 18.00, categoryId: 'cat_alcoolicas', stock: 70 },
-  { id: '4', name: 'Refrigerante Lata', price: 7.00, categoryId: 'cat_nao_alcoolicas', stock: 150 },
-  { id: '5', name: 'Suco Natural Laranja', price: 10.00, categoryId: 'cat_nao_alcoolicas', stock: 80 },
-];
-
-export const getProducts = async (): Promise<Product[]> => {
-  if (productsCache) return productsCache;
-  if (!supabase) {
-      return getFromLocalStorage('barmate_products_v2', []);
-  }
-
-  try {
-    const { data, error } = await supabase.from('products').select('*');
-    if (error) throw error;
-     if (!data || data.length === 0) {
-      productsCache = [];
-      return [];
-    }
-    productsCache = data.map(p => ({ ...p, isCombo: p.is_combo, comboItems: p.combo_items })) as Product[];
-    return productsCache;
-  } catch (error) {
-    console.error("Error fetching products:", error);
-    return getFromLocalStorage('barmate_products_v2', []);
-  }
-};
-
-export const saveProducts = async (products: Product[]): Promise<void> => {
-  productsCache = products;
-  window.dispatchEvent(new Event('storage'));
-
-  if (!supabase) {
-    saveToLocalStorage('barmate_products_v2', products);
-    return;
-  }
-  try {
-    const productsToSave = products.map(p => ({ 
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        categoryId: p.categoryId,
-        stock: p.stock,
-        is_combo: p.isCombo,
-        combo_items: p.comboItems,
-    }));
-    const { error } = await supabase.from('products').upsert(productsToSave, { onConflict: 'id' });
-    if (error) throw error;
-    
-    const {data: existingProducts} = await supabase.from('products').select('id');
-    const oldIds = existingProducts?.map(p => p.id) || [];
-    const newIds = products.map(p => p.id);
-    const idsToDelete = oldIds.filter(id => !newIds.includes(id));
-
-    if(idsToDelete.length > 0) {
-        const { error: deleteError } = await supabase.from('products').delete().in('id', idsToDelete);
-        if (deleteError) throw deleteError;
-    }
-  } catch (error) {
-    console.error("Error saving products:", error);
-  }
-};
-
-export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: LucideIcon }[] = [
-  { name: 'Dinheiro', value: 'cash', icon: Banknote },
-  { name: 'Débito', value: 'debit', icon: CreditCard },
-  { name: 'Crédito', value: 'credit', icon: CreditCard },
-  { name: 'PIX', value: 'pix', icon: QrCode },
-];
-
-
-export const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-};
-
-
-// Generic function to get data from local storage as a fallback
-const getFromLocalStorage = <T>(key: string, defaultValue: T): T => {
+const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     if (typeof window === 'undefined') return defaultValue;
-    const data = localStorage.getItem(key);
+    const storedValue = window.localStorage.getItem(key);
     try {
-        return data ? JSON.parse(data) : defaultValue;
-    } catch {
+        return storedValue ? JSON.parse(storedValue) : defaultValue;
+    } catch (error) {
+        console.error(`Error parsing localStorage key "${key}":`, error);
         return defaultValue;
     }
 };
 
-// Generic function to save data to local storage as a fallback
-const saveToLocalStorage = <T>(key: string, data: T) => {
+const saveToLocalStorage = <T,>(key: string, value: T) => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(key, JSON.stringify(data));
-    window.dispatchEvent(new Event('storage'));
+    try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+        window.dispatchEvent(new Event('storage'));
+    } catch (error) {
+        console.error(`Error saving to localStorage key "${key}":`, error);
+    }
 };
 
-// --- Open Orders ---
-export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
-    if (!supabase) return getFromLocalStorage('barmate_openOrders_v2', []);
+const getFromSupabase = async <T,>(table: string, key: string, defaultValue: T): Promise<T> => {
+    if (!supabase) return getFromLocalStorage(key, defaultValue);
     try {
-        const { data, error } = await supabase.from('active_orders').select('*');
-        if (error) {
-            console.error("Error getting open orders:", error);
-            return [];
-        };
-        return (data || []).map(o => ({
-            ...o,
-            createdAt: new Date(o.created_at),
-        })) as ActiveOrder[];
-    } catch(e) {
-        console.error("Error getting open orders:", e);
-        return [];
+        const { data, error } = await supabase.from(table).select('*').eq('id', key).single();
+        if (error && error.code !== 'PGRST116') throw error; // 'PGRST116' is "JSON object requested, but row not found"
+        return data ? (data as any).data : defaultValue;
+    } catch (error) {
+        console.error(`Error fetching from Supabase table "${table}" key "${key}":`, error);
+        return getFromLocalStorage(key, defaultValue); // Fallback
     }
 }
-export const saveOpenOrders = async (orders: ActiveOrder[]) => {
+
+const saveToSupabase = async (table: string, key: string, value: any): Promise<void> => {
+    window.dispatchEvent(new Event('storage')); // Optimistic update
     if (!supabase) {
-        saveToLocalStorage('barmate_openOrders_v2', orders);
+        saveToLocalStorage(key, value);
         return;
     }
     try {
-        const ordersToSave = orders.map(o => ({
-            id: o.id,
-            name: o.name,
-            items: o.items as any,
-            created_at: o.createdAt.toISOString(),
-            status: o.status
-        }));
-
-        const { error } = await supabase.from('active_orders').upsert(ordersToSave, { onConflict: 'id' });
+        const { error } = await supabase.from(table).upsert({ id: key, data: value }, { onConflict: 'id' });
         if (error) throw error;
-
-        const currentOrderIds = orders.map(o => o.id);
-        const { data: existingOrders } = await supabase.from('active_orders').select('id');
-        const idsToDelete = existingOrders?.filter(o => !currentOrderIds.includes(o.id)).map(o => o.id) || [];
-        
-        if (idsToDelete.length > 0) {
-            await supabase.from('active_orders').delete().in('id', idsToDelete);
-        }
-    } catch (e) {
-        console.error("Error saving open orders:", e);
-    } finally {
-       window.dispatchEvent(new Event('storage'));
+    } catch (error) {
+        console.error(`Error saving to Supabase table "${table}" key "${key}":`, error);
     }
 }
 
-// ---- SALES ----
-export const getSales = async (): Promise<Sale[]> => {
-    if (!supabase) return getFromLocalStorage('barmate_sales_v2', []);
-    try {
-        const { data, error } = await supabase.from('sales').select('*');
-        if (error) {
-            console.error("Error getting sales:", error);
-            return [];
-        };
-        return (data || []).map(s => ({
-            ...s,
-            timestamp: new Date(s.timestamp),
-            totalAmount: s.total_amount,
-            originalAmount: s.original_amount,
-            discountAmount: s.discount_amount,
-            cashTendered: s.cash_tendered,
-            changeGiven: s.change_given,
-            leaveChangeAsCredit: s.leave_change_as_credit,
-        })) as Sale[];
-    } catch(e) {
-        console.error("Error getting sales:", e);
-        return [];
-    }
+export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
+    { id: 'cat_alcoolicas', name: 'Bebidas Alcoólicas', iconName: 'Beer' },
+    { id: 'cat_nao_alcoolicas', name: 'Bebidas Não Alcoólicas', iconName: 'Martini' },
+    { id: 'cat_cafes', name: 'Outros', iconName: 'Coffee' },
+    { id: 'cat_lanches', name: 'Lanches', iconName: 'UtensilsCrossed' },
+    { id: 'cat_outros', name: 'Doces', iconName: 'Package' },
+    { id: 'cat_gelos_1751233766129', name: 'Gelos', iconName: 'Package' },
+    { id: 'cat_doses_1756500736217', name: '.Doses', iconName: 'Martini' },
+    { id: 'cat_cop_o_1756500824433', name: 'Copão', iconName: 'Beer' },
+    { id: 'cat_caipirinhas_1756501145617', name: 'Caipirinhas', iconName: 'Wine' },
+    { id: 'cat_drinks_1756501505560', name: '.Drinks', iconName: 'Martini' },
+];
+
+export const INITIAL_PRODUCTS: Product[] = [
+    { id: '4', name: 'Refrigerante Lata', price: 6.00, categoryId: 'cat_nao_alcoolicas', stock: 150, isCombo: null, comboItems: null },
+    { id: '6', name: 'Água Mineral', price: 3.00, categoryId: 'cat_nao_alcoolicas', stock: 200, isCombo: null, comboItems: null },
+    { id: '9', name: 'Porção de Mini Pastel', price: 18.00, categoryId: 'cat_lanches', stock: 60, isCombo: null, comboItems: null },
+    { id: '10', name: 'Porção de Batata Frita', price: 20.00, categoryId: 'cat_lanches', stock: 75, isCombo: null, comboItems: null },
+    { id: '11', name: 'Pastel Médio', price: 5.00, categoryId: 'cat_lanches', stock: 120, isCombo: false, comboItems: null },
+    { id: '12', name: 'Coxinha Requeijão', price: 5.00, categoryId: 'cat_lanches', stock: 40, isCombo: null, comboItems: null },
+    { id: '13', name: 'Coxinha Frango', price: 7.00, categoryId: 'cat_lanches', stock: 50, isCombo: null, comboItems: null },
+    { id: 'prod-1751039867904', name: 'Guaraná 2l', price: 8.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751041766897', 'name': 'Boa Lata', price: 6.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751041775342', name: 'Brahma Lata', price: 6.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751041784688', name: 'Litrinho', price: 5.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751041977097', name: 'Litrão Boa', price: 14.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751041989546', name: 'Litrão Brahma', price: 14.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751042001771', name: 'Litrão Burguesa', price: 10.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751046072790', name: 'Caçulinha', price: 3.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751053428816', name: 'Doce pingo de Leite', price: 1.00, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751053439322', name: 'Paçoca', price: 2.50, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751053482199', name: 'Freegel', price: 2.50, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751053491747', name: 'Bala', price: 0.10, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751053518890', name: 'Salgadinhos - Snack', price: 3.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751053555446', name: 'Dose: Conh, Vel, Old, Canel', price: 5.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751053571441', name: 'Dose, Smirnoff, Chanceller', price: 8.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751053959839', name: 'Copão Chan/Smirnoff 500ml', price: 16.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054003985', name: 'Copão Chan/Smirnoff 700ml', price: 18.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054045524', name: 'Copão Old, Black, 500ml', price: 12.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054091130', name: 'Copão Old, Black 700ml', price: 14.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054235029', name: 'Caipirinha Suiça 500ml', price: 18.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054310013', name: 'Caipirinha Velho B. 500ml', price: 14.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054389085', name: 'Caipirinha Suiça 700ml', price: 22.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054424501', name: 'Caipirinha Velho B. 700ml ', price: 16.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751054488734', name: 'Energetico 2l', price: 15.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751054518235', name: 'Energético Big Lata', price: 10.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751054526270', name: 'Monster', price: 12.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751054542329', name: 'Ice', price: 10.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751054556571', name: 'Bud Zero long', price: 8.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751054581351', name: 'Guaraviton', price: 5.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751054647461', name: 'Enrolado Salsicha', price: 7.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751054663995', name: 'Bola de Pres e Queijo', price: 7.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751117100368', name: 'Porção Batata/Calab', price: 35.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751151129717', name: 'Drink Gin Morango 700ml', price: 20.00, categoryId: 'cat_drinks_1756501505560', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751151145451', name: 'Drink Gin Morango 500ml', price: 18.00, categoryId: 'cat_drinks_1756501505560', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751163190318', name: 'Cigarro Egypt', price: 6.00, categoryId: 'cat_cafes', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751230528773', name: 'Pirulito', price: 2.00, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751233703629', name: 'Gelo Sabores', price: 3.00, categoryId: 'cat_gelos_1751233766129', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751234546004', name: 'Pizza Frita', price: 8.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751235420286', name: 'Troca/ Smirnof', price: 2.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1751550966986', name: 'Caçulinha Refri', price: 3.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751587450959', name: 'Porção Calabreza', price: 29.90, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751717009029', name: 'Heinneken Long', price: 10.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751832758151', name: 'Eergético copao 700ml', price: 10.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751832986080', name: 'Mini Foçaça Doce', price: 3.50, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1751833065880', name: 'Fogazza', price: 8.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1752026443378', name: 'Amendoim', price: 3.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752191703013', name: 'Caipirinha Smirnoff 500ml', price: 16.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1752191719465', name: 'Caipirinha Smirnoff 700ml', price: 18.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1752193386649', name: 'Heinneken Lata', price: 10.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752345564272', name: 'Pé de Moça', price: 2.50, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752354724070', name: 'Beats', price: 8.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752432435259', name: 'BUD lata', price: 8.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752432474546', name: 'MAK Whisky Dose', price: 9.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1752805356848', name: 'Porção Mandioca', price: 20.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752888413197', name: 'Doce de Leite', price: 3.00, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752899659793', name: 'Hamburguer', price: 20.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1752955084682', name: 'Dose Jurupinga', price: 8.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1753044218094', name: 'Porção Mandioca C/ Queijo', price: 25.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753309708619', name: 'Copo Smirnoff', price: 10.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1753312010859', name: 'Cigarro Solto', price: 0.50, categoryId: 'cat_cafes', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753320485714', name: 'Risoles Queijo', price: 7.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753551168321', name: 'Gatorade', price: 10.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753640027893', name: 'Água c/ Gás', price: 4.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753649013041', name: 'Copo Energético 500ml', price: 8.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753655035530', name: 'Batata Meia Porção', price: 10.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753721577957', name: 'Chiclete BRINQ', price: 0.50, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1753998770546', name: 'Rifa FACAS', price: 1.00, categoryId: 'cat_cafes', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1754230638331', name: 'Red Label Dose', price: 15.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754526694819', name: 'Porção Promocional', price: 25.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1754610401420', name: 'Chup-Chup', price: 1.00, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1754698560258', name: 'Pizza  Pedaço', price: 5.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754760397301', name: 'Dose Old Red Apple/Honey', price: 6.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754760423970', name: 'Dose Menta', price: 6.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754760448411', name: 'Copão Menta Maçâ Mel 500ml', price: 14.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754760464595', name: 'Copão Menta Maçã Mel  700ml', price: 16.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754779417140', name: 'Copão Red Label 500ml', price: 22.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754779442181', name: 'Copão  Red Label 700ml', price: 32.00, categoryId: 'cat_cop_o_1756500824433', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1754852919813', name: 'Mini Pastel c/ Cheddar', price: 20.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1754877400440', name: 'água de coco', price: 3.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755213541831', name: 'Meia Porção Calabreza', price: 15.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755218169136', name: 'Crystal Lata', price: 5.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755452355805', name: 'Jack Coca', price: 10.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755909592063', name: 'Espetinho', price: 7.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755909604993', name: 'Jantar', price: 20.00, categoryId: 'cat_lanches', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755909988154', name: 'Rifa facas', price: 5.00, categoryId: 'cat_cafes', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755915135649', name: 'Fanta 2l', price: 10.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755992245535', name: 'Diplink', price: 1.50, categoryId: 'cat_outros', stock: 0, isCombo: null, comboItems: null },
+    { id: 'prod-1755995597845', name: 'Combo Burguesa', price: 27.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 3 },
+    { id: 'prod-1756070296458', name: 'Combo boa 2', price: 28.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 2 },
+    { id: 'prod-1756076440939', name: 'Suco Del Vale 450ml', price: 5.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756328269633', name: 'Bala Lilith Maçã Verde', price: 2.00, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756341313637', name: 'Batida Vinho 500ml', price: 10.00, categoryId: 'cat_drinks_1756501505560', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756515550988', name: 'Pizza Mini', price: 10.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756684956893', name: 'Torcida', price: 4.50, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756730140786', name: 'café', price: 3.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1756842130837', name: 'Bolo Pedaço', price: 4.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757024665367', name: 'Goiabeta', price: 7.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757029259306', name: 'Fogazza Frango', price: 8.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757094580196', name: 'Cigarro Chester', price: 15.00, categoryId: 'cat_cafes', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757113177863', name: 'Litrão Promo(1)', price: 10.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757113194750', name: 'Litrão Promo (2)', price: 12.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757113227803', name: 'Mini Pastel Promo(1)', price: 12.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757113245742', name: 'Mini Pastel Promo (2)', price: 15.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757277565421', name: 'Cigarro Winston', price: 10.00, categoryId: 'cat_cafes', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757295642819', name: 'trident', price: 4.50, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757295742663', name: 'halls', price: 3.50, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757337611317', name: 'Pé de Moça', price: 2.50, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757424939826', name: 'Amstel lata 350ml', price: 6.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757621516067', name: 'Doce Leite em Pó', price: 2.00, categoryId: 'cat_outros', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757626961147', name: 'Empada', price: 8.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757692349157', name: 'X MORTADELA', price: 5.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757694299347', name: 'Enrolado Mort.', price: 5.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757718149513', name: 'porção KARINA', price: 10.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757726210076', name: 'Coca 2l', price: 15.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757735881190', name: 'pastel grande', price: 10.00, categoryId: 'cat_lanches', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1757958531219', name: 'POWERADE', price: 7.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1758240849203', name: 'Dose Paratudo', price: 5.00, categoryId: 'cat_doses_1756500736217', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1758243780811', name: 'COM 3 BOA', price: 42.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: true, comboItems: 3 },
+    { id: 'prod-1758248021903', name: 'h2o', price: 7.00, categoryId: 'cat_nao_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1758309928671', name: 'Burguesa Lata', price: 5.00, categoryId: 'cat_alcoolicas', stock: 0, isCombo: false, comboItems: null },
+    { id: 'prod-1758322472705', name: 'Caipirinha Menta', price: 16.00, categoryId: 'cat_caipirinhas_1756501145617', stock: 0, isCombo: false, comboItems: null },
+];
+
+export const LUCIDE_ICON_MAP: { [key: string]: LucideIcon } = {
+    Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, Wallet
 };
 
-export const addSale = async (newSale: Omit<Sale, 'id'> & {id?: string}): Promise<void> => {
-    const saleWithId: Sale = { ...newSale, id: newSale.id || `sale-${Date.now()}` };
+export const PAYMENT_METHODS: { value: PaymentMethod, name: string, icon: LucideIcon }[] = [
+  { value: 'cash', name: 'Dinheiro', icon: CircleDollarSign },
+  { value: 'debit', name: 'Débito', icon: CreditCard },
+  { value: 'credit', name: 'Crédito', icon: CreditCard },
+  { value: 'pix', name: 'PIX', icon: QrCode },
+];
 
-    if (!supabase) {
-        const sales = getFromLocalStorage('barmate_sales_v2', []);
-        saveToLocalStorage('barmate_sales_v2', [...sales, saleWithId]);
-    } else {
-       try {
-            const { error } = await supabase.from('sales').insert([{
-                id: saleWithId.id,
-                items: saleWithId.items as any,
-                total_amount: saleWithId.totalAmount,
-                original_amount: saleWithId.originalAmount,
-                discount_amount: saleWithId.discountAmount,
-                payments: saleWithId.payments as any,
-                cash_tendered: saleWithId.cashTendered,
-                change_given: saleWithId.changeGiven,
-                timestamp: saleWithId.timestamp.toISOString(),
-                status: saleWithId.status,
-                leave_change_as_credit: saleWithId.leaveChangeAsCredit
-            }]);
-            if (error) throw error;
-       } catch (e) {
-            console.error("Error adding sale:", e);
-       }
-    }
-    
-    // Add financial entries for card/pix fees and revenue
-    const fees = await getTransactionFees();
-    
-    for (const p of saleWithId.payments) {
-        let feeAmount = 0;
-        let feeDescription = '';
+export const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+    }).format(value);
+};
 
-        if (p.method === 'credit' && fees.creditRate > 0) {
-            feeAmount = p.amount * (fees.creditRate / 100);
-            feeDescription = `Taxa Crédito (Venda #${saleWithId.id.slice(-6)})`;
-        } else if (p.method === 'debit' && fees.debitRate > 0) {
-            feeAmount = p.amount * (fees.debitRate / 100);
-            feeDescription = `Taxa Débito (Venda #${saleWithId.id.slice(-6)})`;
-        } else if (p.method === 'pix' && fees.pixRate > 0) {
-            feeAmount = p.amount * (fees.pixRate / 100);
-            feeDescription = `Taxa PIX (Venda #${saleWithId.id.slice(-6)})`;
+
+// --- Data Functions ---
+
+// Product Categories
+const PRODUCT_CATEGORIES_KEY = 'barmate_productCategories_v2';
+export const getProductCategories = async (): Promise<ProductCategory[]> => {
+    if (supabase) {
+        const { data, error } = await supabase.from('product_categories').select('*');
+        if (error) {
+            console.error("Error fetching product categories:", error);
+            return getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
         }
+        if (!data || data.length === 0) {
+            await saveProductCategories(INITIAL_PRODUCT_CATEGORIES);
+            return INITIAL_PRODUCT_CATEGORIES;
+        }
+        return data;
+    }
+    return getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
+};
+export const saveProductCategories = async (categories: ProductCategory[]) => {
+    if (supabase) {
+        const { error } = await supabase.from('product_categories').upsert(categories, { onConflict: 'id' });
+        if (error) console.error("Error saving product categories:", error);
+    }
+    saveToLocalStorage(PRODUCT_CATEGORIES_KEY, categories);
+    window.dispatchEvent(new Event('storage'));
+};
 
-        // Register revenue and deduct fee
-        if (p.method !== 'cash') {
-            await addFinancialEntry({ 
-                description: `Receita Venda (${p.method}) #${saleWithId.id.slice(-6)}`, amount: p.amount, type: 'income', source: 'bank_account', timestamp: new Date(), saleId: saleWithId.id 
-            });
-            if (feeAmount > 0) {
-                await addFinancialEntry({ description: feeDescription, amount: feeAmount, type: 'expense', source: 'bank_account', timestamp: new Date(), saleId: saleWithId.id });
+// Products
+const PRODUCTS_KEY = 'barmate_products_v2';
+export const getProducts = async (): Promise<Product[]> => {
+    if (supabase) {
+        const { data, error } = await supabase.from('products').select('*');
+        if (error) {
+            console.error("Error fetching products:", error);
+            return getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
+        }
+        if (!data || data.length === 0) {
+            await saveProducts(INITIAL_PRODUCTS);
+            return INITIAL_PRODUCTS;
+        }
+        return data.map(p => ({...p, isCombo: p.is_combo, comboItems: p.combo_items}));
+    }
+    return getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
+};
+export const saveProducts = async (products: Product[]) => {
+    if (supabase) {
+        const productsToSave = products.map(p => ({...p, is_combo: p.isCombo, combo_items: p.comboItems, isCombo: undefined, comboItems: undefined }));
+        const { error } = await supabase.from('products').upsert(productsToSave, { onConflict: 'id' });
+        if (error) console.error("Error saving products:", error);
+    }
+    saveToLocalStorage(PRODUCTS_KEY, products);
+    window.dispatchEvent(new Event('storage'));
+};
+
+// Sales
+const SALES_KEY = 'barmate_sales_v2';
+export const getSales = async (): Promise<Sale[]> => {
+    if (supabase) {
+        const { data, error } = await supabase.from('sales').select('*');
+        if (error) {
+            console.error("Error fetching sales:", error);
+            return getFromLocalStorage(SALES_KEY, []);
+        }
+        return (data || []).map((s: any) => ({ ...s, timestamp: new Date(s.timestamp) }));
+    }
+    return getFromLocalStorage(SALES_KEY, []);
+};
+export const addSale = async (sale: Omit<Sale, 'id'> & { id?: string }) => {
+    const newSale = { ...sale, id: sale.id || `sale-${Date.now()}` };
+    const allSales = await getSales();
+    const updatedSales = [...allSales, newSale];
+
+    if (supabase) {
+        const saleToSave = { 
+            ...newSale,
+            total_amount: newSale.totalAmount,
+            original_amount: newSale.originalAmount,
+            discount_amount: newSale.discountAmount,
+            cash_tendered: newSale.cashTendered,
+            change_given: newSale.changeGiven,
+            leave_change_as_credit: newSale.leaveChangeAsCredit
+        };
+        const { error } = await supabase.from('sales').insert(saleToSave as any);
+        if (error) console.error("Error adding sale:", error);
+
+         // Add fee entries if applicable
+        const fees = await getTransactionFees();
+        for (const payment of newSale.payments) {
+            let feeRate = 0;
+            if (payment.method === 'debit') feeRate = fees.debitRate;
+            else if (payment.method === 'credit') feeRate = fees.creditRate;
+            else if (payment.method === 'pix') feeRate = fees.pixRate;
+
+            if (feeRate > 0) {
+                await addFinancialEntry({
+                    description: `Taxa ${payment.method.toUpperCase()} da venda #${newSale.id.slice(-6)}`,
+                    amount: payment.amount * (feeRate / 100),
+                    type: 'expense',
+                    source: 'bank_account',
+                    timestamp: new Date(),
+                    saleId: newSale.id
+                });
             }
         }
     }
+    
+    saveToLocalStorage(SALES_KEY, updatedSales);
+    window.dispatchEvent(new Event('storage'));
+};
+export const removeSale = async (saleId: string) => {
+    const allSales = await getSales();
+    const saleToRemove = allSales.find(s => s.id === saleId);
+    if (!saleToRemove) return;
+
+    const updatedSales = allSales.filter(s => s.id !== saleId);
+    if (supabase) {
+        await supabase.from('sales').delete().eq('id', saleId);
+        // Also remove associated fee entries
+        await supabase.from('financial_entries').delete().eq('saleId', saleId);
+    }
+    saveToLocalStorage(SALES_KEY, updatedSales);
+    window.dispatchEvent(new Event('storage'));
+};
+export const saveSales = (sales: Sale[]) => {
+    saveToLocalStorage(SALES_KEY, sales); // Should be handled by addSale/removeSale
     window.dispatchEvent(new Event('storage'));
 };
 
-export const removeSale = async (saleId: string) => {
-    if (!supabase) {
-        const sales = getFromLocalStorage('barmate_sales_v2', []).filter((s: Sale) => s.id !== saleId);
-        saveToLocalStorage('barmate_sales_v2', sales);
-        const entries = getFromLocalStorage('barmate_financialEntries_v2', []).filter((e: FinancialEntry) => e.saleId !== saleId);
-        saveToLocalStorage('barmate_financialEntries_v2', entries);
-        window.dispatchEvent(new Event('storage'));
-        return;
+// Active Orders
+const OPEN_ORDERS_KEY = 'barmate_openOrders_v2';
+export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
+    if (supabase) {
+        const { data, error } = await supabase.from('active_orders').select('*');
+        if (error) {
+            console.error("Error fetching open orders:", error);
+            return getFromLocalStorage(OPEN_ORDERS_KEY, []);
+        }
+        return (data || []).map((o: any) => ({ ...o, createdAt: new Date(o.created_at) }));
     }
-
-    try {
-        await supabase.from('sales').delete().eq('id', saleId);
-        await supabase.from('financial_entries').delete().eq('saleId', saleId);
-    } catch (e) {
-        console.error("Error removing sale:", e);
-    } finally {
-        window.dispatchEvent(new Event('storage'));
+    return getFromLocalStorage(OPEN_ORDERS_KEY, []);
+};
+export const saveOpenOrders = async (orders: ActiveOrder[]) => {
+     if (supabase) {
+        // Delete all and insert, simpler than upserting all
+        await supabase.from('active_orders').delete().neq('id', 'dummy-id-to-not-delete-all-if-empty');
+        const ordersToSave = orders.map(o => ({...o, created_at: o.createdAt.toISOString() }));
+        const { error } = await supabase.from('active_orders').insert(ordersToSave as any);
+        if (error) console.error("Error saving open orders:", error);
     }
+    saveToLocalStorage(OPEN_ORDERS_KEY, orders);
+    window.dispatchEvent(new Event('storage'));
 };
 
+// --- Financial Data ---
 
-// ---- FINANCIAL ENTRIES ----
+const FINANCIAL_ENTRIES_KEY = 'barmate_financialEntries_v2';
 export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
-    if (!supabase) return getFromLocalStorage('barmate_financialEntries_v2', []);
-    try {
+    if (supabase) {
         const { data, error } = await supabase.from('financial_entries').select('*');
         if (error) {
-            console.error("Error getting financial entries:", error);
-            return [];
-        };
-        return (data || []).map(e => ({ ...e, timestamp: new Date(e.timestamp) })) as FinancialEntry[];
-    } catch (e) {
-        console.error("Error getting financial entries:", e);
-        return [];
-    }
-};
-
-export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id'> & {id?:string}): Promise<void> => {
-    const entryWithId: FinancialEntry = { ...entry, id: entry.id || `entry-${Date.now()}` } as FinancialEntry;
-    if (!supabase) {
-        const entries = getFromLocalStorage('barmate_financialEntries_v2', []);
-        saveToLocalStorage('barmate_financialEntries_v2', [...entries, entryWithId]);
-    } else {
-        try {
-            await supabase.from('financial_entries').insert([{ ...entryWithId, timestamp: entryWithId.timestamp.toISOString() }]);
-        } catch(e) {
-             console.error("Error adding financial entry:", e);
+            console.error("Error fetching financial entries:", error);
+            return getFromLocalStorage(FINANCIAL_ENTRIES_KEY, []);
         }
+        return (data || []).map((e: any) => ({ ...e, timestamp: new Date(e.timestamp) }));
     }
-    // Don't dispatch storage event here to avoid loops with addSale
+    return getFromLocalStorage(FINANCIAL_ENTRIES_KEY, []);
 };
-
+export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id'> & {id?: string}) => {
+    const newEntry = { ...entry, id: entry.id || `fin-${Date.now()}` };
+    const allEntries = await getFinancialEntries();
+    const updatedEntries = [...allEntries, newEntry];
+    if (supabase) {
+        const { error } = await supabase.from('financial_entries').insert(newEntry as any);
+        if (error) console.error("Error adding financial entry:", error);
+    }
+    saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
+    window.dispatchEvent(new Event('storage'));
+};
 export const removeFinancialEntry = async (entryId: string) => {
-    if(!supabase) {
-        const entries = getFromLocalStorage('barmate_financialEntries_v2', []).filter((e: FinancialEntry) => e.id !== entryId);
-        saveToLocalStorage('barmate_financialEntries_v2', entries);
-        window.dispatchEvent(new Event('storage'));
-        return;
-    }
-    try {
+    const allEntries = await getFinancialEntries();
+    const updatedEntries = allEntries.filter(e => e.id !== entryId);
+    if (supabase) {
         await supabase.from('financial_entries').delete().eq('id', entryId);
-    } catch(e) {
-        console.error("Error removing financial entry:", e);
-    } finally {
-        window.dispatchEvent(new Event('storage'));
     }
-}
-
-
-// --- Balances (Caixa 02, Bank Account) are stored in one table ---
-export const getSecondaryCashBox = async (): Promise<SecondaryCashBox> => {
-    if(!supabase) return getFromLocalStorage('barmate_secondaryCashBox_v2', { balance: 0 });
-    try {
-        const { data, error } = await supabase.from('balances').select('balance').eq('id', 'secondary_cash').single();
-        if (error && error.code === 'PGRST116') {
-          await supabase.from('balances').insert({ id: 'secondary_cash', balance: 0 });
-          return { balance: 0 };
-        }
-        if (error) throw error;
-        
-        return { balance: data.balance };
-    } catch (e) {
-        console.error("Error getting secondary cash box:", e);
-        return { balance: 0 };
-    }
+    saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
+    window.dispatchEvent(new Event('storage'));
 };
 
-export const saveSecondaryCashBox = async (box: SecondaryCashBox) => {
-    if (!supabase) {
-        saveToLocalStorage('barmate_secondaryCashBox_v2', box);
-        return;
-    }
-    try {
-        await supabase.from('balances').upsert({ id: 'secondary_cash', balance: box.balance });
-    } catch(e) {
-        console.error("Error saving secondary cash box:", e);
-    } finally {
-       window.dispatchEvent(new Event('storage'));
-    }
-};
+// Balances
+const SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox_v2';
+export const getSecondaryCashBox = (): Promise<SecondaryCashBox> => getFromSupabase('balances', 'secondary_cash', { balance: 0 });
+export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToSupabase('balances', 'secondary_cash', box);
 
-export const getBankAccount = async (): Promise<BankAccount> => {
-     if(!supabase) return getFromLocalStorage('barmate_bankAccount_v2', { balance: 0 });
-    try {
-        const { data, error } = await supabase.from('balances').select('balance').eq('id', 'bank_account').single();
-        if (error && error.code === 'PGRST116') {
-          await supabase.from('balances').insert({ id: 'bank_account', balance: 0 });
-          return { balance: 0 };
-        }
-        if (error) throw error;
+const BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
+export const getBankAccount = (): Promise<BankAccount> => getFromSupabase('balances', 'bank_account', { balance: 0 });
+export const saveBankAccount = (account: BankAccount) => saveToSupabase('balances', 'bank_account', account);
 
-        return { balance: data.balance };
-    } catch (e) {
-        console.error("Error getting bank account:", e);
-        return { balance: 0 };
-    }
-};
 
-export const saveBankAccount = async (account: BankAccount) => {
-    if (!supabase) {
-        saveToLocalStorage('barmate_bankAccount_v2', account);
-        return;
-    }
-    try {
-        await supabase.from('balances').upsert({ id: 'bank_account', balance: account.balance });
-    } catch(e) {
-        console.error("Error saving bank account:", e);
-    } finally {
-       window.dispatchEvent(new Event('storage'));
-    }
-};
+// Cash Register Status
+const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus_v2';
+export const getCashRegisterStatus = (): Promise<CashRegisterStatus> => getFromSupabase('balances', 'cash_register_status', { status: 'closed', adjustments: [] });
+export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveToSupabase('balances', 'cash_register_status', status);
 
-// --- Cash Register Status (can be local or synced) ---
-export const getCashRegisterStatus = async (): Promise<CashRegisterStatus> => {
-    if(!supabase) return getFromLocalStorage('barmate_cashRegisterStatus_v2', { status: 'closed', adjustments: [] });
-    try {
-        const { data, error } = await supabase.from('balances').select('status_data').eq('id', 'cash_register_status').single();
-        
-        if (error && error.code === 'PGRST116') {
-          const defaultStatus: CashRegisterStatus = { status: 'closed', adjustments: [] };
-          await supabase.from('balances').insert({ id: 'cash_register_status', status_data: defaultStatus });
-          return defaultStatus;
-        }
-        if (error) throw error;
+// Transaction Fees
+const TRANSACTION_FEES_KEY = 'barmate_transactionFees_v2';
+export const getTransactionFees = (): Promise<TransactionFees> => getFromSupabase('balances', 'transaction_fees', { debitRate: 0, creditRate: 0, pixRate: 0 });
+export const saveTransactionFees = (fees: TransactionFees) => saveToSupabase('balances', 'transaction_fees', fees);
 
-        return data.status_data as CashRegisterStatus || { status: 'closed', adjustments: [] };
-    } catch (e) {
-        console.error("Error getting cash register status:", e);
-        return { status: 'closed', adjustments: [] };
-    }
-};
-
-export const saveCashRegisterStatus = async (status: CashRegisterStatus) => {
-    if (!supabase) {
-        saveToLocalStorage('barmate_cashRegisterStatus_v2', status);
-        return;
-    }
-    try {
-        await supabase.from('balances').upsert({ id: 'cash_register_status', status_data: status as any });
-    } catch (e) {
-        console.error("Error saving cash register status:", e);
-    } finally {
-        window.dispatchEvent(new Event('storage'));
-    }
-};
-
-// --- Transaction Fees (can be local or synced) ---
-export const getTransactionFees = async (): Promise<TransactionFees> => {
-    if(!supabase) return getFromLocalStorage('barmate_transactionFees_v2', { debitRate: 2, creditRate: 4, pixRate: 1 });
-    try {
-        const { data, error } = await supabase.from('balances').select('fees_data').eq('id', 'transaction_fees').single();
-
-        if (error && error.code === 'PGRST116') {
-          const defaultFees: TransactionFees = { debitRate: 2, creditRate: 4, pixRate: 1 };
-          await supabase.from('balances').insert({ id: 'transaction_fees', fees_data: defaultFees });
-          return defaultFees;
-        }
-        if (error) throw error;
-
-        return data.fees_data as TransactionFees || { debitRate: 2, creditRate: 4, pixRate: 1 };
-    } catch (e) {
-        console.error("Error getting transaction fees:", e);
-        return { debitRate: 2, creditRate: 4, pixRate: 1 };
-    }
-};
-
-export const saveTransactionFees = async (fees: TransactionFees) => {
-    if (!supabase) {
-        saveToLocalStorage('barmate_transactionFees_v2', fees);
-        return;
-    }
-     try {
-        await supabase.from('balances').upsert({ id: 'transaction_fees', fees_data: fees as any });
-    } catch (e) {
-        console.error("Error saving transaction fees:", e);
-    } finally {
-        window.dispatchEvent(new Event('storage'));
-    }
-};
+    
