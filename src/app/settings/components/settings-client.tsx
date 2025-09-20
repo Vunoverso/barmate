@@ -251,7 +251,6 @@ export default function SettingsClient() {
       cat.id === updatedCategory.id ? updatedCategory : cat
     );
     saveProductCategories(updatedCategories);
-    setProductCategories(updatedCategories);
     toast({ title: "Categoria Atualizada", description: `Categoria "${updatedCategory.name}" salva com sucesso.`});
   };
 
@@ -264,7 +263,6 @@ export default function SettingsClient() {
     };
     const updatedCategories = [...productCategories, newCategory];
     saveProductCategories(updatedCategories);
-    setProductCategories(updatedCategories);
     toast({ title: "Categoria Adicionada", description: `A categoria "${data.name}" foi criada com sucesso.`});
   };
 
@@ -276,9 +274,7 @@ export default function SettingsClient() {
     if (!categoryToDelete) return;
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
-    // You'd also need to handle products that use this category, maybe reassign to 'Outros'
     saveProductCategories(updatedCategories);
-    setProductCategories(updatedCategories);
     toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
   };
@@ -287,18 +283,16 @@ export default function SettingsClient() {
     toast({ title: "Exportando dados...", description: "Aguarde enquanto preparamos seu backup." });
     try {
         const backupData = {
-            products: getProducts(),
-            productCategories: getProductCategories(),
-            sales: getSales(),
-            openOrders: getOpenOrders(),
-            financialEntries: getFinancialEntries(),
-            cashRegisterStatus: getCashRegisterStatus(),
-            secondaryCashBox: getSecondaryCashBox(),
-            bankAccount: getBankAccount(),
-            transactionFees: getTransactionFees(),
-            barName: localStorage.getItem('barName') || 'BarMate',
-            version: '1.0',
-            exportedAt: new Date().toISOString(),
+            'barmate_productCategories_v2': getProductCategories(),
+            'barmate_products_v2': getProducts(),
+            'barmate_sales_v2': getSales(),
+            'barmate_openOrders_v2': getOpenOrders(),
+            'barmate_financialEntries_v2': getFinancialEntries(),
+            'barmate_cashRegisterStatus_v2': getCashRegisterStatus(),
+            'barmate_secondaryCashBox_v2': getSecondaryCashBox(),
+            'barmate_bankAccount_v2': getBankAccount(),
+            'barmate_transactionFees_v2': getTransactionFees(),
+            'barName': localStorage.getItem('barName') || 'BarMate',
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -335,36 +329,33 @@ export default function SettingsClient() {
             const text = e.target?.result as string;
             const data = JSON.parse(text);
 
-            // Validate data object
             if (typeof data !== 'object' || data === null) {
               throw new Error("Arquivo de backup inválido.");
             }
 
-            // Save data to localStorage
-            saveProductCategories(data.productCategories || []);
-            saveProducts(data.products || []);
-            saveSales(data.sales || []);
-            saveOpenOrders(data.openOrders || []);
-            saveFinancialEntries(data.financialEntries || []);
-            localStorage.setItem('barName', data.barName || 'BarMate');
-            saveCashRegisterStatus(data.cashRegisterStatus || { status: 'closed', adjustments: [] });
-            saveSecondaryCashBox(data.secondaryCashBox || { balance: 0 });
-            saveBankAccount(data.bankAccount || { balance: 0 });
-            saveTransactionFees(data.transactionFees || { debitRate: 0, creditRate: 0, pixRate: 0 });
+            // Directly write to localStorage
+            Object.keys(data).forEach(key => {
+                const value = data[key];
+                if (typeof value !== 'undefined' && value !== null) {
+                    if (typeof value === 'object') {
+                        localStorage.setItem(key, JSON.stringify(value));
+                    } else {
+                        localStorage.setItem(key, String(value));
+                    }
+                }
+            });
             
             toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
 
-            // Reload the page to reflect all changes
             setTimeout(() => window.location.reload(), 2000);
         } catch (innerError) {
             console.error("Import processing error:", innerError);
             toast({ title: "Erro ao Processar Arquivo", description: "O arquivo JSON é inválido ou está corrompido.", variant: "destructive" });
-            setIsImporting(false);
         } finally {
-           // Reset file input so the same file can be selected again if needed
-           if (fileInputRef.current) {
+            setIsImporting(false);
+            if (fileInputRef.current) {
                fileInputRef.current.value = "";
-           }
+            }
         }
     };
     reader.onerror = (error) => {
