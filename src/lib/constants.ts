@@ -1056,7 +1056,45 @@ export const INITIAL_PRODUCTS: Product[] = [
     }
 ];
 
-export const INITIAL_SALES: Sale[] = [];
+export const INITIAL_SALES: Sale[] = [
+    {
+      "id": "csale-1751039929910",
+      "items": [
+        {
+          "id": "12",
+          "name": "Coxinha Requeijão",
+          "price": 5,
+          "categoryId": "cat_lanches",
+          "stock": 40,
+          "quantity": 4,
+          "categoryName": "Lanches",
+          "categoryIconName": "UtensilsCrossed"
+        },
+        {
+          "id": "prod-1751039867904",
+          "name": "Guaraná 2l",
+          "price": 8,
+          "categoryId": "cat_nao_alcoolicas",
+          "stock": 0,
+          "quantity": 1,
+          "categoryName": "Bebidas Não Alcoólicas",
+          "categoryIconName": "Martini"
+        }
+      ],
+      "totalAmount": 28,
+      "originalAmount": 28,
+      "discountAmount": 0,
+      "timestamp": new Date("2025-06-27T15:58:49.910Z"),
+      "changeGiven": 0,
+      "status": "completed",
+      "payments": [
+        {
+          "method": "cash",
+          "amount": 28
+        }
+      ]
+    }
+  ];
 
 
 export const LUCIDE_ICON_MAP: { [key: string]: LucideIcon } = {
@@ -1084,7 +1122,7 @@ const PRODUCT_CATEGORIES_KEY = 'barmate_productCategories_v2';
 export const getProductCategories = (): ProductCategory[] => {
     return getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
 };
-export const saveProductCategories = (categories: ProductCategory[], options?: { silent: boolean }) => {
+export const saveProductCategories = (categories: ProductCategory[], options?: { silent?: boolean }) => {
     saveToLocalStorage(PRODUCT_CATEGORIES_KEY, categories, options);
 };
 
@@ -1093,7 +1131,7 @@ const PRODUCTS_KEY = 'barmate_products_v2';
 export const getProducts = (): Product[] => {
     return getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
 };
-export const saveProducts = (products: Product[], options?: { silent: boolean }) => {
+export const saveProducts = (products: Product[], options?: { silent?: boolean }) => {
     saveToLocalStorage(PRODUCTS_KEY, products, options);
 };
 
@@ -1128,9 +1166,6 @@ export const addSale = (sale: Omit<Sale, 'id'> & { id?: string }) => {
                 timestamp: new Date(),
                 saleId: newSale.id
             });
-            // Also deduct from bank account balance
-            const bankAccount = getBankAccount();
-            saveBankAccount({ balance: bankAccount.balance - feeAmount });
         }
     }
 };
@@ -1139,21 +1174,19 @@ export const removeSale = (saleId: string) => {
     const saleToRemove = allSales.find(s => s.id === saleId);
     if (!saleToRemove) return;
 
+    // This part is tricky because financial entries are also local.
+    // We should revert the changes made by the sale.
     const entries = getFinancialEntries();
-    const saleFeeEntries = entries.filter(e => e.saleId === saleId && e.type === 'expense');
-    for (const feeEntry of saleFeeEntries) {
+    const relatedFeeEntries = entries.filter(e => e.saleId === saleId && e.type === 'expense');
+
+    for (const feeEntry of relatedFeeEntries) {
         removeFinancialEntry(feeEntry.id); // This already saves the financial entries
-        // Refund to bank account
-        if (feeEntry.source === 'bank_account') {
-            const bankAccount = getBankAccount();
-            saveBankAccount({ balance: bankAccount.balance + feeEntry.amount });
-        }
     }
 
     const updatedSales = allSales.filter(s => s.id !== saleId);
     saveToLocalStorage(SALES_KEY, updatedSales);
 };
-export const saveSales = (sales: Sale[], options?: { silent: boolean }) => {
+export const saveSales = (sales: Sale[], options?: { silent?: boolean }) => {
     saveToLocalStorage(SALES_KEY, sales, options);
 };
 
@@ -1162,7 +1195,7 @@ const OPEN_ORDERS_KEY = 'barmate_openOrders_v2';
 export const getOpenOrders = (): ActiveOrder[] => {
     return getFromLocalStorage(OPEN_ORDERS_KEY, []);
 };
-export const saveOpenOrders = (orders: ActiveOrder[], options?: { silent: boolean }) => {
+export const saveOpenOrders = (orders: ActiveOrder[], options?: { silent?: boolean }) => {
     saveToLocalStorage(OPEN_ORDERS_KEY, orders, options);
 };
 
@@ -1175,31 +1208,81 @@ export const getFinancialEntries = (): FinancialEntry[] => {
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id'> & {id?: string}) => {
     const newEntry = { ...entry, id: entry.id || `fin-${Date.now()}` };
     const allEntries = getFinancialEntries();
+
+    // Since we are now fully local, if this entry is an expense, we must deduct from the correct balance.
+    if (newEntry.type === 'expense') {
+        if (newEntry.source === 'secondary_cash') {
+            const secondaryCash = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: secondaryCash.balance - newEntry.amount });
+        } else if (newEntry.source === 'bank_account') {
+            const bankAccount = getBankAccount();
+            saveBankAccount({ balance: bankAccount.balance - newEntry.amount });
+        }
+        // 'daily_cash' expenses are handled via adjustments inside the cash register component.
+    }
+     if (newEntry.type === 'income') {
+        if (newEntry.source === 'daily_cash') {
+          // This should be handled via cash register adjustment 'in'
+        } else if (newEntry.source === 'secondary_cash') {
+            const secondaryCash = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: secondaryCash.balance + newEntry.amount });
+        } else if (newEntry.source === 'bank_account') {
+            const bankAccount = getBankAccount();
+            saveBankAccount({ balance: bankAccount.balance + newEntry.amount });
+        }
+    }
+
+
     const updatedEntries = [...allEntries, newEntry];
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
 };
 export const removeFinancialEntry = (entryId: string) => {
     const allEntries = getFinancialEntries();
+    const entryToRemove = allEntries.find(e => e.id === entryId);
+    if (!entryToRemove) return;
+    
+    // Revert the balance change when an entry is removed
+    if (entryToRemove.type === 'expense') {
+        if (entryToRemove.source === 'secondary_cash') {
+            const secondaryCash = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: secondaryCash.balance + entryToRemove.amount });
+        } else if (entryToRemove.source === 'bank_account') {
+            const bankAccount = getBankAccount();
+            saveBankAccount({ balance: bankAccount.balance + entryToRemove.amount });
+        }
+        // Daily cash expenses are tied to adjustments and should be handled there.
+    }
+     if (entryToRemove.type === 'income') {
+        if (entryToRemove.source === 'secondary_cash') {
+            const secondaryCash = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: secondaryCash.balance - entryToRemove.amount });
+        } else if (entryToRemove.source === 'bank_account') {
+            const bankAccount = getBankAccount();
+            saveBankAccount({ balance: bankAccount.balance - entryToRemove.amount });
+        }
+    }
+
+
     const updatedEntries = allEntries.filter(e => e.id !== entryId);
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, updatedEntries);
 };
-export const saveFinancialEntries = (entries: FinancialEntry[], options?: { silent: boolean }) => {
+export const saveFinancialEntries = (entries: FinancialEntry[], options?: { silent?: boolean }) => {
     saveToLocalStorage(FINANCIAL_ENTRIES_KEY, entries, options);
 };
 
 // Balances and Status
 const SECONDARY_CASH_KEY = 'barmate_secondaryCashBox_v2';
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(SECONDARY_CASH_KEY, { balance: 0 });
-export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent: boolean }) => saveToLocalStorage(SECONDARY_CASH_KEY, box, options);
+export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent?: boolean }) => saveToLocalStorage(SECONDARY_CASH_KEY, box, options);
 
 const BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
 export const getBankAccount = (): BankAccount => getFromLocalStorage(BANK_ACCOUNT_KEY, { balance: 0 });
-export const saveBankAccount = (account: BankAccount, options?: { silent: boolean }) => saveToLocalStorage(BANK_ACCOUNT_KEY, account, options);
+export const saveBankAccount = (account: BankAccount, options?: { silent?: boolean }) => saveToLocalStorage(BANK_ACCOUNT_KEY, account, options);
 
 const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus_v2';
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(CASH_REGISTER_STATUS_KEY, { status: 'closed', adjustments: [] });
-export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent: boolean }) => saveToLocalStorage(CASH_REGISTER_STATUS_KEY, status, options);
+export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(CASH_REGISTER_STATUS_KEY, status, options);
 
 const FEES_KEY = 'barmate_transactionFees_v2';
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(FEES_KEY, { debitRate: 0, creditRate: 0, pixRate: 0 });
-export const saveTransactionFees = (fees: TransactionFees, options?: { silent: boolean }) => saveToLocalStorage(FEES_KEY, fees, options);
+export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(FEES_KEY, fees, options);
