@@ -332,18 +332,18 @@ export default function SettingsClient() {
             if (typeof data !== 'object' || data === null) {
               throw new Error("Arquivo de backup inválido.");
             }
-
-            // Directly write to localStorage
-            Object.keys(data).forEach(key => {
-                const value = data[key];
-                if (typeof value !== 'undefined' && value !== null) {
-                    if (typeof value === 'object') {
-                        localStorage.setItem(key, JSON.stringify(value));
-                    } else {
-                        localStorage.setItem(key, String(value));
-                    }
-                }
-            });
+            
+            const silentSave = { silent: true };
+            if (data['barmate_productCategories_v2']) saveProductCategories(data['barmate_productCategories_v2'], silentSave);
+            if (data['barmate_products_v2']) saveProducts(data['barmate_products_v2'], silentSave);
+            if (data['barmate_sales_v2']) saveSales(data['barmate_sales_v2'], silentSave);
+            if (data['barmate_openOrders_v2']) saveOpenOrders(data['barmate_openOrders_v2'], silentSave);
+            if (data['barmate_financialEntries_v2']) saveFinancialEntries(data['barmate_financialEntries_v2'], silentSave);
+            if (data['barmate_cashRegisterStatus_v2']) saveCashRegisterStatus(data['barmate_cashRegisterStatus_v2'], silentSave);
+            if (data['barmate_secondaryCashBox_v2']) saveSecondaryCashBox(data['barmate_secondaryCashBox_v2'], silentSave);
+            if (data['barmate_bankAccount_v2']) saveBankAccount(data['barmate_bankAccount_v2'], silentSave);
+            if (data['barmate_transactionFees_v2']) saveTransactionFees(data['barmate_transactionFees_v2'], silentSave);
+            if (data['barName']) localStorage.setItem('barName', data['barName']);
             
             toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
 
