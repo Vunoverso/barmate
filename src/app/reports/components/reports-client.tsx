@@ -69,23 +69,22 @@ export default function ReportsClient() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
 
+  const loadData = () => {
+      try {
+          setSales(getSales());
+          setFinancialEntries(getFinancialEntries());
+          setSecondaryCashBox(getSecondaryCashBox());
+          setBankAccount(getBankAccount());
+          setCashStatus(getCashRegisterStatus());
+      } catch (error) {
+          console.error("Failed to load report data:", error);
+          toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os dados para os relatórios.", variant: "destructive" });
+      } finally {
+          setIsMounted(true);
+      }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-        setIsMounted(false);
-        try {
-            setSales(await getSales());
-            setFinancialEntries(await getFinancialEntries());
-            setSecondaryCashBox(getSecondaryCashBox());
-            setBankAccount(getBankAccount());
-            setCashStatus(getCashRegisterStatus());
-        } catch (error) {
-            console.error("Failed to load report data:", error);
-            toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os dados para os relatórios.", variant: "destructive" });
-        } finally {
-            setIsMounted(true);
-        }
-    };
-    
     loadData();
     setDateRange({
       from: addDays(new Date(), -30),
@@ -97,7 +96,7 @@ export default function ReportsClient() {
     return () => {
       window.removeEventListener('storage', loadData);
     };
-  }, [toast]);
+  }, []);
 
   const filterByDate = (items: (Sale | FinancialEntry)[]) => {
     if (!dateRange || !dateRange.from) return items;
@@ -197,9 +196,9 @@ export default function ReportsClient() {
 
   const confirmDeleteSale = (sale: Sale) => setSaleToDelete(sale);
 
-  const handleDeleteSale = async () => {
+  const handleDeleteSale = () => {
     if (!saleToDelete) return;
-    await removeSale(saleToDelete.id);
+    removeSale(saleToDelete.id);
     toast({
       title: "Venda Removida",
       description: "A venda e seu impacto financeiro foram revertidos.",
