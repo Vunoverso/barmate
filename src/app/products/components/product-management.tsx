@@ -63,28 +63,31 @@ export default function ProductManagement() {
         console.error("Failed to fetch data:", error);
         toast({
           title: "Erro ao carregar dados",
-          description: "Não foi possível buscar os produtos e categorias. Usando dados locais.",
+          description: "Não foi possível buscar os produtos e categorias.",
           variant: "destructive",
         });
       } finally {
         setIsLoading(false);
       }
     };
+
     fetchData();
+    window.addEventListener('storage', fetchData); // Refresca os dados quando há uma mudança
+    return () => window.removeEventListener('storage', fetchData);
   }, [toast]);
 
-  const handleAddProduct = async (product: Product) => {
+  const handleAddProduct = async (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
+    setProducts(updatedProducts); // Optimistic update
     await saveProducts(updatedProducts);
-    setProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
   const handleEditProduct = async (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+    setProducts(updatedProducts); // Optimistic update
     await saveProducts(updatedProducts);
-    setProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
 
@@ -101,9 +104,9 @@ export default function ProductManagement() {
   const handleDeleteProduct = async (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
+    setProducts(updatedProducts); // Optimistic update
+    setProductToDelete(null);
     await saveProducts(updatedProducts);
-    setProducts(updatedProducts);
-    setProductToDelete(null); 
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
     }

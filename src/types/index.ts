@@ -4,13 +4,11 @@ import type { Database } from './supabase';
 
 export type { Database } from './supabase';
 
-export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
+export type ProductCategory = Tables<'product_categories'>;
 
-export interface ProductCategory extends Tables<'product_categories'> {}
-
-export interface Product extends Tables<'products'> {
-  isCombo?: boolean;
-  comboItems?: number;
+export interface Product extends Omit<Tables<'products'>, 'is_combo' | 'combo_items'> {
+  isCombo?: boolean | null;
+  comboItems?: number | null;
 }
 
 export interface OrderItem extends Product {
@@ -29,26 +27,22 @@ export interface Payment {
   amount: number;
 }
 
-export interface Sale {
-  id: string;
-  items: OrderItem[];
-  totalAmount: number; 
-  originalAmount: number; 
-  discountAmount: number; 
-  payments: Payment[];
-  cashTendered?: number; 
-  changeGiven?: number; 
+export interface Sale extends Omit<Tables<'sales'>, 'total_amount' | 'original_amount' | 'discount_amount' | 'cash_tendered' | 'change_given' | 'leave_change_as_credit' | 'timestamp' | 'items' | 'payments'> {
   timestamp: Date;
-  status: 'completed' | 'pending' | 'cancelled';
-  leaveChangeAsCredit?: boolean;
+  items: OrderItem[];
+  payments: Payment[];
+  totalAmount: number;
+  originalAmount: number;
+  discountAmount: number;
+  cashTendered?: number | null;
+  changeGiven?: number | null;
+  leaveChangeAsCredit?: boolean | null;
 }
 
-export interface ActiveOrder {
-  id: string;
-  name:string;
-  items: OrderItem[];
+
+export interface ActiveOrder extends Omit<Tables<'active_orders'>, 'created_at' | 'items'> {
   createdAt: Date;
-  status?: 'paid';
+  items: OrderItem[];
 }
 
 export interface CashAdjustment {
@@ -77,16 +71,9 @@ export interface BankAccount {
   balance: number;
 }
 
-export interface FinancialEntry {
-  id: string;
-  description: string;
-  amount: number;
-  type: 'expense' | 'income'; 
-  source: 'daily_cash' | 'secondary_cash' | 'bank_account';
-  timestamp: Date;
-  adjustmentId?: string;
-  saleId?: string;
-  isAdjustment?: boolean; 
+
+export interface FinancialEntry extends Omit<Tables<'financial_entries'>, 'timestamp'> {
+    timestamp: Date;
 }
 
 export interface TransactionFees {
@@ -94,3 +81,7 @@ export interface TransactionFees {
   creditRate: number;
   pixRate: number;
 }
+
+
+// Helper for getting table row types
+type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];

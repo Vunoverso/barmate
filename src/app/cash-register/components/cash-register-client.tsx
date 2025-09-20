@@ -2,7 +2,7 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus } from '@/lib/constants';
+import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -50,11 +50,10 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
-const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus';
-const CLOSED_SESSIONS_KEY = 'barmate_closedCashSessions';
+const CLOSED_SESSIONS_KEY = 'barmate_closedCashSessions_v2'; // Still local, as it's just a log
 
 export default function CashRegisterClient() {
-  const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed', adjustments: [] });
   const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
   const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
@@ -74,25 +73,24 @@ export default function CashRegisterClient() {
   const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-
-    const handleStorageChange = () => {
-        setSales(getSales());
-        setSecondaryCashBox(getSecondaryCashBox());
-        setBankAccount(getBankAccount());
-        const storedStatusRaw = localStorage.getItem(CASH_REGISTER_STATUS_KEY);
-        if (storedStatusRaw) {
-            try {
-                const newState = JSON.parse(storedStatusRaw);
-                setCashStatus(currentState => {
-                    if (JSON.stringify(currentState) !== JSON.stringify(newState)) {
-                        return { adjustments: [], ...newState };
-                    }
-                    return currentState;
-                });
-            } catch (e) {
-                console.error("Failed to parse cash register status from storage", e);
-            }
+    const handleStorageChange = async () => {
+        setIsLoading(true);
+        try {
+            const [salesData, secondaryCashData, bankAccountData, cashRegisterStatusData] = await Promise.all([
+                getSales(),
+                getSecondaryCashBox(),
+                getBankAccount(),
+                getCashRegisterStatus(),
+            ]);
+            setSales(salesData);
+            setSecondaryCashBox(secondaryCashData);
+            setBankAccount(bankAccountData);
+            setCashStatus(cashRegisterStatusData);
+        } catch (e) {
+            console.error("Failed to load cash register data", e);
+            toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar dados da nuvem.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
         }
     };
     
@@ -102,16 +100,16 @@ export default function CashRegisterClient() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
-    if (isMounted) {
+    if (!isLoading) {
       saveCashRegisterStatus(cashStatus);
     }
-  }, [cashStatus, isMounted]);
+  }, [cashStatus, isLoading]);
 
-  const handleOpenCashRegister = (openingBalance: number) => {
-    const currentSecondaryBox = getSecondaryCashBox();
+  const handleOpenCashRegister = async (openingBalance: number) => {
+    const currentSecondaryBox = await getSecondaryCashBox();
 
     if (currentSecondaryBox.balance < openingBalance) {
       toast({
@@ -122,8 +120,7 @@ export default function CashRegisterClient() {
       return;
     }
     
-    // Deduct from Caixa 02
-    saveSecondaryCashBox({ balance: currentSecondaryBox.balance - openingBalance });
+    await saveSecondaryCashBox({ balance: currentSecondaryBox.balance - openingBalance });
 
     const newStatus: CashRegisterStatus = {
       status: 'open',
@@ -145,26 +142,14 @@ export default function CashRegisterClient() {
     if (idToUpdate) { // Editing existing adjustment
         const originalAdjustment = cashStatus.adjustments?.find(adj => adj.id === idToUpdate);
         if (!originalAdjustment) return;
-
-        // Revert the original adjustment financial impact
+        
         revertAdjustment(originalAdjustment);
         
-        // Create the updated adjustment
-        const updatedAdjustment: CashAdjustment = {
-            ...originalAdjustment,
-            amount: details.amount,
-            description: details.description,
-            // Keep original destination/source if it's a transfer type. The new dialog doesn't allow changing this.
-        };
+        const updatedAdjustment: CashAdjustment = { ...originalAdjustment, amount: details.amount, description: details.description };
         
-        // Apply the new financial impact
         applyAdjustment(updatedAdjustment);
 
-        const updatedAdjustments = cashStatus.adjustments?.map(adj => 
-            adj.id === idToUpdate ? updatedAdjustment : adj
-        );
-
-        setCashStatus(prev => ({...prev, adjustments: updatedAdjustments}));
+        setCashStatus(prev => ({...prev, adjustments: prev.adjustments?.map(adj => adj.id === idToUpdate ? updatedAdjustment : adj)}));
         toast({ title: "Movimentação Atualizada!" });
 
     } else { // Creating new adjustment
@@ -180,162 +165,132 @@ export default function CashRegisterClient() {
         applyAdjustment(newAdjustment);
         setCashStatus(prev => ({...prev, adjustments: [...(prev.adjustments || []), newAdjustment]}));
         
-        toast({
-            title: `Movimentação Registrada!`,
-            description: `${adjustmentType === 'in' ? 'Suprimento' : 'Sangria'} de ${formatCurrency(details.amount)} adicionado.`,
-        });
+        toast({ title: `Movimentação Registrada!`, description: `${adjustmentType === 'in' ? 'Suprimento' : 'Sangria'} de ${formatCurrency(details.amount)} adicionado.` });
     }
     
     setIsAdjustmentDialogOpen(false);
     setEditingAdjustment(null);
   };
   
-  const applyAdjustment = (adjustment: CashAdjustment) => {
+  const applyAdjustment = async (adjustment: CashAdjustment) => {
     if (adjustment.type === 'out') { // Sangria
         if (adjustment.destination === 'secondary_cash') {
-            const currentBox = getSecondaryCashBox();
-            saveSecondaryCashBox({ balance: currentBox.balance + adjustment.amount });
+            const currentBox = await getSecondaryCashBox();
+            await saveSecondaryCashBox({ balance: currentBox.balance + adjustment.amount });
         } else if (adjustment.destination === 'bank_account') {
-            const currentAccount = getBankAccount();
-            saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
+            const currentAccount = await getBankAccount();
+            await saveBankAccount({ balance: currentAccount.balance + adjustment.amount });
         }
     }
   }
   
-  const revertAdjustment = (adjustment: CashAdjustment) => {
+  const revertAdjustment = async (adjustment: CashAdjustment) => {
     const { type, amount, destination, source } = adjustment;
 
-    // Revert transfers that happened during the adjustment
     if (type === 'out') { // Sangria reversal
       if (destination === 'secondary_cash') {
-        const currentBox = getSecondaryCashBox();
-        saveSecondaryCashBox({ balance: currentBox.balance - amount }); // Take money back from Caixa 02
+        const currentBox = await getSecondaryCashBox();
+        await saveSecondaryCashBox({ balance: currentBox.balance - amount });
       } else if (destination === 'bank_account') {
-        const currentAccount = getBankAccount();
-        saveBankAccount({ balance: currentAccount.balance - amount }); // Take money back from Bank
+        const currentAccount = await getBankAccount();
+        await saveBankAccount({ balance: currentAccount.balance - amount });
       }
     } 
     else if (type === 'in') { // Suprimento reversal
       if (source === 'secondary_cash') {
-        const currentBox = getSecondaryCashBox();
-        saveSecondaryCashBox({ balance: currentBox.balance + amount }); // Return money to Caixa 02
+        const currentBox = await getSecondaryCashBox();
+        await saveSecondaryCashBox({ balance: currentBox.balance + amount });
       }
     }
   }
 
-
   const handleDeleteAdjustment = () => {
     if (!adjustmentToDelete || cashStatus.status !== 'open') return;
-    
     revertAdjustment(adjustmentToDelete);
-    
-    const newState = { ...cashStatus, adjustments: cashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) };
-    setCashStatus(newState);
-
+    setCashStatus(prev => ({ ...prev, adjustments: prev.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) }));
     toast({ title: "Movimentação Removida", variant: "destructive" });
     setAdjustmentToDelete(null);
   };
 
-
   const handleEditInitialBalance = (newBalance: number) => {
     if (cashStatus.status !== 'open') return;
-    const newState = { ...cashStatus, openingBalance: newBalance };
-    setCashStatus(newState);
+    setCashStatus(prev => ({ ...prev, openingBalance: newBalance }));
     toast({ title: "Saldo Inicial Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditInitialBalanceDialogOpen(false);
   };
 
-
-  const handleTransfer = (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
+  const handleTransfer = async (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
     const { amount, destination } = details;
+    const currentSecondaryBox = await getSecondaryCashBox();
 
-    if (secondaryCashBox.balance < amount) {
+    if (currentSecondaryBox.balance < amount) {
         toast({ title: "Saldo Insuficiente", description: "O Caixa 02 não possui saldo suficiente para esta transferência.", variant: "destructive" });
         return;
     }
     
-    // Deduct from Caixa 02
-    const newSecondaryBalance = secondaryCashBox.balance - amount;
-    saveSecondaryCashBox({ balance: newSecondaryBalance });
+    await saveSecondaryCashBox({ balance: currentSecondaryBox.balance - amount });
 
     if (destination === 'daily_cash') {
       if (cashStatus.status !== 'open') {
         toast({ title: "Caixa Fechado", description: "Não é possível transferir para o caixa diário pois ele está fechado.", variant: "destructive" });
-        // Rollback deduction from Caixa 02
-        saveSecondaryCashBox({ balance: secondaryCashBox.balance });
+        await saveSecondaryCashBox({ balance: currentSecondaryBox.balance }); // Rollback
         return;
       }
       const transferAdjustment: CashAdjustment = {
-          id: `adj-transfer-${Date.now()}`,
-          amount,
-          type: 'in',
-          description: `Transferência do Caixa 02`,
-          timestamp: new Date().toISOString(),
-          source: 'secondary_cash'
+          id: `adj-transfer-${Date.now()}`, amount, type: 'in', description: `Transferência do Caixa 02`, timestamp: new Date().toISOString(), source: 'secondary_cash'
       };
-
-      const newState = { ...cashStatus, adjustments: [...(cashStatus.adjustments || []), transferAdjustment] };
-      setCashStatus(newState);
-
+      setCashStatus(prev => ({ ...prev, adjustments: [...(prev.adjustments || []), transferAdjustment] }));
       toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o Caixa Diário.` });
 
     } else if (destination === 'bank_account') {
-      const currentAccount = getBankAccount();
-      saveBankAccount({ balance: currentAccount.balance + amount });
-      
+      const currentAccount = await getBankAccount();
+      await saveBankAccount({ balance: currentAccount.balance + amount });
       toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para a Conta Bancária.` });
     }
 
     setIsTransferDialogOpen(false);
   }
 
-  const handleEditCaixa02 = (newBalance: number) => {
-    saveSecondaryCashBox({ balance: newBalance });
+  const handleEditCaixa02 = async (newBalance: number) => {
+    await saveSecondaryCashBox({ balance: newBalance });
     toast({ title: "Caixa 02 Atualizado", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditCaixa02DialogOpen(false);
   }
 
-  const handleEditBankAccount = (newBalance: number) => {
-    saveBankAccount({ balance: newBalance });
+  const handleEditBankAccount = async (newBalance: number) => {
+    await saveBankAccount({ balance: newBalance });
     toast({ title: "Conta Bancária Atualizada", description: `O saldo foi definido para ${formatCurrency(newBalance)}.` });
     setIsEditBankAccountDialogOpen(false);
   }
 
-  const handleCloseCashRegister = () => {
+  const handleCloseCashRegister = async () => {
     const finalCashAmount = sessionSummary.expectedCash;
 
-    // Transfer the final cash amount to the secondary cash box (Caixa 02)
     if (finalCashAmount > 0) {
-        const currentSecondaryBox = getSecondaryCashBox();
-        saveSecondaryCashBox({ balance: currentSecondaryBox.balance + finalCashAmount });
+        const currentSecondaryBox = await getSecondaryCashBox();
+        await saveSecondaryCashBox({ balance: currentSecondaryBox.balance + finalCashAmount });
     }
 
     const closedSession = {
       ...sessionSummary,
       id: `session-${Date.now()}`,
       closingTime: new Date().toISOString(),
-      transferredToCaixa02: finalCashAmount, // Optional: log the transferred amount
+      transferredToCaixa02: finalCashAmount,
     };
     
     const allClosedSessions = JSON.parse(localStorage.getItem(CLOSED_SESSIONS_KEY) || '[]');
     allClosedSessions.push(closedSession);
     localStorage.setItem(CLOSED_SESSIONS_KEY, JSON.stringify(allClosedSessions));
 
-    // Reset the cash register status. The openingBalance for the next session will be set by the user.
     setCashStatus({ status: 'closed', adjustments: [] });
     setIsClosingDialog(false);
-    toast({
-      title: "Caixa Fechado!",
-      description: `O valor de ${formatCurrency(finalCashAmount)} foi transferido para o Caixa 02.`,
-      variant: 'default'
-    });
+    toast({ title: "Caixa Fechado!", description: `O valor de ${formatCurrency(finalCashAmount)} foi transferido para o Caixa 02.`, variant: 'default' });
   };
 
   const sessionSummary = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) {
       return {
-        openingBalance: 0, sessionSales: [], totalSessionRevenue: 0, cashRevenue: 0,
-        cardRevenue: 0, pixRevenue: 0, expectedCash: 0, totalIn: 0, totalOut: 0, adjustments: [],
+        openingBalance: 0, sessionSales: [], totalSessionRevenue: 0, cashRevenue: 0, cardRevenue: 0, pixRevenue: 0, expectedCash: 0, totalIn: 0, totalOut: 0, adjustments: [],
       };
     }
     const openingTime = new Date(cashStatus.openingTime);
@@ -344,12 +299,9 @@ export default function CashRegisterClient() {
     const totalSessionRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
 
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        // If change was left as credit, the full cash tendered amount entered the drawer.
         if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
             return total + sale.cashTendered;
         }
-        
-        // Otherwise, what entered the drawer is the sum of cash payments.
         const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
         return total + cashPayment;
     }, 0);
@@ -372,21 +324,19 @@ export default function CashRegisterClient() {
     const expectedCash = openingBalance + cashRevenue + totalIn - totalOut;
 
     return {
-      openingBalance, sessionSales, totalSessionRevenue, cashRevenue, cardRevenue,
-      pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
+      openingBalance, sessionSales, totalSessionRevenue, cashRevenue, cardRevenue, pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
     };
   }, [cashStatus, sales]);
 
   const sortedAdjustments = useMemo(() => {
     if (!cashStatus.adjustments) return [];
-    // Filter out manual corrections from being displayed
     return [...cashStatus.adjustments]
         .filter(adj => !adj.isCorrection) 
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [cashStatus.adjustments]);
 
 
-  if (!isMounted) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <p>Carregando gestão de caixa...</p>
@@ -679,11 +629,7 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBal
     e.preventDefault();
     const balanceValue = parseFloat(balance.replace(',', '.'));
     if (isNaN(balanceValue) || balanceValue < 0) {
-      toast({
-        title: "Valor Inválido",
-        description: "Por favor, insira um saldo inicial válido.",
-        variant: 'destructive',
-      });
+      toast({ title: "Valor Inválido", description: "Por favor, insira um saldo inicial válido.", variant: 'destructive' });
       return;
     }
     onOpen(balanceValue);
@@ -703,20 +649,10 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBal
           </DialogHeader>
           <div className="py-4 space-y-2">
             <Label htmlFor="openingBalance">Saldo Inicial (R$)</Label>
-            <Input
-              id="openingBalance"
-              value={balance}
-              onChange={(e) => setBalance(e.target.value)}
-              placeholder="Ex: 100,00"
-              type="number"
-              step="0.01"
-              autoFocus
-            />
+            <Input id="openingBalance" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="Ex: 100,00" type="number" step="0.01" autoFocus />
           </div>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancelar</Button>
-            </DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
             <Button type="submit">Confirmar e Abrir</Button>
           </DialogFooter>
         </form>
@@ -732,9 +668,7 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Confirmar Fechamento do Caixa?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Revise os totais antes de fechar. Esta ação não pode ser desfeita.
-          </AlertDialogDescription>
+          <AlertDialogDescription>Revise os totais antes de fechar. Esta ação não pode ser desfeita.</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="text-sm space-y-2 my-4">
             <div className="flex justify-between"><span>Saldo Inicial:</span> <strong>{formatCurrency(summary.openingBalance)}</strong></div>
@@ -760,7 +694,6 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
   )
 }
 
-// Dialog for Cash In/Out
 function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentToEdit }: { isOpen: boolean, onOpenChange: (open: boolean) => void, type: 'in' | 'out', onSave: (details: { amount: number, description: string, destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => void, adjustmentToEdit?: CashAdjustment | null }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -846,12 +779,8 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
   );
 }
 
-// Dialog for Transfer
 function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { 
-  isOpen: boolean, 
-  onOpenChange: (open: boolean) => void, 
-  maxAmount: number, 
-  onTransfer: (details: { amount: number, destination: 'daily_cash' | 'bank_account' }) => void 
+  isOpen: boolean, onOpenChange: (open: boolean) => void, maxAmount: number, onTransfer: (details: { amount: number, destination: 'daily_cash' | 'bank_account' }) => void 
 }) {
   const [amount, setAmount] = useState('');
   const [destination, setDestination] = useState<'daily_cash' | 'bank_account'>('daily_cash');

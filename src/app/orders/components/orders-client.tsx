@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
-import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, PAYMENT_METHODS, addFinancialEntry } from '@/lib/constants';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,8 +42,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const LOCAL_STORAGE_ORDERS_KEY = 'barmate_openOrders';
-
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   if (!categories.length) return {};
   return products.reduce((acc, product) => {
@@ -74,87 +72,59 @@ export default function OrdersClient() {
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const { toast } = useToast();
-  const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
   useEffect(() => {
-    setIsMounted(true);
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const [
+          fetchedProducts, 
+          fetchedCategories, 
+          fetchedOrders
+        ] = await Promise.all([
+          getProducts(), 
+          getProductCategories(), 
+          getOpenOrders()
+        ]);
+        
+        setProducts(fetchedProducts);
+        setProductCategories(fetchedCategories);
 
-    const handleStorageChange = () => {
-        const allProducts = getProducts();
-        const allCategories = getProductCategories();
-        setProducts(allProducts);
-        setProductCategories(allCategories);
+        const ordersWithDetails = fetchedOrders.map(order => ({
+            ...order,
+            items: order.items.map(item => {
+                const productDetails = fetchedProducts.find(p => p.id === item.id);
+                const category = fetchedCategories.find(c => c.id === productDetails?.categoryId);
+                return { ...item, categoryName: category?.name, categoryIconName: category?.iconName };
+            })
+        }));
+        
+        setOpenOrders(ordersWithDetails);
 
-        const storedOrdersJSON = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
-        if (storedOrdersJSON && storedOrdersJSON !== JSON.stringify(openOrders)) {
-            try {
-                const parsedOrders: ActiveOrder[] = JSON.parse(storedOrdersJSON).map((order: ActiveOrder) => ({
-                    ...order,
-                    createdAt: new Date(order.createdAt),
-                    items: order.items.map(item => {
-                        const productDetails = allProducts.find(p => p.id === item.id);
-                        const category = allCategories.find(c => c.id === productDetails?.categoryId);
-                        return {
-                            ...item,
-                            categoryName: category?.name,
-                            categoryIconName: category?.iconName
-                        };
-                    })
-                }));
-                setOpenOrders(parsedOrders);
-                if (parsedOrders.length > 0 && !currentOrderId) {
-                    setCurrentOrderId(parsedOrders[0].id);
-                } else if (parsedOrders.length === 0) {
-                    setCurrentOrderId(null);
-                }
-            } catch (error) {
-                console.error("Failed to parse open orders from localStorage", error);
-                localStorage.removeItem(LOCAL_STORAGE_ORDERS_KEY);
-            }
+        if (ordersWithDetails.length > 0 && !ordersWithDetails.some(o => o.id === currentOrderId)) {
+            setCurrentOrderId(ordersWithDetails[0].id);
+        } else if (ordersWithDetails.length === 0) {
+            setCurrentOrderId(null);
         }
+      } catch (error) {
+          console.error("Failed to fetch initial data", error);
+          toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados da nuvem.", variant: "destructive" });
+      } finally {
+          setIsLoading(false);
+      }
     };
 
-    handleStorageChange(); // Carga inicial
-    window.addEventListener('storage', handleStorageChange); // Listener para outras abas
+    fetchData();
+    window.addEventListener('storage', fetchData);
+    return () => window.removeEventListener('storage', fetchData);
+  }, [currentOrderId, toast]);
 
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
-
-  // Update localStorage when openOrders change
   useEffect(() => {
-    if (isMounted) {
-      localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(openOrders));
-    }
-  }, [openOrders, isMounted]);
-
-  // Effect to automatically clean up credit labels from order names
-  useEffect(() => {
-    if (!openOrders.length) return;
-
-    let wasChanged = false;
-    const cleanedOrders = openOrders.map(order => {
-        const total = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-        const hasCreditText = order.name.includes('(Com Crédito)') || order.name.includes('(Crédito de Troco)');
-
-        if (total >= 0 && hasCreditText) {
-            wasChanged = true;
-            return {
-                ...order,
-                name: order.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')
-            };
-        }
-        return order;
-    });
-
-    // Only update state if a change was actually made, to prevent infinite loops.
-    if (wasChanged) {
-        setOpenOrders(cleanedOrders);
-    }
-  }, [openOrders]);
-
+    if (isLoading) return; // Don't save while loading
+    saveOpenOrders(openOrders);
+  }, [openOrders, isLoading]);
 
   const filteredOpenOrders = useMemo(() => {
     return openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase()));
@@ -166,7 +136,7 @@ export default function OrdersClient() {
 
   const totalOpenOrdersValue = useMemo(() => {
     return openOrders
-      .filter(order => order.status !== 'paid') // Exclude paid orders from the total
+      .filter(order => order.status !== 'paid')
       .reduce((total, order) => {
         const orderTotal = order.items.reduce((orderSum, item) => orderSum + (item.price * item.quantity), 0);
         return total + orderTotal;
@@ -244,18 +214,13 @@ export default function OrdersClient() {
     const oldOrders = [...openOrders];
     const updatedOrders = oldOrders.filter(order => order.id !== orderIdToDelete);
     
-    // Logic to select the next order if the current one is deleted
     if (currentOrderId === orderIdToDelete) {
         const deletedIndex = oldOrders.findIndex(o => o.id === orderIdToDelete);
         let nextSelectedId: string | null = null;
         if (updatedOrders.length > 0) {
-            // Select the next order in the list, or the previous one if the last was deleted
             nextSelectedId = updatedOrders[deletedIndex]?.id || updatedOrders[deletedIndex - 1]?.id || updatedOrders[0].id;
         }
         setCurrentOrderId(nextSelectedId);
-    } else {
-      // If a different order was deleted, keep the current selection
-      // No change to currentOrderId needed
     }
     
     setOpenOrders(updatedOrders);
@@ -273,7 +238,6 @@ export default function OrdersClient() {
     const allItemsToMerge = [...destinationOrder.items, ...sourceOrders.flatMap(o => o.items)];
 
     const mergedItems = allItemsToMerge.reduce((acc, item) => {
-        // Don't group combos or special negative-price items (payments, credits)
         const isGroupable = !item.isCombo && !item.id.startsWith('combo-') && item.price > 0 && !item.id.startsWith('payment-') && !item.id.startsWith('credit-');
         const existingItem = isGroupable ? acc.find(i => i.id === item.id) : null;
         
@@ -285,23 +249,18 @@ export default function OrdersClient() {
         return acc;
     }, [] as OrderItem[]);
 
-    setOpenOrders(prevOrders => {
-        const updatedOrder: ActiveOrder = { ...destinationOrder!, items: mergedItems };
-        
-        // Remove source orders and update the destination order
-        const finalOrders = prevOrders
-            .filter(o => !sourceOrderIds.includes(o.id))
-            .map(o => o.id === currentOrderId ? updatedOrder : o);
+    const updatedOrder: ActiveOrder = { ...destinationOrder, items: mergedItems };
+    const finalOrders = openOrders
+        .filter(o => !sourceOrderIds.includes(o.id))
+        .map(o => o.id === currentOrderId ? updatedOrder : o);
             
-        return finalOrders;
-    });
-
+    setOpenOrders(finalOrders);
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
     setIsMergeDialogOpen(false);
   };
 
 
-  const handleAddCredit = ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
+  const handleAddCredit = async ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
     if (!currentOrderId) {
         toast({ title: "Nenhuma comanda selecionada", variant: "destructive" });
         return;
@@ -321,24 +280,16 @@ export default function OrdersClient() {
     };
 
     const newName = `${orderToUpdate.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)`;
-    
-    // 1. Calculate the new state
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
-    const newOrdersState = openOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
+    setOpenOrders(openOrders.map(order => order.id === currentOrderId ? updatedOrder : order));
 
-    // 2. Save the new state to localStorage FIRST to prevent race conditions
-    localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(newOrdersState));
-
-    // 3. Update the component's state
-    setOpenOrders(newOrdersState);
-
-    // 4. Handle the financial side-effect
     if (source !== 'permuta') {
-        addFinancialEntry({
+        await addFinancialEntry({
             description: `Crédito para ${orderToUpdate.name}: ${description}`,
             amount: amount,
             type: 'income',
             source: source === 'dinheiro' ? 'daily_cash' : 'bank_account',
+            timestamp: new Date()
         });
         toast({ title: "Crédito Adicionado e Registrado", description: `${formatCurrency(amount)} adicionado à comanda e registrado como entrada.` });
     } else {
@@ -361,7 +312,7 @@ export default function OrdersClient() {
              const category = productCategories.find(c => c.id === product.categoryId);
              const newComboItem: OrderItem = {
                ...product,
-               id: `combo-${product.id}-${Date.now()}`, // Unique ID for this combo instance
+               id: `combo-${product.id}-${Date.now()}`, 
                quantity: 1,
                claimedQuantity: 0,
                categoryName: category?.name,
@@ -394,7 +345,7 @@ export default function OrdersClient() {
 
   const handleClaimComboItem = (comboItemId: string) => {
     setOpenOrders(prevOrders => {
-        const newOrders = [...prevOrders];
+        let newOrders = [...prevOrders];
         const orderIndex = newOrders.findIndex(o => o.id === currentOrderId);
         if (orderIndex === -1) return prevOrders;
 
@@ -415,17 +366,14 @@ export default function OrdersClient() {
         
         const updatedOrder = { ...order, items: updatedItems };
 
-        // Check if the order is paid and all combos are now claimed
         const allCombosClaimed = updatedOrder.items
             .filter(item => item.isCombo)
             .every(item => (item.claimedQuantity ?? 0) >= (item.comboItems ?? 1));
 
         if (updatedOrder.status === 'paid' && allCombosClaimed) {
-            // Close the order now
-            newOrders.splice(orderIndex, 1); // Remove the order
+            newOrders.splice(orderIndex, 1);
             toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${order.name}" foram entregues.` });
 
-            // Select next order
             if (newOrders.length > 0) {
               const nextIndex = orderIndex < newOrders.length ? orderIndex : newOrders.length - 1;
               setCurrentOrderId(newOrders[nextIndex].id);
@@ -484,41 +432,28 @@ export default function OrdersClient() {
     const totalPaid = details.payments.reduce((sum, p) => sum + p.amount, 0);
     const effectiveOrderTotal = orderTotal - details.discountAmount;
 
-    // Partial Payment Logic
     if (totalPaid < effectiveOrderTotal) {
-        const paymentItems: OrderItem[] = details.payments.map(p => {
-            const methodName = PAYMENT_METHODS.find(pm => pm.value === p.method)?.name || 'Pagamento';
-            return {
-                id: `payment-${p.method}-${Date.now()}`,
-                name: `Pagamento Parcial (${methodName})`,
-                price: -p.amount,
-                quantity: 1,
-                categoryId: 'cat_outros',
-                categoryName: 'Pagamento',
-                categoryIconName: 'Banknote',
-            };
-        });
+        const paymentItems: OrderItem[] = details.payments.map(p => ({
+            id: `payment-${p.method}-${Date.now()}`,
+            name: `Pagamento Parcial (${p.method})`,
+            price: -p.amount,
+            quantity: 1,
+            categoryId: 'cat_outros',
+            categoryName: 'Pagamento',
+            categoryIconName: 'Banknote',
+        }));
 
         if (details.discountAmount > 0) {
             paymentItems.push({
-                id: `discount-${Date.now()}`,
-                name: `Desconto Aplicado`,
-                price: -details.discountAmount,
-                quantity: 1,
-                categoryId: 'cat_outros',
-                categoryName: 'Pagamento',
-                categoryIconName: 'Banknote',
+                id: `discount-${Date.now()}`, name: `Desconto Aplicado`, price: -details.discountAmount, quantity: 1, categoryId: 'cat_outros', categoryName: 'Pagamento', categoryIconName: 'Banknote',
             });
         }
         
-        const updatedOrder: ActiveOrder = {
-            ...currentOrder,
-            items: [...currentOrder.items, ...paymentItems],
-        };
+        const updatedOrder: ActiveOrder = { ...currentOrder, items: [...currentOrder.items, ...paymentItems] };
+        setOpenOrders(openOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
 
         addSale({
-            id: `sale-partial-${Date.now()}`,
-            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), // Log positive amounts in sale
+            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})),
             originalAmount: totalPaid,
             discountAmount: details.discountAmount,
             totalAmount: totalPaid - details.discountAmount,
@@ -527,32 +462,26 @@ export default function OrdersClient() {
             timestamp: new Date(),
             status: 'completed',
             cashTendered: details.cashTendered
-        })
+        });
         
-        setOpenOrders(openOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
         toast({ title: "Pagamento Parcial Registrado", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
         setIsPaymentDialogOpen(false);
         return;
     }
     
-    // --- Full Payment Logic ---
-    const finalTotal = effectiveOrderTotal;
-    const newSale: Sale = {
-      id: `sale-${Date.now()}`,
-      items: currentOrderItems, // includes products and previous partial payments as negative items
+    addSale({
+      items: currentOrderItems,
       originalAmount: currentOrderItems.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0),
       discountAmount: details.discountAmount,
-      totalAmount: finalTotal,
+      totalAmount: effectiveOrderTotal,
       payments: details.payments,
       changeGiven: details.changeGiven,
       timestamp: new Date(),
       status: 'completed',
       cashTendered: details.cashTendered,
       leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
-    };
-    addSale(newSale);
+    });
 
-    // Check for pending combos
     const hasUnclaimedCombos = currentOrder.items.some(item => 
       item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1)
     );
@@ -560,13 +489,8 @@ export default function OrdersClient() {
     if (hasUnclaimedCombos) {
       const paidOrder: ActiveOrder = {
         ...currentOrder,
-        items: [...currentOrder.items, { // Add a payment item to balance the total
-            id: `payment-full-${Date.now()}`,
-            name: 'Pagamento Integral',
-            price: -finalTotal,
-            quantity: 1,
-            categoryId: 'cat_outros',
-            categoryName: 'Banknote'
+        items: [...currentOrder.items, {
+            id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -effectiveOrderTotal, quantity: 1, categoryId: 'cat_outros', categoryIconName: 'Banknote'
         }],
         status: 'paid'
       };
@@ -576,32 +500,21 @@ export default function OrdersClient() {
       return;
     }
 
-    // Handle order state after full payment (NO pending combos)
     let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
     let nextSelectedOrderId: string | null = null;
     
     if (details.leaveChangeAsCredit && details.changeGiven > 0) {
-        const creditAmount = details.changeGiven;
-        const creditOrderName = `${currentOrder.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)','')} (Crédito de Troco)`;
-        const creditItem: OrderItem = {
-            id: `credit-${Date.now()}`,
-            name: `Crédito de Troco`,
-            price: -creditAmount,
-            quantity: 1,
-            categoryId: 'cat_outros',
-            categoryName: 'Outros',
-            categoryIconName: 'Banknote',
-        };
-        const newCreditOrderId = `order-credit-${Date.now()}`;
         const newCreditOrder: ActiveOrder = {
-            id: newCreditOrderId,
-            name: creditOrderName,
-            items: [creditItem],
+            id: `order-credit-${Date.now()}`,
+            name: `${currentOrder.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`,
+            items: [{
+                id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -details.changeGiven, quantity: 1, categoryId: 'cat_outros', categoryIconName: 'Banknote'
+            }],
             createdAt: new Date(),
         };
         nextOrdersState.push(newCreditOrder);
-        nextSelectedOrderId = newCreditOrderId;
-        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(creditAmount)}.` });
+        nextSelectedOrderId = newCreditOrder.id;
+        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(details.changeGiven)}.` });
     } else {
         if (nextOrdersState.length > 0) {
             const currentIndex = openOrders.findIndex(o => o.id === currentOrderId);
@@ -610,7 +523,7 @@ export default function OrdersClient() {
          if (!details.leaveChangeAsCredit) {
              toast({
                 title: "Venda Concluída!",
-                description: `Venda de ${formatCurrency(newSale.totalAmount)} (${currentOrder.name}) registrada com sucesso.`,
+                description: `Venda de ${formatCurrency(effectiveOrderTotal)} (${currentOrder.name}) registrada com sucesso.`,
                 action: <CheckCircle className="text-green-500" />,
             });
          }
@@ -620,10 +533,10 @@ export default function OrdersClient() {
     setIsPaymentDialogOpen(false);
   };
   
-  if (!isMounted) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p>Carregando comandas...</p>
+        <p>Carregando comandas da nuvem...</p>
       </div>
     );
   }
@@ -728,7 +641,7 @@ export default function OrdersClient() {
                           </div>
                           <div className="text-xs text-muted-foreground flex flex-col items-start">
                             <span>{order.items.length} item(s)</span>
-                             <span>{format(order.createdAt, "dd/MM HH:mm", { locale: ptBR })}</span>
+                             <span>{format(new Date(order.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
@@ -820,7 +733,7 @@ export default function OrdersClient() {
                         <>
                           <span>{currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'}</span>
                           <span className="text-xs">&bull;</span>
-                          <span>{format(currentOrder.createdAt, "dd/MM HH:mm", { locale: ptBR })}</span>
+                          <span>{format(new Date(currentOrder.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
                         </>
                        )}
                        {!currentOrder && <span>Nenhum item na comanda.</span>}
@@ -1288,15 +1201,3 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-

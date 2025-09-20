@@ -14,7 +14,7 @@ import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle,
 import PaymentDialog from '@/app/orders/components/payment-dialog'; 
 import { useToast } from '@/hooks/use-toast';
 
-const LOCAL_STORAGE_COUNTER_SALE_KEY = 'barmate_counterSaleOrderItems';
+const LOCAL_STORAGE_COUNTER_SALE_KEY = 'barmate_counterSaleOrderItems_v2'; // Use a different key to avoid conflicts
 
 // Group products by category
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
@@ -37,39 +37,42 @@ export default function CounterSaleClient() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const { toast } = useToast();
-  const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
   useEffect(() => {
-    setIsMounted(true);
-    
-    const handleStorageChange = () => {
-        setProducts(getProducts());
-        setProductCategories(getProductCategories());
-        const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-        if (storedOrderItems) {
-          try {
-            setCurrentOrderItems(JSON.parse(storedOrderItems));
-          } catch (error) {
-            console.error("Failed to parse counter sale items from localStorage", error);
-            localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-          }
+    const loadInitialData = async () => {
+        setIsLoading(true);
+        try {
+            const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
+            setProducts(fetchedProducts);
+            setProductCategories(fetchedCategories);
+        } catch (error) {
+            console.error("Failed to load products/categories", error);
+            toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os produtos.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
         }
     };
+    
+    loadInitialData();
 
-    handleStorageChange();
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
+    // Load cart from localStorage
+    const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+    if (storedOrderItems) {
+      try {
+        setCurrentOrderItems(JSON.parse(storedOrderItems));
+      } catch (error) {
+        console.error("Failed to parse counter sale items from localStorage", error);
+        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+      }
+    }
+  }, [toast]);
 
   useEffect(() => {
-    if (isMounted) {
-      localStorage.setItem(LOCAL_STORAGE_COUNTER_SALE_KEY, JSON.stringify(currentOrderItems));
-    }
-  }, [currentOrderItems, isMounted]);
+    // Save cart to localStorage whenever it changes
+    localStorage.setItem(LOCAL_STORAGE_COUNTER_SALE_KEY, JSON.stringify(currentOrderItems));
+  }, [currentOrderItems]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -126,10 +129,10 @@ export default function CounterSaleClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed' }) => {
+  const handlePayment = async (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     const finalTotal = orderTotal - details.discountAmount;
-    const newSale: Sale = {
-      id: `csale-${Date.now()}`,
+    
+    await addSale({
       items: currentOrderItems,
       originalAmount: orderTotal,
       discountAmount: details.discountAmount,
@@ -138,26 +141,24 @@ export default function CounterSaleClient() {
       changeGiven: details.changeGiven,
       timestamp: new Date(),
       status: 'completed',
-    };
-    
-    addSale(newSale);
+      cashTendered: details.cashTendered,
+      leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
+    });
     
     setCurrentOrderItems([]); 
-    if (isMounted) {
-      localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    }
+    localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
     setIsPaymentDialogOpen(false);
     toast({
       title: "Venda Balcão Concluída!",
-      description: `Venda de ${formatCurrency(newSale.totalAmount)} registrada com sucesso.`,
+      description: `Venda de ${formatCurrency(finalTotal)} registrada com sucesso.`,
       action: <CheckCircle className="text-green-500" />,
     });
   };
 
-  if (!isMounted) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p>Carregando venda balcão...</p>
+        <p>Carregando produtos...</p>
       </div>
     );
   }

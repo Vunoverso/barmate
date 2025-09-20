@@ -62,7 +62,7 @@ interface AddProductDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   product?: Product | null;
-  onSave: (product: Product) => void;
+  onSave: (product: Omit<Product, 'id'> | Product) => void;
 }
 
 export default function AddProductDialog({ isOpen, onOpenChange, product, onSave }: AddProductDialogProps) {
@@ -87,7 +87,7 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
   });
 
   useEffect(() => {
-    if (availableCategories.length > 0) {
+    if (isOpen && availableCategories.length > 0) {
       if (product) {
         form.reset({
           name: product.name,
@@ -107,30 +107,25 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
           comboItems: 0,
         });
       }
-    } else if (!product) { 
-       form.reset({
-          name: '',
-          price: 0,
-          categoryId: '', 
-          stock: 0,
-          isCombo: false,
-          comboItems: 0,
-        });
     }
   }, [product, form, isOpen, availableCategories]);
 
   const isCombo = form.watch("isCombo");
 
   const onSubmit = (data: ProductFormData) => {
-    onSave({
-      id: product?.id || '', 
+    const productData = {
       name: data.name,
       price: data.price,
       categoryId: data.categoryId,
       stock: data.stock,
       isCombo: data.isCombo,
       comboItems: data.isCombo ? data.comboItems : undefined,
-    });
+    };
+    if (product) {
+      onSave({ ...product, ...productData });
+    } else {
+      onSave(productData);
+    }
     onOpenChange(false);
   };
 
@@ -269,5 +264,3 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
     </Dialog>
   );
 }
-
-    
