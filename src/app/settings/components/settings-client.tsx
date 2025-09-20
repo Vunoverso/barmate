@@ -3,7 +3,7 @@
 
 import type { ProductCategory, TransactionFees } from '@/types';
 import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, INITIAL_PRODUCT_CATEGORIES, getTransactionFees, saveTransactionFees } from '@/lib/constants';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,10 +37,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -183,6 +181,8 @@ export default function SettingsClient() {
   const [initialBarName, setInitialBarName] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
+  const [isImportConfirmationOpen, setIsImportConfirmationOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
 
@@ -239,29 +239,18 @@ export default function SettingsClient() {
   const handleExportAllData = () => {
     try {
       const allData: Record<string, any> = {};
-      const keysToExport = [
-        'barmate_productCategories',
-        'barmate_products',
-        'barmate_sales',
-        'barmate_financialEntries',
-        'barmate_secondaryCashBox',
-        'barmate_bankAccount',
-        'barmate_cashRegisterStatus',
-        'barmate_transactionFees',
-        'barName',
-        'barmate_openOrders',
-        'barmate_counterSaleOrderItems',
-        'barmate_closedCashSessions',
-      ];
+      const keysToExport = Object.keys(localStorage);
 
       keysToExport.forEach(key => {
-        const data = localStorage.getItem(key);
-        if (data) {
-          try {
-            allData[key] = JSON.parse(data);
-          } catch {
-            allData[key] = data; // Store as string if not valid JSON
-          }
+        if (key.startsWith('barmate_') || key === 'barName' || key === 'theme') {
+            const data = localStorage.getItem(key);
+            if (data) {
+                try {
+                    allData[key] = JSON.parse(data);
+                } catch {
+                    allData[key] = data; // Store as string if not valid JSON
+                }
+            }
         }
       });
       
@@ -290,6 +279,57 @@ export default function SettingsClient() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleImportFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result;
+        if (typeof text !== 'string') {
+            throw new Error("Ocorreu um erro ao ler o arquivo.");
+        }
+        
+        const importedData = JSON.parse(text);
+        
+        // Clear existing data before import for a clean slate
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('barmate_') || key === 'barName' || key === 'theme') {
+            localStorage.removeItem(key);
+          }
+        });
+
+        // Import new data
+        Object.keys(importedData).forEach(key => {
+          const value = importedData[key];
+          localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+        });
+
+        toast({
+          title: "Importação Concluída!",
+          description: "Os dados foram restaurados. Por favor, recarregue a página para aplicar as alterações.",
+        });
+
+      } catch (err) {
+        console.error("Falha ao importar dados:", err);
+        toast({
+          title: "Erro na Importação",
+          description: `O arquivo de backup é inválido ou está corrompido. ${(err as Error).message}`,
+          variant: "destructive",
+        });
+      } finally {
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
 
@@ -343,8 +383,23 @@ export default function SettingsClient() {
 
   if (!isMounted) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p>Carregando configurações...</p>
+      <div className="space-y-8">
+          <Card>
+            <CardHeader><CardTitle>Nome do Estabelecimento</CardTitle></CardHeader>
+            <CardContent><div className="h-10 w-1/2 bg-muted rounded-md animate-pulse"></div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Taxas de Transação</CardTitle></CardHeader>
+            <CardContent><div className="h-24 w-full bg-muted rounded-md animate-pulse"></div></CardContent>
+          </Card>
+           <Card>
+            <CardHeader><CardTitle>Gerenciamento de Dados</CardTitle></CardHeader>
+            <CardContent><div className="h-10 w-1/3 bg-muted rounded-md animate-pulse"></div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Gerenciar Categorias de Produtos</CardTitle></CardHeader>
+            <CardContent><div className="h-48 w-full bg-muted rounded-md animate-pulse"></div></CardContent>
+          </Card>
       </div>
     );
   }
@@ -427,28 +482,24 @@ export default function SettingsClient() {
         <Card>
           <CardHeader>
             <CardTitle>Gerenciamento de Dados</CardTitle>
-            <CardDescription>Faça o backup dos seus dados locais ou restaure-os em uma nova instalação.</CardDescription>
+            <CardDescription>Faça o backup dos seus dados locais ou restaure-os de um arquivo.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col sm:flex-row gap-4">
             <Button onClick={handleExportAllData}>
               <Download className="mr-2 h-4 w-4" />
               Exportar todos os dados
             </Button>
-             <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0}>
-                    <Button variant="outline" disabled>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Importar dados
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Funcionalidade a ser implementada.<br />Usada para restaurar um backup em uma nova instalação.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button variant="outline" onClick={() => setIsImportConfirmationOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Importar dados
+            </Button>
+            <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".json"
+                onChange={handleImportFileSelect}
+            />
           </CardContent>
         </Card>
 
@@ -513,6 +564,31 @@ export default function SettingsClient() {
         onOpenChange={setIsAddCategoryDialogOpen}
         onSave={handleAddNewCategory}
       />
+      
+      <AlertDialog open={isImportConfirmationOpen} onOpenChange={setIsImportConfirmationOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar Importação de Dados?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Atenção! Esta ação irá **sobrescrever todos os dados atuais** do aplicativo neste navegador com as informações do arquivo de backup. 
+                    <br/><br/>
+                    Continue apenas se você tem certeza que deseja restaurar um backup. Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction 
+                    className="bg-destructive hover:bg-destructive/90"
+                    onClick={() => {
+                        fileInputRef.current?.click();
+                        setIsImportConfirmationOpen(false);
+                    }}
+                >
+                    Confirmar e Importar
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {categoryToDelete && (
         <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
@@ -521,7 +597,7 @@ export default function SettingsClient() {
               <AlertDialogTitle>Confirmar Remoção de Categoria</AlertDialogTitle>
               <AlertDialogDescription>
                 Tem certeza que deseja remover a categoria "{categoryToDelete.name}"? 
-                Produtos que utilizam esta categoria podem precisar ser reatribuídos manually a uma nova categoria.
+                Produtos que utilizam esta categoria podem precisar ser reatribuídos manualmente a uma nova categoria.
                 Esta ação não pode ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -540,3 +616,5 @@ export default function SettingsClient() {
     </>
   );
 }
+
+    
