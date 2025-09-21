@@ -1,16 +1,16 @@
 
-
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, type LucideIcon, Wallet, CreditCard, QrCode } from 'lucide-react';
 
 // --- LocalStorage Helper Functions ---
-const saveToLocalStorage = <T,>(key: string, value: T) => {
+const saveToLocalStorage = <T,>(key: string, value: T, options?: { silent?: boolean }) => {
   if (typeof window !== 'undefined') {
     try {
       const serializedValue = JSON.stringify(value);
       window.localStorage.setItem(key, serializedValue);
-      // Dispara um evento para que outros componentes possam reagir à mudança.
-      window.dispatchEvent(new StorageEvent('storage', { key }));
+      if (!options?.silent) {
+        window.dispatchEvent(new StorageEvent('storage', { key }));
+      }
     } catch (error) {
       console.error(`Error saving to localStorage key "${key}":`, error);
     }
@@ -24,7 +24,8 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
   try {
     const storedValue = window.localStorage.getItem(key);
     if (storedValue === null || storedValue === 'undefined') {
-      saveToLocalStorage(key, defaultValue);
+      // Don't save default value here to prevent overwriting on first load in SSR environments.
+      // The calling components should handle initialization.
       return defaultValue;
     }
     return JSON.parse(storedValue);
@@ -1122,12 +1123,7 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
 
   newSale.payments.forEach(p => {
-    let feeRate = 0;
     const isBankTransaction = ['debit', 'credit', 'pix'].includes(p.method);
-
-    if (p.method === 'debit') feeRate = fees.debitRate;
-    if (p.method === 'credit') feeRate = fees.creditRate;
-    if (p.method === 'pix') feeRate = fees.pixRate;
 
     if (isBankTransaction) {
       // Add the income from the sale to the bank account
@@ -1141,6 +1137,11 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
       });
 
       // Add the transaction fee as an expense from the bank account
+      let feeRate = 0;
+      if (p.method === 'debit') feeRate = fees.debitRate;
+      if (p.method === 'credit') feeRate = fees.creditRate;
+      if (p.method === 'pix') feeRate = fees.pixRate;
+
       if (feeRate > 0) {
         const feeAmount = p.amount * (feeRate / 100);
         if (feeAmount > 0) {
@@ -1183,19 +1184,22 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
     }));
 
     // Update balances based on the new entries
+    let currentBank = getBankAccount();
+    let bankBalanceChanged = false;
+
     newEntries.forEach(e => {
         if (e.source === 'bank_account') {
-            const currentAccount = getBankAccount();
-            const newBalance = e.type === 'income' 
-                ? currentAccount.balance + e.amount 
-                : currentAccount.balance - e.amount;
-            saveBankAccount({ balance: newBalance });
+            currentBank.balance = e.type === 'income' 
+                ? currentBank.balance + e.amount 
+                : currentBank.balance - e.amount;
+            bankBalanceChanged = true;
         }
-        // NOTE: 'daily_cash' and 'secondary_cash' are handled separately
-        // in their respective components to avoid double-counting or complex state management here.
     });
 
-
+    if(bankBalanceChanged){
+        saveBankAccount(currentBank);
+    }
+    
     saveFinancialEntries([...currentEntries, ...newEntries]);
 };
 
@@ -1251,7 +1255,7 @@ export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-// Dummy function to satisfy type checker, will not be used
+// Dummy function to satisfy type checker, will not be used in local mode
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }

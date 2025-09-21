@@ -77,9 +77,12 @@ export default function OrdersClient() {
 
  const fetchData = useCallback(() => {
     setIsLoading(true);
-    setProducts(getProducts());
-    setProductCategories(getProductCategories());
+    const fetchedProducts = getProducts();
+    const fetchedCategories = getProductCategories();
     const fetchedOrders = getOpenOrders();
+
+    setProducts(fetchedProducts);
+    setProductCategories(fetchedCategories);
     setOpenOrders(fetchedOrders);
 
     if (currentOrderId && !fetchedOrders.some(o => o.id === currentOrderId)) {
@@ -94,9 +97,8 @@ export default function OrdersClient() {
 
   useEffect(() => {
     fetchData();
-    const handleStorageChange = () => fetchData();
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('storage', fetchData);
+    return () => window.removeEventListener('storage', fetchData);
   }, [fetchData]);
 
   const filteredOpenOrders = useMemo(() => {
@@ -163,11 +165,11 @@ export default function OrdersClient() {
       items: [],
       createdAt: new Date(),
     };
-    const updatedOrders = [...openOrders, newOrder];
+    const updatedOrders = [...getOpenOrders(), newOrder];
     saveOpenOrders(updatedOrders);
-    setCurrentOrderId(newOrderId);
+    setCurrentOrderId(newOrderId); // Select the new order
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
-  }, [openOrders, toast]);
+  }, [toast]);
 
   const handleSelectOrder = useCallback((orderId: string) => {
     setCurrentOrderId(orderId);
@@ -181,13 +183,13 @@ export default function OrdersClient() {
   }, [openOrders, currentOrderId]);
   
   const handleSaveOrderName = useCallback((orderId: string, newName: string) => {
-      const updatedOrders = openOrders.map(order => 
+      const updatedOrders = getOpenOrders().map(order => 
           order.id === orderId ? { ...order, name: newName } : order
       );
       saveOpenOrders(updatedOrders);
       setOrderToEdit(null);
       toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
-  }, [openOrders, toast]);
+  }, [toast]);
 
   const confirmDeleteOrder = useCallback((order: ActiveOrder) => {
     setOrderToDelete(order);
@@ -199,7 +201,7 @@ export default function OrdersClient() {
     const orderIdToDelete = orderToDelete.id;
     const orderName = orderToDelete.name;
 
-    const oldOrders = [...openOrders];
+    const oldOrders = getOpenOrders();
     const updatedOrders = oldOrders.filter(order => order.id !== orderIdToDelete);
     
     let nextSelectedId: string | null = null;
@@ -214,17 +216,20 @@ export default function OrdersClient() {
     
     saveOpenOrders(updatedOrders);
     setOrderToDelete(null);
-    setCurrentOrderId(nextSelectedId);
+    if (currentOrderId === orderIdToDelete) {
+      setCurrentOrderId(nextSelectedId);
+    }
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
-  }, [orderToDelete, openOrders, currentOrderId, toast]);
+  }, [orderToDelete, currentOrderId, toast]);
   
   const handleMergeOrders = useCallback((sourceOrderIds: string[]) => {
     if (!currentOrderId || sourceOrderIds.length === 0) return;
-
-    let destinationOrder = openOrders.find(o => o.id === currentOrderId);
+    
+    const allOrders = getOpenOrders();
+    let destinationOrder = allOrders.find(o => o.id === currentOrderId);
     if (!destinationOrder) return;
     
-    const sourceOrders = openOrders.filter(o => sourceOrderIds.includes(o.id));
+    const sourceOrders = allOrders.filter(o => sourceOrderIds.includes(o.id));
     const allItemsToMerge = [...destinationOrder.items, ...sourceOrders.flatMap(o => o.items)];
 
     const mergedItems = allItemsToMerge.reduce((acc, item) => {
@@ -240,14 +245,14 @@ export default function OrdersClient() {
     }, [] as OrderItem[]);
 
     const updatedOrder: ActiveOrder = { ...destinationOrder, items: mergedItems };
-    const finalOrders = openOrders
+    const finalOrders = allOrders
         .filter(o => !sourceOrderIds.includes(o.id))
         .map(o => o.id === currentOrderId ? updatedOrder : o);
             
     saveOpenOrders(finalOrders);
     setIsMergeDialogOpen(false);
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
-  }, [currentOrderId, openOrders, toast]);
+  }, [currentOrderId, toast]);
 
 
   const handleAddCredit = useCallback(({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
@@ -256,7 +261,8 @@ export default function OrdersClient() {
         return;
     }
 
-    const orderToUpdate = openOrders.find(o => o.id === currentOrderId);
+    const allOrders = getOpenOrders();
+    const orderToUpdate = allOrders.find(o => o.id === currentOrderId);
     if (!orderToUpdate) return;
     
     const creditItem: OrderItem = {
@@ -271,7 +277,7 @@ export default function OrdersClient() {
 
     const newName = `${orderToUpdate.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)`;
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
-    const newOpenOrders = openOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
+    const newOpenOrders = allOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
     saveOpenOrders(newOpenOrders);
 
     if (source !== 'permuta') {
@@ -280,6 +286,8 @@ export default function OrdersClient() {
             amount: amount,
             type: 'income',
             source: source === 'dinheiro' ? 'daily_cash' : 'bank_account',
+            saleId: null,
+            adjustmentId: null
         });
         toast({ title: "Crédito Adicionado e Registrado", description: `${formatCurrency(amount)} adicionado à comanda e registrado como entrada.` });
     } else {
@@ -287,7 +295,7 @@ export default function OrdersClient() {
     }
 
     setIsCreditDialogOpen(false);
-  }, [currentOrderId, openOrders, toast]);
+  }, [currentOrderId, toast]);
 
 
   const addToOrder = useCallback((product: Product) => {
@@ -295,7 +303,7 @@ export default function OrdersClient() {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
       return;
     }
-    const updatedOrders = openOrders.map(order => {
+    const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
           const newItems = [...order.items];
           if (product.isCombo) {
@@ -311,7 +319,7 @@ export default function OrdersClient() {
             if (existingItemIndex > -1) {
               newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newItems[existingItemIndex].quantity + 1 };
             } else {
-              newItems.push({ ...product, quantity: 1 });
+              newItems.push({ ...product, quantity: 1 } as OrderItem);
             }
           }
           return { ...order, items: newItems };
@@ -320,13 +328,14 @@ export default function OrdersClient() {
       });
     
     saveOpenOrders(updatedOrders);
-  }, [currentOrderId, openOrders, toast]);
+  }, [currentOrderId, toast]);
 
   const handleClaimComboItem = useCallback((comboItemId: string) => {
-    const orderIndex = openOrders.findIndex(o => o.id === currentOrderId);
+    const allOrders = getOpenOrders();
+    const orderIndex = allOrders.findIndex(o => o.id === currentOrderId);
     if (orderIndex === -1) return;
     
-    const order = openOrders[orderIndex];
+    const order = allOrders[orderIndex];
     const comboItemIndex = order.items.findIndex(item => item.id === comboItemId);
     if (comboItemIndex === -1) return;
 
@@ -348,7 +357,7 @@ export default function OrdersClient() {
         .every(item => (item.claimedQuantity ?? 0) >= (item.comboItems ?? 1));
 
     if (updatedOrder.status === 'paid' && allCombosClaimed) {
-        const newOrders = openOrders.filter(o => o.id !== currentOrderId);
+        const newOrders = allOrders.filter(o => o.id !== currentOrderId);
         saveOpenOrders(newOrders);
         toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${order.name}" foram entregues.` });
 
@@ -359,15 +368,15 @@ export default function OrdersClient() {
           setCurrentOrderId(null);
         }
     } else {
-        const newOrders = [...openOrders];
+        const newOrders = [...allOrders];
         newOrders[orderIndex] = updatedOrder;
         saveOpenOrders(newOrders);
     }
-  }, [currentOrderId, openOrders, toast]);
+  }, [currentOrderId, toast]);
 
   const updateQuantity = useCallback((productId: string, quantity: number) => {
     if (!currentOrderId) return;
-    const updatedOrders = openOrders.map(order => {
+    const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
           if (quantity <= 0) {
             return { ...order, items: order.items.filter(item => item.id !== productId) };
@@ -382,23 +391,25 @@ export default function OrdersClient() {
         return order;
       });
     saveOpenOrders(updatedOrders);
-  }, [currentOrderId, openOrders]);
+  }, [currentOrderId]);
 
   const removeFromOrder = useCallback((productId: string) => {
     if (!currentOrderId) return;
-    const updatedOrders = openOrders.map(order =>
+    const updatedOrders = getOpenOrders().map(order =>
         order.id === currentOrderId
           ? { ...order, items: order.items.filter(item => item.id !== productId) }
           : order
       );
     saveOpenOrders(updatedOrders);
-  }, [currentOrderId, openOrders]);
+  }, [currentOrderId]);
 
   const orderTotal = useMemo(() => {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
   
   const handlePayment = useCallback((details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
+    const allOrders = getOpenOrders();
+    const currentOrder = allOrders.find(o => o.id === currentOrderId);
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -407,7 +418,7 @@ export default function OrdersClient() {
     const totalPaid = details.payments.reduce((sum, p) => sum + p.amount, 0);
     const effectiveOrderTotal = orderTotal - details.discountAmount;
 
-    if (totalPaid < effectiveOrderTotal) {
+    if (allowPartialPayment && totalPaid < effectiveOrderTotal) {
         const paymentItems: OrderItem[] = details.payments.map(p => ({
             id: `payment-${p.method}-${Date.now()}`, name: `Pagamento Parcial (${p.method})`, price: -p.amount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null
         }));
@@ -419,7 +430,7 @@ export default function OrdersClient() {
         }
         
         const updatedOrder: ActiveOrder = { ...currentOrder, items: [...currentOrder.items, ...paymentItems] };
-        const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
+        const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
         saveOpenOrders(newOpenOrders);
 
         addSale({
@@ -447,15 +458,15 @@ export default function OrdersClient() {
         }],
         status: 'paid'
       };
-      const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? paidOrder : o);
+      const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? paidOrder : o);
       saveOpenOrders(newOpenOrders);
       toast({ title: "Comanda Paga!", description: `A comanda "${currentOrder.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
       setIsPaymentDialogOpen(false);
       return;
     }
 
-    const currentIndex = openOrders.findIndex(o => o.id === currentOrderId);
-    let nextOrdersState = openOrders.filter(order => order.id !== currentOrderId);
+    const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
+    let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
     let nextSelectedOrderId: string | null = null;
     
     if (details.leaveChangeAsCredit && details.changeGiven > 0) {
@@ -482,7 +493,7 @@ export default function OrdersClient() {
     saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
-  }, [currentOrder, openOrders, orderTotal, toast]);
+  }, [currentOrderId, orderTotal, toast, allowPartialPayment]);
   
   if (isLoading) {
     return (
@@ -654,7 +665,7 @@ export default function OrdersClient() {
                     </TabsContent>
                     {displayCategories.map(categoryName => (
                       <TabsContent key={categoryName} value={categoryName} className="mt-0">
-                        <ProductDisplay products={productsByCategoryDisplay[categoryName]} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
+                        <ProductDisplay products={productsByCategoryDisplay[categoryName] || []} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                       </TabsContent>
                     ))}
                   </>

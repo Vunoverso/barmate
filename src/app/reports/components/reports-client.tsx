@@ -4,7 +4,7 @@
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { 
   getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
-  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale, removeFinancialEntry
+  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale, removeFinancialEntry, saveFinancialEntries, saveBankAccount, saveSecondaryCashBox, saveCashRegisterStatus
 } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -69,18 +69,17 @@ export default function ReportsClient() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
 
-  const loadData = async () => {
+  const loadData = () => {
+      setIsMounted(false);
       try {
-          const [fetchedSales, fetchedEntries] = await Promise.all([getSales(), getFinancialEntries()]);
-          setSales(fetchedSales);
-          setFinancialEntries(fetchedEntries);
-
-          // Local data
+          // All data is now local
+          setSales(getSales());
+          setFinancialEntries(getFinancialEntries());
           setSecondaryCashBox(getSecondaryCashBox());
           setBankAccount(getBankAccount());
           setCashStatus(getCashRegisterStatus());
       } catch (error) {
-          console.error("Failed to load report data:", error);
+          console.error("Failed to load report data from localStorage:", error);
           toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os dados para os relatórios.", variant: "destructive" });
       } finally {
           setIsMounted(true);
@@ -199,10 +198,10 @@ export default function ReportsClient() {
 
   const confirmDeleteSale = (sale: Sale) => setSaleToDelete(sale);
 
-  const handleDeleteSale = async () => {
+  const handleDeleteSale = () => {
     if (!saleToDelete) return;
-    await removeSale(saleToDelete.id);
-    await loadData();
+    removeSale(saleToDelete.id);
+    loadData();
     toast({
       title: "Venda Removida",
       description: "A venda e seu impacto financeiro foram revertidos.",
