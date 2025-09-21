@@ -3,7 +3,7 @@
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
 import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry } from '@/lib/constants';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -75,7 +75,7 @@ export default function OrdersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
- const fetchData = () => {
+ const fetchData = useCallback(() => {
     setIsLoading(true);
     setProducts(getProducts());
     setProductCategories(getProductCategories());
@@ -90,14 +90,14 @@ export default function OrdersClient() {
       setCurrentOrderId(null);
     }
     setIsLoading(false);
-  };
+  }, [currentOrderId]);
 
   useEffect(() => {
     fetchData();
     const handleStorageChange = () => fetchData();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [fetchData]);
 
   const filteredOpenOrders = useMemo(() => {
     return openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase()));
@@ -151,11 +151,11 @@ export default function OrdersClient() {
   }, [displayCategories, activeDisplayCategory]);
 
 
-  const handleOpenCreateOrderDialog = () => {
+  const handleOpenCreateOrderDialog = useCallback(() => {
     setIsCreateOrderDialogOpen(true);
-  };
+  }, []);
 
-  const handleCreateNewOrder = (orderName: string) => {
+  const handleCreateNewOrder = useCallback((orderName: string) => {
     const newOrderId = `order-${Date.now()}`;
     const newOrder: ActiveOrder = {
       id: newOrderId,
@@ -167,33 +167,33 @@ export default function OrdersClient() {
     saveOpenOrders(updatedOrders);
     setCurrentOrderId(newOrderId);
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
-  };
+  }, [openOrders, toast]);
 
-  const handleSelectOrder = (orderId: string) => {
+  const handleSelectOrder = useCallback((orderId: string) => {
     setCurrentOrderId(orderId);
-  };
+  }, []);
 
-  const handleEditOrder = () => {
+  const handleEditOrder = useCallback(() => {
     const order = openOrders.find(o => o.id === currentOrderId);
     if (order) {
       setOrderToEdit(order);
     }
-  };
+  }, [openOrders, currentOrderId]);
   
-  const handleSaveOrderName = (orderId: string, newName: string) => {
+  const handleSaveOrderName = useCallback((orderId: string, newName: string) => {
       const updatedOrders = openOrders.map(order => 
           order.id === orderId ? { ...order, name: newName } : order
       );
       saveOpenOrders(updatedOrders);
       setOrderToEdit(null);
       toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
-  };
+  }, [openOrders, toast]);
 
-  const confirmDeleteOrder = (order: ActiveOrder) => {
+  const confirmDeleteOrder = useCallback((order: ActiveOrder) => {
     setOrderToDelete(order);
-  };
+  }, []);
 
-  const handleDeleteOrder = () => {
+  const handleDeleteOrder = useCallback(() => {
     if (!orderToDelete) return;
     
     const orderIdToDelete = orderToDelete.id;
@@ -216,9 +216,9 @@ export default function OrdersClient() {
     setOrderToDelete(null);
     setCurrentOrderId(nextSelectedId);
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
-  };
+  }, [orderToDelete, openOrders, currentOrderId, toast]);
   
-  const handleMergeOrders = (sourceOrderIds: string[]) => {
+  const handleMergeOrders = useCallback((sourceOrderIds: string[]) => {
     if (!currentOrderId || sourceOrderIds.length === 0) return;
 
     let destinationOrder = openOrders.find(o => o.id === currentOrderId);
@@ -247,10 +247,10 @@ export default function OrdersClient() {
     saveOpenOrders(finalOrders);
     setIsMergeDialogOpen(false);
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
-  };
+  }, [currentOrderId, openOrders, toast]);
 
 
-  const handleAddCredit = ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
+  const handleAddCredit = useCallback(({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
     if (!currentOrderId) {
         toast({ title: "Nenhuma comanda selecionada", variant: "destructive" });
         return;
@@ -287,10 +287,10 @@ export default function OrdersClient() {
     }
 
     setIsCreditDialogOpen(false);
-  };
+  }, [currentOrderId, openOrders, toast]);
 
 
-  const addToOrder = (product: Product) => {
+  const addToOrder = useCallback((product: Product) => {
     if (!currentOrderId) {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
       return;
@@ -320,9 +320,9 @@ export default function OrdersClient() {
       });
     
     saveOpenOrders(updatedOrders);
-  };
+  }, [currentOrderId, openOrders, toast]);
 
-  const handleClaimComboItem = (comboItemId: string) => {
+  const handleClaimComboItem = useCallback((comboItemId: string) => {
     const orderIndex = openOrders.findIndex(o => o.id === currentOrderId);
     if (orderIndex === -1) return;
     
@@ -363,9 +363,9 @@ export default function OrdersClient() {
         newOrders[orderIndex] = updatedOrder;
         saveOpenOrders(newOrders);
     }
-  };
+  }, [currentOrderId, openOrders, toast]);
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, quantity: number) => {
     if (!currentOrderId) return;
     const updatedOrders = openOrders.map(order => {
         if (order.id === currentOrderId) {
@@ -382,9 +382,9 @@ export default function OrdersClient() {
         return order;
       });
     saveOpenOrders(updatedOrders);
-  };
+  }, [currentOrderId, openOrders]);
 
-  const removeFromOrder = (productId: string) => {
+  const removeFromOrder = useCallback((productId: string) => {
     if (!currentOrderId) return;
     const updatedOrders = openOrders.map(order =>
         order.id === currentOrderId
@@ -392,13 +392,13 @@ export default function OrdersClient() {
           : order
       );
     saveOpenOrders(updatedOrders);
-  };
+  }, [currentOrderId, openOrders]);
 
   const orderTotal = useMemo(() => {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
   
-  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
+  const handlePayment = useCallback((details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -482,7 +482,7 @@ export default function OrdersClient() {
     saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
-  };
+  }, [currentOrder, openOrders, orderTotal, toast]);
   
   if (isLoading) {
     return (
