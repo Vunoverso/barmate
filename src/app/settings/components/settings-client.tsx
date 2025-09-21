@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { ProductCategory, TransactionFees, Product, Sale, ActiveOrder, FinancialEntry, CashRegisterStatus, SecondaryCashBox, BankAccount } from '@/types';
-import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, getTransactionFees, saveTransactionFees, getProducts, getSales, getOpenOrders, getFinancialEntries, getCashRegisterStatus, getSecondaryCashBox, getBankAccount, saveProducts, saveSales, saveOpenOrders, saveFinancialEntries, saveCashRegisterStatus, saveSecondaryCashBox, saveBankAccount } from '@/lib/constants';
+import type { ProductCategory, TransactionFees } from '@/types';
+import { DATA_KEYS, getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, getTransactionFees, saveTransactionFees } from '@/lib/constants';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -282,18 +282,13 @@ export default function SettingsClient() {
   const handleExportData = () => {
     toast({ title: "Exportando dados...", description: "Aguarde enquanto preparamos seu backup." });
     try {
-        const backupData = {
-            'barmate_productCategories_v2': getProductCategories(),
-            'barmate_products_v2': getProducts(),
-            'barmate_sales_v2': getSales(),
-            'barmate_openOrders_v2': getOpenOrders(),
-            'barmate_financialEntries_v2': getFinancialEntries(),
-            'barmate_cashRegisterStatus_v2': getCashRegisterStatus(),
-            'barmate_secondaryCashBox_v2': getSecondaryCashBox(),
-            'barmate_bankAccount_v2': getBankAccount(),
-            'barmate_transactionFees_v2': getTransactionFees(),
-            'barName': localStorage.getItem('barName') || 'BarMate',
-        };
+        const backupData: { [key: string]: any } = {};
+        DATA_KEYS.forEach(key => {
+            const data = localStorage.getItem(key);
+            if (data !== null) {
+                backupData[key] = JSON.parse(data);
+            }
+        });
 
         const jsonString = JSON.stringify(backupData, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
@@ -333,16 +328,17 @@ export default function SettingsClient() {
               throw new Error("Arquivo de backup inválido.");
             }
             
-            if (data['barmate_productCategories_v2']) saveProductCategories(data['barmate_productCategories_v2']);
-            if (data['barmate_products_v2']) saveProducts(data['barmate_products_v2']);
-            if (data['barmate_sales_v2']) saveSales(data['barmate_sales_v2']);
-            if (data['barmate_openOrders_v2']) saveOpenOrders(data['barmate_openOrders_v2']);
-            if (data['barmate_financialEntries_v2']) saveFinancialEntries(data['barmate_financialEntries_v2']);
-            if (data['barmate_cashRegisterStatus_v2']) saveCashRegisterStatus(data['barmate_cashRegisterStatus_v2']);
-            if (data['barmate_secondaryCashBox_v2']) saveSecondaryCashBox(data['barmate_secondaryCashBox_v2']);
-            if (data['barmate_bankAccount_v2']) saveBankAccount(data['barmate_bankAccount_v2']);
-            if (data['barmate_transactionFees_v2']) saveTransactionFees(data['barmate_transactionFees_v2']);
-            if (data['barName']) localStorage.setItem('barName', data['barName']);
+            // Clean all existing data before import
+            DATA_KEYS.forEach(key => {
+                localStorage.removeItem(key);
+            });
+
+            // Import new data
+            Object.keys(data).forEach(key => {
+                if (DATA_KEYS.includes(key)) {
+                    localStorage.setItem(key, JSON.stringify(data[key]));
+                }
+            });
             
             toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
 
