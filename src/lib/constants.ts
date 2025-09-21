@@ -1,5 +1,5 @@
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, type LucideIcon, CreditCard, QrCode, Wallet } from 'lucide-react';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, type LucideIcon } from 'lucide-react';
 
 // --- LocalStorage Helper Functions ---
 const saveToLocalStorage = <T,>(key: string, value: T, options?: { silent?: boolean }) => {
@@ -43,6 +43,7 @@ const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
 const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
 const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
 const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
+const KEY_COUNTER_SALE_ITEMS = 'barmate_counterSaleOrderItems_v2';
 
 
 // --- INITIAL DATA ---
@@ -1086,12 +1087,10 @@ export const migrateOldData = () => {
         const oldData = localStorage.getItem(oldKey);
         if (oldData) {
             try {
-                // Check if new key already has data, if so, don't overwrite
-                if (!localStorage.getItem(newKey)) {
-                    localStorage.setItem(newKey, oldData);
-                }
-                localStorage.removeItem(oldKey);
+                // SOBRESCREVE a chave nova com os dados da chave antiga
+                localStorage.setItem(newKey, oldData);
                 console.log(`Migrado: ${oldKey} -> ${newKey}`);
+                localStorage.removeItem(oldKey); // Remove a chave antiga após a migração bem-sucedida
             } catch (e) {
                 console.error(`Falha ao migrar ${oldKey}:`, e);
             }
@@ -1108,8 +1107,8 @@ export const migrateOldData = () => {
     migrateKey('barmate_secondaryCashBox', KEY_SECONDARY_CASH_BOX);
     migrateKey('barmate_bankAccount', KEY_BANK_ACCOUNT);
     migrateKey('barmate_transactionFees', KEY_TRANSACTION_FEES);
-    migrateKey('barmate_counterSaleOrderItems', 'barmate_counterSaleOrderItems_v2');
-
+    migrateKey('barmate_counterSaleOrderItems', KEY_COUNTER_SALE_ITEMS);
+    migrateKey('barName', 'barName'); // barName não mudou de versão, mas garantimos que está aqui.
 
     localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
     console.log("Migração de dados concluída.");
