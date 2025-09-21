@@ -118,27 +118,40 @@ export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
         console.error('Error fetching open orders:', error);
         return [];
     }
-    return (data as any) || [];
+    const orders = (data || []).map(o => ({ ...o, createdAt: new Date(o.created_at) }));
+    return orders as ActiveOrder[];
 };
 
 export const saveOpenOrders = async (orders: ActiveOrder[], options?: { silent?: boolean }) => {
     if (!supabase) return;
-    
-    // Ensure every order has a user_id for upserting
-    const ordersWithUserId = orders.map(o => ({
-        ...o,
-        user_id: o.user_id || '1', // Default user_id if not present
-        created_at: o.createdAt.toISOString()
-    }));
 
-    const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(ordersWithUserId as any);
+    const ordersToUpsert = orders.map(o => {
+        return {
+            ...o,
+            user_id: o.user_id || '1',
+            created_at: new Date(o.createdAt).toISOString(),
+            items: JSON.parse(JSON.stringify(o.items)), // Deep copy and ensure it's valid JSON
+        };
+    });
+
+    // We can remove the `createdAt` property from the object as it is not a column in the database
+    // and `created_at` is already mapped. This is to avoid Supabase errors.
+    const sanitizedOrders = ordersToUpsert.map(({ createdAt, ...rest }) => rest);
+
+
+    const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(sanitizedOrders as any);
+
     if (error) {
         console.error('Error saving open orders:', error);
+        // Throw the error so the calling function can catch it
+        throw new Error(`Error saving open orders: ${JSON.stringify(error)}`);
     }
+
     if (!options?.silent) {
         window.dispatchEvent(new StorageEvent('storage', { key: TBL_OPEN_ORDERS }));
     }
 };
+
 
 export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
     if (!supabase) return [];

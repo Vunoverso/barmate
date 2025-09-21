@@ -177,10 +177,16 @@ export default function OrdersClient() {
       user_id: '1'
     };
     const updatedOrders = [...openOrders, newOrder];
-    await saveOpenOrders(updatedOrders);
-    setCurrentOrderId(newOrderId);
-    await fetchData(); 
-    toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
+    
+    try {
+        await saveOpenOrders(updatedOrders);
+        setCurrentOrderId(newOrderId);
+        await fetchData(); 
+        toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
+    } catch(e) {
+        console.error("Failed to save new order:", e);
+        toast({ title: "Erro ao Criar Comanda", description: "Não foi possível salvar a nova comanda na nuvem.", variant: "destructive"});
+    }
   };
 
   const handleSelectOrder = (orderId: string) => {
@@ -1182,5 +1188,6 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
 
 
