@@ -62,11 +62,13 @@ export const getProductCategories = async (): Promise<ProductCategory[]> => {
     return data || [];
 }
 
-export const saveProductCategories = async (categories: ProductCategory[]) => {
+export const saveProductCategories = async (categories: ProductCategory[], options?: { silent?: boolean }) => {
     if (!supabase) return;
     const { error } = await supabase.from(TBL_PRODUCT_CATEGORIES).upsert(categories);
     if (error) console.error('Error saving product categories:', error);
-     window.dispatchEvent(new StorageEvent('storage', { key: TBL_PRODUCT_CATEGORIES }));
+    if (!options?.silent) {
+        window.dispatchEvent(new StorageEvent('storage', { key: TBL_PRODUCT_CATEGORIES }));
+    }
 }
 
 export const getProducts = async (): Promise<Product[]> => {
@@ -79,11 +81,13 @@ export const getProducts = async (): Promise<Product[]> => {
     return data || [];
 }
 
-export const saveProducts = async (products: Product[]) => {
+export const saveProducts = async (products: Product[], options?: { silent?: boolean }) => {
     if (!supabase) return;
     const { error } = await supabase.from(TBL_PRODUCTS).upsert(products);
     if (error) console.error('Error saving products:', error);
-     window.dispatchEvent(new StorageEvent('storage', { key: TBL_PRODUCTS }));
+    if (!options?.silent) {
+        window.dispatchEvent(new StorageEvent('storage', { key: TBL_PRODUCTS }));
+    }
 }
 
 export const getSales = async (): Promise<Sale[]> => {
@@ -116,11 +120,13 @@ export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
     return (data as any) || [];
 };
 
-export const saveOpenOrders = async (orders: ActiveOrder[]) => {
+export const saveOpenOrders = async (orders: ActiveOrder[], options?: { silent?: boolean }) => {
     if (!supabase) return;
     const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(orders as any);
     if (error) console.error('Error saving open orders:', error);
-     window.dispatchEvent(new StorageEvent('storage', { key: TBL_OPEN_ORDERS }));
+    if (!options?.silent) {
+        window.dispatchEvent(new StorageEvent('storage', { key: TBL_OPEN_ORDERS }));
+    }
 };
 
 export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
@@ -170,7 +176,7 @@ export const addSale = async (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp
   await saveSales(updatedSales);
 
   const fees = getTransactionFees();
-  const newFinancialEntries: FinancialEntry[] = [];
+  const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
 
   newSale.payments.forEach(p => {
     let feeRate = 0;
@@ -182,12 +188,10 @@ export const addSale = async (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp
       const feeAmount = p.amount * (feeRate / 100);
       if (feeAmount > 0) {
         newFinancialEntries.push({
-          id: `fee-${newSale.id}-${p.method}-${Date.now()}`,
           description: `Taxa ${p.method} venda #${newSale.id.slice(-6)}`,
           amount: feeAmount,
           type: 'expense',
           source: 'bank_account',
-          timestamp: new Date(),
           saleId: newSale.id,
           adjustmentId: null
         });
@@ -214,7 +218,7 @@ export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id' | 'time
     const currentEntries = await getFinancialEntries();
     const entriesToAdd = Array.isArray(entry) ? entry : [entry];
 
-    const newEntries = entriesToAdd.map(e => ({
+    const newEntries: FinancialEntry[] = entriesToAdd.map(e => ({
         ...e,
         id: `fin-${Date.now()}-${Math.random()}`,
         timestamp: new Date()
