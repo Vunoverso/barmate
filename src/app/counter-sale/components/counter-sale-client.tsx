@@ -39,28 +39,20 @@ export default function CounterSaleClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
-  const loadInitialData = async () => {
+  const loadInitialData = () => {
     setIsLoading(true);
-    try {
-        const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
-        setProducts(fetchedProducts);
-        setProductCategories(fetchedCategories);
-        
-        const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-        if (storedOrderItems) {
-          try {
-            setCurrentOrderItems(JSON.parse(storedOrderItems));
-          } catch (error) {
-            console.error("Failed to parse counter sale items from localStorage", error);
-            localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-          }
-        }
-    } catch (error) {
-        console.error("Failed to load products/categories", error);
-        toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os produtos.", variant: "destructive" });
-    } finally {
-        setIsLoading(false);
+    setProducts(getProducts());
+    setProductCategories(getProductCategories());
+    const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+    if (storedOrderItems) {
+      try {
+        setCurrentOrderItems(JSON.parse(storedOrderItems));
+      } catch (error) {
+        console.error("Failed to parse counter sale items from localStorage", error);
+        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+      }
     }
+    setIsLoading(false);
   };
   
   useEffect(() => {

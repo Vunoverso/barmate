@@ -72,22 +72,13 @@ export default function CashRegisterClient() {
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
   const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
 
-  const loadInitialData = async () => {
+  const loadInitialData = () => {
     setIsLoading(true);
-    try {
-        // Sync (local)
-        setSecondaryCashBox(getSecondaryCashBox());
-        setBankAccount(getBankAccount());
-        setCashStatus(getCashRegisterStatus());
-        // Async (cloud)
-        const fetchedSales = await getSales();
-        setSales(fetchedSales);
-    } catch (e) {
-        console.error("Failed to load cash register data", e);
-        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados.", variant: "destructive" });
-    } finally {
-        setIsLoading(false);
-    }
+    setSecondaryCashBox(getSecondaryCashBox());
+    setBankAccount(getBankAccount());
+    setCashStatus(getCashRegisterStatus());
+    setSales(getSales());
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -101,7 +92,7 @@ export default function CashRegisterClient() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []); // Empty dependency array ensures this runs only once on mount and sets up the listener
+  }, []); 
 
 
   const handleOpenCashRegister = (openingBalance: number) => {
@@ -285,7 +276,6 @@ export default function CashRegisterClient() {
       transferredToCaixa02: finalCashAmount,
     };
     
-    // This remains local as it's a log, not critical state.
     const allClosedSessions = JSON.parse(localStorage.getItem(CLOSED_SESSIONS_KEY) || '[]');
     allClosedSessions.push(closedSession);
     localStorage.setItem(CLOSED_SESSIONS_KEY, JSON.stringify(allClosedSessions));

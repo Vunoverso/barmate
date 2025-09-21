@@ -52,42 +52,29 @@ export default function ProductManagement() {
 
   const { toast } = useToast();
 
-  const fetchData = async () => {
+  const fetchData = () => {
     setIsLoading(true);
-    try {
-      const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
-      setProducts(fetchedProducts);
-      setProductCategories(fetchedCategories);
-    } catch (error) {
-      console.error("Failed to fetch data:", error);
-      toast({
-        title: "Erro ao carregar dados",
-        description: "Não foi possível buscar os produtos e categorias.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    setProducts(getProducts());
+    setProductCategories(getProductCategories());
+    setIsLoading(false);
   };
 
   useEffect(() => {
     fetchData();
-    window.addEventListener('storage', () => fetchData()); 
-    return () => window.removeEventListener('storage', () => fetchData());
+    window.addEventListener('storage', fetchData); 
+    return () => window.removeEventListener('storage', fetchData);
   }, []);
 
-  const handleAddProduct = async (product: Omit<Product, 'id'>) => {
+  const handleAddProduct = (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
-    await saveProducts(updatedProducts);
-    // No need to set state here, the storage event listener will trigger a re-fetch
+    saveProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
-  const handleEditProduct = async (updatedProduct: Product) => {
+  const handleEditProduct = (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-    await saveProducts(updatedProducts);
-    // No need to set state here, the storage event listener will trigger a re-fetch
+    saveProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
 
@@ -101,15 +88,14 @@ export default function ProductManagement() {
     setIsDialogOpen(true);
   };
   
-  const handleDeleteProduct = async (productId: string) => {
+  const handleDeleteProduct = (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
-    await saveProducts(updatedProducts);
+    saveProducts(updatedProducts);
     setProductToDelete(null);
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
     }
-     // No need to set state here, the storage event listener will trigger a re-fetch
   };
 
   const filteredProducts = useMemo(() => {

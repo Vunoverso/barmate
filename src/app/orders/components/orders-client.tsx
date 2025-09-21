@@ -75,33 +75,21 @@ export default function OrdersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
- const fetchData = async () => {
+ const fetchData = () => {
     setIsLoading(true);
-    try {
-      const [fetchedProducts, fetchedCategories, fetchedOrders] = await Promise.all([
-        getProducts(),
-        getProductCategories(),
-        getOpenOrders()
-      ]);
-      
-      setProducts(fetchedProducts);
-      setProductCategories(fetchedCategories);
-      setOpenOrders(fetchedOrders);
+    setProducts(getProducts());
+    setProductCategories(getProductCategories());
+    const fetchedOrders = getOpenOrders();
+    setOpenOrders(fetchedOrders);
 
-      if (currentOrderId && !fetchedOrders.some(o => o.id === currentOrderId)) {
-        setCurrentOrderId(fetchedOrders.length > 0 ? fetchedOrders[0].id : null);
-      } else if (!currentOrderId && fetchedOrders.length > 0) {
-        setCurrentOrderId(fetchedOrders[0].id);
-      } else if (fetchedOrders.length === 0) {
-        setCurrentOrderId(null);
-      }
-
-    } catch (error) {
-        console.error("Failed to fetch initial data", error);
-        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados da nuvem.", variant: "destructive" });
-    } finally {
-        setIsLoading(false);
+    if (currentOrderId && !fetchedOrders.some(o => o.id === currentOrderId)) {
+      setCurrentOrderId(fetchedOrders.length > 0 ? fetchedOrders[0].id : null);
+    } else if (!currentOrderId && fetchedOrders.length > 0) {
+      setCurrentOrderId(fetchedOrders[0].id);
+    } else if (fetchedOrders.length === 0) {
+      setCurrentOrderId(null);
     }
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -167,7 +155,7 @@ export default function OrdersClient() {
     setIsCreateOrderDialogOpen(true);
   };
 
-  const handleCreateNewOrder = async (orderName: string) => {
+  const handleCreateNewOrder = (orderName: string) => {
     const newOrderId = `order-${Date.now()}`;
     const newOrder: ActiveOrder = {
       id: newOrderId,
@@ -176,16 +164,9 @@ export default function OrdersClient() {
       createdAt: new Date(),
     };
     const updatedOrders = [...openOrders, newOrder];
-    
-    try {
-        await saveOpenOrders(updatedOrders);
-        setCurrentOrderId(newOrderId);
-        await fetchData(); 
-        toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
-    } catch(e) {
-        console.error("Failed to save new order:", e);
-        toast({ title: "Erro ao Criar Comanda", description: "Não foi possível salvar a nova comanda na nuvem.", variant: "destructive"});
-    }
+    saveOpenOrders(updatedOrders);
+    setCurrentOrderId(newOrderId);
+    toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
   };
 
   const handleSelectOrder = (orderId: string) => {
@@ -199,13 +180,12 @@ export default function OrdersClient() {
     }
   };
   
-  const handleSaveOrderName = async (orderId: string, newName: string) => {
+  const handleSaveOrderName = (orderId: string, newName: string) => {
       const updatedOrders = openOrders.map(order => 
           order.id === orderId ? { ...order, name: newName } : order
       );
-      await saveOpenOrders(updatedOrders);
+      saveOpenOrders(updatedOrders);
       setOrderToEdit(null);
-      await fetchData();
       toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
   };
 
@@ -213,7 +193,7 @@ export default function OrdersClient() {
     setOrderToDelete(order);
   };
 
-  const handleDeleteOrder = async () => {
+  const handleDeleteOrder = () => {
     if (!orderToDelete) return;
     
     const orderIdToDelete = orderToDelete.id;
@@ -232,14 +212,13 @@ export default function OrdersClient() {
       nextSelectedId = currentOrderId;
     }
     
-    await saveOpenOrders(updatedOrders);
+    saveOpenOrders(updatedOrders);
     setOrderToDelete(null);
     setCurrentOrderId(nextSelectedId);
-    await fetchData();
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
   };
   
-  const handleMergeOrders = async (sourceOrderIds: string[]) => {
+  const handleMergeOrders = (sourceOrderIds: string[]) => {
     if (!currentOrderId || sourceOrderIds.length === 0) return;
 
     let destinationOrder = openOrders.find(o => o.id === currentOrderId);
@@ -265,14 +244,13 @@ export default function OrdersClient() {
         .filter(o => !sourceOrderIds.includes(o.id))
         .map(o => o.id === currentOrderId ? updatedOrder : o);
             
-    await saveOpenOrders(finalOrders);
+    saveOpenOrders(finalOrders);
     setIsMergeDialogOpen(false);
-    await fetchData();
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
   };
 
 
-  const handleAddCredit = async ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
+  const handleAddCredit = ({ amount, description, source }: { amount: number; description: string; source: 'permuta' | 'dinheiro' | 'cartao' | 'pix' }) => {
     if (!currentOrderId) {
         toast({ title: "Nenhuma comanda selecionada", variant: "destructive" });
         return;
@@ -294,7 +272,7 @@ export default function OrdersClient() {
     const newName = `${orderToUpdate.name.replace(' (Com Crédito)', '').replace(' (Crédito de Troco)', '')} (Com Crédito)`;
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
     const newOpenOrders = openOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
-    await saveOpenOrders(newOpenOrders);
+    saveOpenOrders(newOpenOrders);
 
     if (source !== 'permuta') {
         addFinancialEntry({
@@ -309,11 +287,10 @@ export default function OrdersClient() {
     }
 
     setIsCreditDialogOpen(false);
-    await fetchData();
   };
 
 
-  const addToOrder = async (product: Product) => {
+  const addToOrder = (product: Product) => {
     if (!currentOrderId) {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
       return;
@@ -342,11 +319,10 @@ export default function OrdersClient() {
         return order;
       });
     
-    await saveOpenOrders(updatedOrders);
-    await fetchData();
+    saveOpenOrders(updatedOrders);
   };
 
-  const handleClaimComboItem = async (comboItemId: string) => {
+  const handleClaimComboItem = (comboItemId: string) => {
     const orderIndex = openOrders.findIndex(o => o.id === currentOrderId);
     if (orderIndex === -1) return;
     
@@ -373,8 +349,7 @@ export default function OrdersClient() {
 
     if (updatedOrder.status === 'paid' && allCombosClaimed) {
         const newOrders = openOrders.filter(o => o.id !== currentOrderId);
-        await saveOpenOrders(newOrders);
-        await fetchData();
+        saveOpenOrders(newOrders);
         toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${order.name}" foram entregues.` });
 
         if (newOrders.length > 0) {
@@ -386,12 +361,11 @@ export default function OrdersClient() {
     } else {
         const newOrders = [...openOrders];
         newOrders[orderIndex] = updatedOrder;
-        await saveOpenOrders(newOrders);
-        await fetchData();
+        saveOpenOrders(newOrders);
     }
   };
 
-  const updateQuantity = async (productId: string, quantity: number) => {
+  const updateQuantity = (productId: string, quantity: number) => {
     if (!currentOrderId) return;
     const updatedOrders = openOrders.map(order => {
         if (order.id === currentOrderId) {
@@ -407,26 +381,24 @@ export default function OrdersClient() {
         }
         return order;
       });
-    await saveOpenOrders(updatedOrders);
-    await fetchData();
+    saveOpenOrders(updatedOrders);
   };
 
-  const removeFromOrder = async (productId: string) => {
+  const removeFromOrder = (productId: string) => {
     if (!currentOrderId) return;
     const updatedOrders = openOrders.map(order =>
         order.id === currentOrderId
           ? { ...order, items: order.items.filter(item => item.id !== productId) }
           : order
       );
-    await saveOpenOrders(updatedOrders);
-    await fetchData();
+    saveOpenOrders(updatedOrders);
   };
 
   const orderTotal = useMemo(() => {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
   
-  const handlePayment = async (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
+  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     if (!currentOrder) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
@@ -448,7 +420,7 @@ export default function OrdersClient() {
         
         const updatedOrder: ActiveOrder = { ...currentOrder, items: [...currentOrder.items, ...paymentItems] };
         const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
-        await saveOpenOrders(newOpenOrders);
+        saveOpenOrders(newOpenOrders);
 
         addSale({
             items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), originalAmount: totalPaid, discountAmount: details.discountAmount, totalAmount: totalPaid - details.discountAmount, payments: details.payments, changeGiven: 0, status: 'completed', cashTendered: details.cashTendered
@@ -456,11 +428,10 @@ export default function OrdersClient() {
         
         toast({ title: "Pagamento Parcial Registrado", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
         setIsPaymentDialogOpen(false);
-        await fetchData();
         return;
     }
     
-    await addSale({
+    addSale({
       items: currentOrderItems, originalAmount: currentOrderItems.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0), discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
     });
 
@@ -477,10 +448,9 @@ export default function OrdersClient() {
         status: 'paid'
       };
       const newOpenOrders = openOrders.map(o => o.id === currentOrderId ? paidOrder : o);
-      await saveOpenOrders(newOpenOrders);
+      saveOpenOrders(newOpenOrders);
       toast({ title: "Comanda Paga!", description: `A comanda "${currentOrder.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
       setIsPaymentDialogOpen(false);
-      await fetchData();
       return;
     }
 
@@ -509,9 +479,8 @@ export default function OrdersClient() {
             });
          }
     }
-    await saveOpenOrders(nextOrdersState);
+    saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
-    await fetchData();
     setIsPaymentDialogOpen(false);
   };
   
@@ -1183,11 +1152,3 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
-
-    
-
-    
-
-
-
-

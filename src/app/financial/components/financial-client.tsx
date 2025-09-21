@@ -126,31 +126,21 @@ export default function FinancialClient() {
     defaultValues: { description: '', amount: 0, source: 'daily_cash' },
   });
 
-  const loadData = async () => {
-    try {
-      // Local sync data
-      setSecondaryCashBox(getSecondaryCashBox());
-      setBankAccount(getBankAccount());
-      setCashStatus(getCashRegisterStatus());
-      
-      // Cloud async data
-      const [fetchedEntries, fetchedSales] = await Promise.all([getFinancialEntries(), getSales()]);
-      setEntries(fetchedEntries);
-      setSales(fetchedSales);
-    } catch(e) {
-      console.error("Error loading data", e);
-      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível ler os dados.", variant: "destructive" });
-    }
+  const loadData = () => {
+    setSecondaryCashBox(getSecondaryCashBox());
+    setBankAccount(getBankAccount());
+    setCashStatus(getCashRegisterStatus());
+    setEntries(getFinancialEntries());
+    setSales(getSales());
   };
   
   useEffect(() => {
-    loadData().then(() => {
-        setDateRange({
-            from: addDays(new Date(), -30),
-            to: new Date(),
-        });
-        setIsMounted(true);
+    loadData();
+    setDateRange({
+        from: addDays(new Date(), -30),
+        to: new Date(),
     });
+    setIsMounted(true);
 
     window.addEventListener('storage', loadData);
 
@@ -322,7 +312,7 @@ export default function FinancialClient() {
     proceedWithAddExpense(data);
   };
 
-  const proceedWithAddExpense = async (data: ExpenseFormData) => {
+  const proceedWithAddExpense = (data: ExpenseFormData) => {
     if (data.source === 'daily_cash') {
       if (cashStatus.status !== 'open') {
         toast({ title: "Ação Bloqueada", description: "O caixa diário está fechado. Não é possível registrar uma despesa dele.", variant: "destructive" });
@@ -368,8 +358,7 @@ export default function FinancialClient() {
       saveBankAccount({ balance: bankAccount.balance - data.amount });
     }
 
-    await addFinancialEntry(newEntry as FinancialEntry);
-    await loadData();
+    addFinancialEntry(newEntry as FinancialEntry);
     
     toast({ title: "Despesa Adicionada", description: "Sua nova despesa foi registrada com sucesso." });
     setIsExpenseDialogOpen(false);
@@ -419,7 +408,7 @@ export default function FinancialClient() {
     setIsEditBankAccountDialogOpen(false);
   }
 
-  const handleDeleteEntry = async () => {
+  const handleDeleteEntry = () => {
     if (!entryToDelete) return;
     
     if(entryToDelete.saleId) {
@@ -445,16 +434,14 @@ export default function FinancialClient() {
        // This case needs to be defined if income entries can be deleted
     }
 
-    await removeFinancialEntry(entryToDelete.id);
-    await loadData();
+    removeFinancialEntry(entryToDelete.id);
     toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
     setEntryToDelete(null);
   };
   
-  const handleDeleteSale = async () => {
+  const handleDeleteSale = () => {
     if (!saleToDelete) return;
-    await removeSale(saleToDelete.id);
-    await loadData();
+    removeSale(saleToDelete.id);
     toast({
       title: "Venda Removida",
       description: "A venda e seu impacto financeiro foram revertidos.",

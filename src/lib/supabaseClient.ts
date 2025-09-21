@@ -5,9 +5,6 @@ import type { Database } from '@/types/supabase'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// A conexão com o Supabase é reativada.
-// O aplicativo usará um modelo híbrido: dados transacionais na nuvem e dados de sessão/configuração localmente.
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient<Database>(supabaseUrl, supabaseAnonKey)
-  : null;
-
+// A conexão com o Supabase está desativada para forçar o modo 100% local.
+// Todos os dados serão lidos e salvos no localStorage do navegador.
+export const supabase = null;
