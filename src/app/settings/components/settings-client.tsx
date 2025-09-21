@@ -286,7 +286,16 @@ export default function SettingsClient() {
         DATA_KEYS.forEach(key => {
             const data = localStorage.getItem(key);
             if (data !== null) {
-                backupData[key] = JSON.parse(data);
+                try {
+                  // Ensure barName which is not JSON is handled
+                  if (key === 'barName') {
+                    backupData[key] = data;
+                  } else {
+                    backupData[key] = JSON.parse(data);
+                  }
+                } catch(e) {
+                   console.warn(`Could not parse localStorage item ${key}, skipping.`, e);
+                }
             }
         });
 
@@ -328,15 +337,13 @@ export default function SettingsClient() {
               throw new Error("Arquivo de backup inválido.");
             }
             
-            // Clean all existing data before import
-            DATA_KEYS.forEach(key => {
-                localStorage.removeItem(key);
-            });
-
-            // Import new data
             Object.keys(data).forEach(key => {
                 if (DATA_KEYS.includes(key)) {
-                    localStorage.setItem(key, JSON.stringify(data[key]));
+                    if (key === 'barName' && typeof data[key] === 'string') {
+                      localStorage.setItem(key, data[key]);
+                    } else {
+                      localStorage.setItem(key, JSON.stringify(data[key]));
+                    }
                 }
             });
             
@@ -600,3 +607,5 @@ export default function SettingsClient() {
     </>
   );
 }
+
+    

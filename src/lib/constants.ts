@@ -29,6 +29,9 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     return JSON.parse(storedValue);
   } catch (error) {
     console.error(`Error parsing localStorage key "${key}":`, error);
+    // If parsing fails, return the default value to prevent app crash
+    // And also save the default value to reset the corrupted data
+    saveToLocalStorage(key, defaultValue);
     return defaultValue;
   }
 };
@@ -61,43 +64,83 @@ const KEY_COUNTER_SALE_ITEMS = 'barmate_counterSaleOrderItems_v2';
 
 
 // --- INITIAL DATA (CLEAN STATE) ---
-export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [];
-export const INITIAL_PRODUCTS: Product[] = [];
+export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
+  { id: 'cat_cervejas', name: 'Cervejas', iconName: 'Beer' },
+  { id: 'cat_vinhos', name: 'Vinhos', iconName: 'Wine' },
+  { id: 'cat_destilados', name: 'Drinks', iconName: 'Martini' },
+  { id: 'cat_sem_alcool', name: 'Sem Álcool', iconName: 'Coffee' },
+  { id: 'cat_porcoes', name: 'Porções', iconName: 'UtensilsCrossed' },
+  { id: 'cat_sobremesas', name: 'Sobremesas', iconName: 'CakeSlice' },
+  { id: 'cat_outros', name: 'Outros', iconName: 'Package' },
+];
+export const INITIAL_PRODUCTS: Product[] = [
+    // Cervejas
+    { id: 'prod_1', name: 'Cerveja Pilsen 600ml', price: 12.00, categoryId: 'cat_cervejas', stock: 100 },
+    { id: 'prod_2', name: 'Cerveja IPA Long Neck', price: 15.00, categoryId: 'cat_cervejas', stock: 50 },
+    { id: 'prod_3', name: 'Cerveja de Trigo 500ml', price: 18.00, categoryId: 'cat_cervejas', stock: 40 },
+    { id: 'prod_22', name: 'Balde com 6 Pilsen Long Neck', price: 60.00, categoryId: 'cat_cervejas', stock: 20, isCombo: true, comboItems: 6},
+
+    // Vinhos
+    { id: 'prod_4', name: 'Taça de Vinho Tinto Seco', price: 25.00, categoryId: 'cat_vinhos', stock: null },
+    { id: 'prod_5', name: 'Garrafa de Vinho Branco Suave', price: 80.00, categoryId: 'cat_vinhos', stock: 10 },
+
+    // Drinks
+    { id: 'prod_6', name: 'Caipirinha de Limão', price: 18.00, categoryId: 'cat_destilados', stock: null },
+    { id: 'prod_7', name: 'Gin Tônica', price: 28.00, categoryId: 'cat_destilados', stock: null },
+    { id: 'prod_8', name: 'Mojito', price: 22.00, categoryId: 'cat_destilados', stock: null },
+
+    // Sem Álcool
+    { id: 'prod_9', name: 'Refrigerante Lata', price: 6.00, categoryId: 'cat_sem_alcool', stock: 200 },
+    { id: 'prod_10', name: 'Água com Gás', price: 4.00, categoryId: 'cat_sem_alcool', stock: 150 },
+    { id: 'prod_11', name: 'Suco Natural de Laranja', price: 9.00, categoryId: 'cat_sem_alcool', stock: null },
+    { id: 'prod_12', name: 'Café Espresso', price: 5.00, categoryId: 'cat_sem_alcool', stock: null },
+
+    // Porções
+    { id: 'prod_13', name: 'Batata Frita com Cheddar e Bacon', price: 35.00, categoryId: 'cat_porcoes', stock: null },
+    { id: 'prod_14', name: 'Anéis de Cebola', price: 28.00, categoryId: 'cat_porcoes', stock: null },
+    { id: 'prod_15', name: 'Frango a Passarinho', price: 45.00, categoryId: 'cat_porcoes', stock: null },
+    { id: 'prod_16', name: 'Tábua de Frios', price: 60.00, categoryId: 'cat_porcoes', stock: 20 },
+
+    // Sobremesas
+    { id: 'prod_17', name: 'Petit Gâteau', price: 22.00, categoryId: 'cat_sobremesas', stock: 30 },
+    { id: 'prod_18', name: 'Pudim de Leite', price: 15.00, categoryId: 'cat_sobremesas', stock: 25 },
+
+    // Outros
+    { id: 'prod_19', name: 'Dose de Whisky 12 Anos', price: 30.00, categoryId: 'cat_outros', stock: null },
+    { id: 'prod_20', name: 'Couvert Artístico', price: 10.00, categoryId: 'cat_outros', stock: null },
+    { id: 'prod_21', name: 'Taxa de Serviço (10%)', price: 0, categoryId: 'cat_outros', stock: null },
+];
 export const INITIAL_SALES: Sale[] = [];
 export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
 export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
 export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0 };
-export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditRate: 0, pixRate: 0 };
+export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 1.99, creditRate: 4.99, pixRate: 0.99 };
 
 // --- Data Migration ---
-const MIGRATION_FLAG_KEY = 'barmate_migration_v2_completed';
+const MIGRATION_FLAG_KEY = 'barmate_migration_v2_completed_final';
 
 export const migrateOldData = () => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || localStorage.getItem(MIGRATION_FLAG_KEY)) {
         return;
     }
-
-    if (localStorage.getItem(MIGRATION_FLAG_KEY)) {
-        return;
-    }
-
-    console.log("Checking for old data to migrate...");
 
     const migrateKey = (oldKey: string, newKey: string) => {
-        const oldData = localStorage.getItem(oldKey);
-        if (oldData) {
+        const oldDataRaw = localStorage.getItem(oldKey);
+        if (oldDataRaw) {
             try {
-                localStorage.setItem(newKey, oldData);
-                console.log(`Successfully migrated: ${oldKey} -> ${newKey}`);
-                localStorage.removeItem(oldKey); 
+                // If old data exists, always overwrite the new key with it.
+                localStorage.setItem(newKey, oldDataRaw);
+                localStorage.removeItem(oldKey);
+                console.log(`Successfully migrated data from ${oldKey} to ${newKey}`);
             } catch (e) {
                 console.error(`Failed to migrate ${oldKey}:`, e);
             }
         }
     };
     
+    // Previous key names used in the app's history
     const oldKeys = [
         'barmate_productCategories',
         'barmate_products',
@@ -124,17 +167,21 @@ export const migrateOldData = () => {
         KEY_COUNTER_SALE_ITEMS
     ];
 
+    console.log("Checking for old data to migrate...");
     for (let i = 0; i < oldKeys.length; i++) {
         migrateKey(oldKeys[i], newKeys[i]);
     }
     
-    const barName = localStorage.getItem('barName');
-    if (barName) {
-        console.log("Bar name preserved.");
+    // Special handling for barName which is not JSON
+    const oldBarName = localStorage.getItem('barName');
+    if (oldBarName) {
+        // No versioning on barName, just ensure it exists
+        console.log("Bar name found, preserved.");
     }
-
+    
     localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
     console.log("Data migration check completed.");
+    window.dispatchEvent(new Event('storage')); // Trigger a storage event to reload data in components
 };
 
 
@@ -343,3 +390,5 @@ export const formatCurrency = (value: number) => {
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }
+
+    
