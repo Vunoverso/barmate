@@ -1,5 +1,4 @@
 
-
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
@@ -24,17 +23,12 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     }
     const storedValue = window.localStorage.getItem(key);
     if (storedValue === null || storedValue === 'undefined') {
-        // If nothing is in storage, save the default value and return it.
-        saveToLocalStorage(key, defaultValue, { silent: true });
         return defaultValue;
     }
     try {
         return JSON.parse(storedValue);
     } catch (error) {
         console.error(`Error parsing localStorage key "${key}":`, error);
-        // If parsing fails, remove the invalid item, save the default, and return it.
-        window.localStorage.removeItem(key); 
-        saveToLocalStorage(key, defaultValue, { silent: true });
         return defaultValue;
     }
 };
@@ -196,12 +190,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     { "id": "prod-1758309928671", "name": "Burguesa Lata", "price": 5, "categoryId": "cat_alcoolicas", "stock": 0, "isCombo": false },
     { "id": "prod-1758322472705", "name": "Caipirinha Menta", "price": 16, "categoryId": "cat_caipirinhas_1756501145617", "stock": 0, "isCombo": false }
 ];
-export const INITIAL_SALES: Sale[] = [
-    { "id": "csale-1751039929910", "items": [ { "id": "12", "name": "Coxinha Requeijão", "price": 5, "categoryId": "cat_lanches", "stock": 40, "quantity": 4, "categoryName": "Lanches", "categoryIconName": "UtensilsCrossed" }, { "id": "prod-1751039867904", "name": "Guaraná 2l", "price": 8, "categoryId": "cat_nao_alcoolicas", "stock": 0, "quantity": 1, "categoryName": "Bebidas Não Alcoólicas", "categoryIconName": "Martini" } ], "totalAmount": 28, "originalAmount": 28, "discountAmount": 0, "timestamp": new Date("2025-06-27T15:58:49.910Z"), "changeGiven": 0, "status": "completed", "payments": [ { "method": "cash", "amount": 28 } ] },
-    { "id": "sale-1751046031618", "items": [ { "id": "13", "name": "Coxinha Frango", "price": 7, "categoryId": "cat_lanches", "stock": 50, "quantity": 1, "categoryName": "Lanches", "categoryIconName": "UtensilsCrossed" } ], "originalAmount": 7, "discountAmount": 0, "totalAmount": 7, "timestamp": new Date("2025-06-27T17:40:31.618Z"), "changeGiven": 1, "status": "completed", "payments": [ { "method": "cash", "amount": 7 } ] },
-    { "id": "csale-1751049361261", "items": [ { "id": "13", "name": "Coxinha Frango", "price": 7, "categoryId": "cat_lanches", "stock": 50, "quantity": 1, "categoryName": "Lanches", "categoryIconName": "UtensilsCrossed" }, { "id": "prod-1751046072790", "name": "Caçulinha", "price": 3, "categoryId": "cat_nao_alcoolicas", "stock": 0, "quantity": 1, "categoryName": "Bebidas Não Alcoólicas", "categoryIconName": "Martini" } ], "originalAmount": 10, "discountAmount": 0, "totalAmount": 10, "timestamp": new Date("2025-06-27T18:36:01.261Z"), "changeGiven": 0, "status": "completed", "payments": [ { "method": "cash", "amount": 10 } ] },
-    { "id": "csale-1751053677353", "items": [ { "id": "prod-1751053571441", "name": "Dose, Smirnoff, Chanceller", "price": 8, "categoryId": "cat_doses_1756500736217", "stock": 0, "quantity": 1, "categoryName": ".Doses", "categoryIconName": "Martini" } ], "originalAmount": 8, "discountAmount": 0, "totalAmount": 8, "timestamp": new Date("2025-06-27T19:47:57.353Z"), "changeGiven": 0, "status": "completed", "payments": [ { "method": "cash", "amount": 8 } ] }
-];
+export const INITIAL_SALES: Sale[] = [];
 export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
@@ -211,31 +200,49 @@ export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditR
 
 // --- Data Accessor Functions ---
 
-export const getProductCategories = (): ProductCategory[] => getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
+export const getProductCategories = (): ProductCategory[] => {
+    return getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
+};
 export const saveProductCategories = (categories: ProductCategory[], options: { silent?: boolean } = {}) => saveToLocalStorage(PRODUCT_CATEGORIES_KEY, categories, options);
 
-export const getProducts = (): Product[] => getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
+export const getProducts = (): Product[] => {
+    return getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
+};
 export const saveProducts = (products: Product[], options: { silent?: boolean } = {}) => saveToLocalStorage(PRODUCTS_KEY, products, options);
 
-export const getSales = (): Sale[] => getFromLocalStorage(SALES_KEY, INITIAL_SALES);
+export const getSales = (): Sale[] => {
+    return getFromLocalStorage(SALES_KEY, INITIAL_SALES);
+};
 export const saveSales = (sales: Sale[], options: { silent?: boolean } = {}) => saveToLocalStorage(SALES_KEY, sales, options);
 
-export const getOpenOrders = (): ActiveOrder[] => getFromLocalStorage(OPEN_ORDERS_KEY, INITIAL_OPEN_ORDERS);
+export const getOpenOrders = (): ActiveOrder[] => {
+    return getFromLocalStorage(OPEN_ORDERS_KEY, INITIAL_OPEN_ORDERS);
+};
 export const saveOpenOrders = (orders: ActiveOrder[], options: { silent?: boolean } = {}) => saveToLocalStorage(OPEN_ORDERS_KEY, orders, options);
 
-export const getFinancialEntries = (): FinancialEntry[] => getFromLocalStorage(FINANCIAL_ENTRIES_KEY, INITIAL_FINANCIAL_ENTRIES);
+export const getFinancialEntries = (): FinancialEntry[] => {
+    return getFromLocalStorage(FINANCIAL_ENTRIES_KEY, INITIAL_FINANCIAL_ENTRIES);
+};
 export const saveFinancialEntries = (entries: FinancialEntry[], options: { silent?: boolean } = {}) => saveToLocalStorage(FINANCIAL_ENTRIES_KEY, entries, options);
 
-export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(CASH_REGISTER_STATUS_KEY, INITIAL_CASH_REGISTER_STATUS);
+export const getCashRegisterStatus = (): CashRegisterStatus => {
+    return getFromLocalStorage(CASH_REGISTER_STATUS_KEY, INITIAL_CASH_REGISTER_STATUS);
+};
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options: { silent?: boolean } = {}) => saveToLocalStorage(CASH_REGISTER_STATUS_KEY, status, options);
 
-export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(SECONDARY_CASH_BOX_KEY, INITIAL_SECONDARY_CASH_BOX);
+export const getSecondaryCashBox = (): SecondaryCashBox => {
+    return getFromLocalStorage(SECONDARY_CASH_BOX_KEY, INITIAL_SECONDARY_CASH_BOX);
+};
 export const saveSecondaryCashBox = (box: SecondaryCashBox, options: { silent?: boolean } = {}) => saveToLocalStorage(SECONDARY_CASH_BOX_KEY, box, options);
 
-export const getBankAccount = (): BankAccount => getFromLocalStorage(BANK_ACCOUNT_KEY, INITIAL_BANK_ACCOUNT);
+export const getBankAccount = (): BankAccount => {
+    return getFromLocalStorage(BANK_ACCOUNT_KEY, INITIAL_BANK_ACCOUNT);
+};
 export const saveBankAccount = (account: BankAccount, options: { silent?: boolean } = {}) => saveToLocalStorage(BANK_ACCOUNT_KEY, account, options);
 
-export const getTransactionFees = (): TransactionFees => getFromLocalStorage(TRANSACTION_FEES_KEY, INITIAL_TRANSACTION_FEES);
+export const getTransactionFees = (): TransactionFees => {
+    return getFromLocalStorage(TRANSACTION_FEES_KEY, INITIAL_TRANSACTION_FEES);
+};
 export const saveTransactionFees = (fees: TransactionFees, options: { silent?: boolean } = {}) => saveToLocalStorage(TRANSACTION_FEES_KEY, fees, options);
 
 
