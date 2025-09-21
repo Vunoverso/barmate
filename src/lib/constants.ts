@@ -1,7 +1,7 @@
 
 
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
 // --- LocalStorage Helper Functions ---
 const saveToLocalStorage = <T,>(key: string, value: T) => {
@@ -24,7 +24,6 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
   try {
     const storedValue = window.localStorage.getItem(key);
     if (storedValue === null || storedValue === 'undefined') {
-      // Se não encontrar nada, salva o valor padrão e o retorna.
       saveToLocalStorage(key, defaultValue);
       return defaultValue;
     }
@@ -49,7 +48,7 @@ const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
 
 
 // --- INITIAL DATA ---
-const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
+export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
     {
       "id": "cat_alcoolicas",
       "name": "Bebidas Alcoólicas",
@@ -102,7 +101,7 @@ const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
     }
   ];
 
-const INITIAL_PRODUCTS: Product[] = [
+export const INITIAL_PRODUCTS: Product[] = [
     {
       "id": "4",
       "name": "Refrigerante Lata",
@@ -1067,13 +1066,13 @@ const INITIAL_PRODUCTS: Product[] = [
     }
   ];
 
-const INITIAL_SALES: Sale[] = [];
-const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
-const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
-const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
-const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
-const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0 };
-const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditRate: 0, pixRate: 0 };
+export const INITIAL_SALES: Sale[] = [];
+export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
+export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
+export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
+export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
+export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0 };
+export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditRate: 0, pixRate: 0 };
 
 
 // --- Data Accessor Functions ---
@@ -1094,16 +1093,16 @@ export const getFinancialEntries = (): FinancialEntry[] => getFromLocalStorage(K
 export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
 
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
-export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status);
+export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
 
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent?: boolean }) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box);
+export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent?: boolean }) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box, options);
 
 export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-export const saveBankAccount = (account: BankAccount, options?: { silent?: boolean }) => saveToLocalStorage(KEY_BANK_ACCOUNT, account);
+export const saveBankAccount = (account: BankAccount, options?: { silent?: boolean }) => saveToLocalStorage(KEY_BANK_ACCOUNT, account, options);
 
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
-export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(KEY_TRANSACTION_FEES, fees);
+export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
 
 
 // --- Business Logic Functions ---
@@ -1251,3 +1250,8 @@ export const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return 'R$ 0,00';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
+
+// Dummy function to satisfy type checker, will not be used
+export function getFromSupabase() {
+  return Promise.resolve({ data: [], error: null });
+}

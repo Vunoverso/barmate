@@ -3,7 +3,7 @@
 
 import type { ProductCategory, TransactionFees, Product, Sale, ActiveOrder, FinancialEntry, CashRegisterStatus, SecondaryCashBox, BankAccount } from '@/types';
 import { getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, getTransactionFees, saveTransactionFees, getProducts, getSales, getOpenOrders, getFinancialEntries, getCashRegisterStatus, getSecondaryCashBox, getBankAccount, saveProducts, saveSales, saveOpenOrders, saveFinancialEntries, saveCashRegisterStatus, saveSecondaryCashBox, saveBankAccount } from '@/lib/constants';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -187,22 +187,22 @@ export default function SettingsClient() {
   
   const { toast } = useToast();
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     const storedName = localStorage.getItem('barName') || 'BarMate';
     setBarName(storedName);
     setInitialBarName(storedName);
     setTransactionFees(getTransactionFees());
     setProductCategories(getProductCategories());
-  }
+  }, []);
 
   useEffect(() => {
     loadData();
     setIsMounted(true);
-    window.addEventListener('storage', () => loadData());
+    window.addEventListener('storage', loadData);
     return () => {
-      window.removeEventListener('storage', () => loadData());
+      window.removeEventListener('storage', loadData);
     }
-  }, []);
+  }, [loadData]);
 
   const handleSaveBarName = (e?: React.FormEvent) => {
     e?.preventDefault();

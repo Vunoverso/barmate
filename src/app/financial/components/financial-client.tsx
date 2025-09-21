@@ -11,7 +11,7 @@ import {
   removeFinancialEntry,
   addFinancialEntry
 } from '@/lib/constants';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
@@ -126,13 +126,13 @@ export default function FinancialClient() {
     defaultValues: { description: '', amount: 0, source: 'daily_cash' },
   });
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setSecondaryCashBox(getSecondaryCashBox());
     setBankAccount(getBankAccount());
     setCashStatus(getCashRegisterStatus());
     setEntries(getFinancialEntries());
     setSales(getSales());
-  };
+  }, []);
   
   useEffect(() => {
     loadData();
@@ -147,7 +147,7 @@ export default function FinancialClient() {
     return () => {
       window.removeEventListener('storage', loadData);
     };
-  }, []);
+  }, [loadData]);
   
  const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;

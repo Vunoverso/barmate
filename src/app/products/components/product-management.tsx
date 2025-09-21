@@ -3,7 +3,7 @@
 
 import type { Product, ProductCategory } from '@/types';
 import { getProducts, saveProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, saveProductCategories } from '@/lib/constants';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -52,43 +52,43 @@ export default function ProductManagement() {
 
   const { toast } = useToast();
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     setIsLoading(true);
     setProducts(getProducts());
     setProductCategories(getProductCategories());
     setIsLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
     window.addEventListener('storage', fetchData); 
     return () => window.removeEventListener('storage', fetchData);
-  }, []);
+  }, [fetchData]);
 
-  const handleAddProduct = (product: Omit<Product, 'id'>) => {
+  const handleAddProduct = useCallback((product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
     saveProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
-  };
+  }, [products, toast]);
 
-  const handleEditProduct = (updatedProduct: Product) => {
+  const handleEditProduct = useCallback((updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
     saveProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
-  };
+  }, [products, toast]);
 
-  const openEditDialog = (product: Product) => {
+  const openEditDialog = useCallback((product: Product) => {
     setEditingProduct(product);
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const openAddDialog = () => {
+  const openAddDialog = useCallback(() => {
     setEditingProduct(null);
     setIsDialogOpen(true);
-  };
+  }, []);
   
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = useCallback((productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
     saveProducts(updatedProducts);
@@ -96,7 +96,7 @@ export default function ProductManagement() {
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
     }
-  };
+  }, [products, toast]);
 
   const filteredProducts = useMemo(() => {
     return products
@@ -104,9 +104,9 @@ export default function ProductManagement() {
     .filter(p => categoryFilter ? p.categoryId === categoryFilter : true);
   }, [products, searchTerm, categoryFilter]);
 
-  const getCategoryNameById = (categoryId: string) => {
+  const getCategoryNameById = useCallback((categoryId: string) => {
     return productCategories.find(cat => cat.id === categoryId)?.name || categoryId;
-  };
+  }, [productCategories]);
 
   if (isLoading) {
     return <p>Carregando produtos...</p>;
