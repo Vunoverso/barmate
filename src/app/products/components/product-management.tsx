@@ -69,7 +69,6 @@ export default function ProductManagement() {
   };
 
   useEffect(() => {
-    setIsLoading(true);
     fetchData();
     window.addEventListener('storage', fetchData); 
     return () => window.removeEventListener('storage', fetchData);

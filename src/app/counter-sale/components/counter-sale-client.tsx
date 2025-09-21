@@ -67,9 +67,7 @@ export default function CounterSaleClient() {
 
     const handleStorageChange = (event: StorageEvent) => {
       // Reload data if relevant keys are changed in another tab
-      if (event.key === PRODUCTS_KEY || event.key === PRODUCT_CATEGORIES_KEY || event.key === LOCAL_STORAGE_COUNTER_SALE_KEY) {
-        loadInitialData();
-      }
+      loadInitialData();
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
