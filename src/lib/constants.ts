@@ -3,11 +3,13 @@
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 
+// --- LocalStorage Helper Functions ---
 const saveToLocalStorage = <T,>(key: string, value: T, options: { silent?: boolean } = {}) => {
     if (typeof window === 'undefined') return;
     try {
         const serializedValue = JSON.stringify(value);
         window.localStorage.setItem(key, serializedValue);
+        // Only dispatch event if not silent
         if (!options.silent) {
           window.dispatchEvent(new StorageEvent('storage', { key }));
         }
@@ -22,6 +24,7 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     }
     const storedValue = window.localStorage.getItem(key);
     if (storedValue === null || storedValue === 'undefined') {
+        // If nothing is in storage, save the default value and return it.
         saveToLocalStorage(key, defaultValue, { silent: true });
         return defaultValue;
     }
@@ -29,11 +32,15 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
         return JSON.parse(storedValue);
     } catch (error) {
         console.error(`Error parsing localStorage key "${key}":`, error);
+        // If parsing fails, remove the invalid item, save the default, and return it.
         window.localStorage.removeItem(key); 
+        saveToLocalStorage(key, defaultValue, { silent: true });
         return defaultValue;
     }
 };
 
+
+// --- DATA KEYS ---
 const PRODUCT_CATEGORIES_KEY = 'barmate_productCategories_v2';
 const PRODUCTS_KEY = 'barmate_products_v2';
 const SALES_KEY = 'barmate_sales_v2';
@@ -44,6 +51,8 @@ const SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox_v2';
 const BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
 const TRANSACTION_FEES_KEY = 'barmate_transactionFees_v2';
 
+
+// --- INITIAL DATA ---
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
     { "id": "cat_alcoolicas", "name": "Bebidas Alcoólicas", "iconName": "Beer" },
     { "id": "cat_nao_alcoolicas", "name": "Bebidas Não Alcoólicas", "iconName": "Martini" },
@@ -200,34 +209,53 @@ export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
 export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0 };
 export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditRate: 0, pixRate: 0 };
 
+// --- Data Accessor Functions ---
+
 export const getProductCategories = (): ProductCategory[] => getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
 export const saveProductCategories = (categories: ProductCategory[], options: { silent?: boolean } = {}) => saveToLocalStorage(PRODUCT_CATEGORIES_KEY, categories, options);
+
 export const getProducts = (): Product[] => getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
 export const saveProducts = (products: Product[], options: { silent?: boolean } = {}) => saveToLocalStorage(PRODUCTS_KEY, products, options);
+
 export const getSales = (): Sale[] => getFromLocalStorage(SALES_KEY, INITIAL_SALES);
 export const saveSales = (sales: Sale[], options: { silent?: boolean } = {}) => saveToLocalStorage(SALES_KEY, sales, options);
+
 export const getOpenOrders = (): ActiveOrder[] => getFromLocalStorage(OPEN_ORDERS_KEY, INITIAL_OPEN_ORDERS);
 export const saveOpenOrders = (orders: ActiveOrder[], options: { silent?: boolean } = {}) => saveToLocalStorage(OPEN_ORDERS_KEY, orders, options);
+
 export const getFinancialEntries = (): FinancialEntry[] => getFromLocalStorage(FINANCIAL_ENTRIES_KEY, INITIAL_FINANCIAL_ENTRIES);
 export const saveFinancialEntries = (entries: FinancialEntry[], options: { silent?: boolean } = {}) => saveToLocalStorage(FINANCIAL_ENTRIES_KEY, entries, options);
+
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(CASH_REGISTER_STATUS_KEY, INITIAL_CASH_REGISTER_STATUS);
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options: { silent?: boolean } = {}) => saveToLocalStorage(CASH_REGISTER_STATUS_KEY, status, options);
+
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(SECONDARY_CASH_BOX_KEY, INITIAL_SECONDARY_CASH_BOX);
 export const saveSecondaryCashBox = (box: SecondaryCashBox, options: { silent?: boolean } = {}) => saveToLocalStorage(SECONDARY_CASH_BOX_KEY, box, options);
+
 export const getBankAccount = (): BankAccount => getFromLocalStorage(BANK_ACCOUNT_KEY, INITIAL_BANK_ACCOUNT);
 export const saveBankAccount = (account: BankAccount, options: { silent?: boolean } = {}) => saveToLocalStorage(BANK_ACCOUNT_KEY, account, options);
+
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(TRANSACTION_FEES_KEY, INITIAL_TRANSACTION_FEES);
 export const saveTransactionFees = (fees: TransactionFees, options: { silent?: boolean } = {}) => saveToLocalStorage(TRANSACTION_FEES_KEY, fees, options);
 
 
-export const addSale = (sale: Sale) => {
+// --- Business Logic Functions ---
+
+export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Date }) => {
+  const newSale: Sale = {
+    ...sale,
+    id: `sale-${Date.now()}`,
+    timestamp: sale.timestamp || new Date(),
+  };
+
   const currentSales = getSales();
-  const updatedSales = [...currentSales, sale];
+  const updatedSales = [...currentSales, newSale];
+  saveSales(updatedSales);
 
   const fees = getTransactionFees();
   const newFinancialEntries: FinancialEntry[] = [];
 
-  sale.payments.forEach(p => {
+  newSale.payments.forEach(p => {
     let feeRate = 0;
     if (p.method === 'debit') feeRate = fees.debitRate;
     if (p.method === 'credit') feeRate = fees.creditRate;
@@ -237,13 +265,13 @@ export const addSale = (sale: Sale) => {
       const feeAmount = p.amount * (feeRate / 100);
       if (feeAmount > 0) {
         newFinancialEntries.push({
-          id: `fee-${sale.id}-${p.method}-${Date.now()}`,
-          description: `Taxa ${p.method} venda #${sale.id.slice(-6)}`,
+          id: `fee-${newSale.id}-${p.method}-${Date.now()}`,
+          description: `Taxa ${p.method} venda #${newSale.id.slice(-6)}`,
           amount: feeAmount,
           type: 'expense',
           source: 'bank_account',
           timestamp: new Date(),
-          saleId: sale.id,
+          saleId: newSale.id,
           adjustmentId: null
         });
       }
@@ -254,8 +282,6 @@ export const addSale = (sale: Sale) => {
     const currentFinancials = getFinancialEntries();
     saveFinancialEntries([...currentFinancials, ...newFinancialEntries]);
   }
-  
-  saveSales(updatedSales);
 };
 
 export const removeSale = (saleId: string) => {
@@ -268,9 +294,9 @@ export const removeSale = (saleId: string) => {
   saveFinancialEntries(updatedFinancials);
 }
 
-export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id'>) => {
+export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> & { timestamp?: Date }) => {
     const currentEntries = getFinancialEntries();
-    const newEntry = { ...entry, id: `fin-${Date.now()}` };
+    const newEntry = { ...entry, id: `fin-${Date.now()}`, timestamp: entry.timestamp || new Date() };
     saveFinancialEntries([...currentEntries, newEntry]);
 };
 
@@ -279,6 +305,8 @@ export const removeFinancialEntry = (entryId: string) => {
   const updatedEntries = currentEntries.filter(e => e.id !== entryId);
   saveFinancialEntries(updatedEntries);
 }
+
+// --- UI Helpers ---
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Wallet

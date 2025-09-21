@@ -31,3 +31,8 @@ export function downloadAsCSV(headers: string[], data: (string | number)[][], fi
   link.click();
   document.body.removeChild(link);
 }
+
+// Dummy function to satisfy type checker, will not be used
+export function getFromSupabase() {
+  return Promise.resolve({ data: [], error: null });
+}

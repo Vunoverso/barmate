@@ -39,36 +39,41 @@ export default function CounterSaleClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
-  useEffect(() => {
-    const loadInitialData = () => {
-        setIsLoading(true);
-        try {
-            setProducts(getProducts());
-            setProductCategories(getProductCategories());
-            
-            const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-            if (storedOrderItems) {
-              try {
-                setCurrentOrderItems(JSON.parse(storedOrderItems));
-              } catch (error) {
-                console.error("Failed to parse counter sale items from localStorage", error);
-                localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-              }
-            }
-        } catch (error) {
-            console.error("Failed to load products/categories", error);
-            toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os produtos.", variant: "destructive" });
-        } finally {
-            setIsLoading(false);
+  const loadInitialData = () => {
+    setIsLoading(true);
+    try {
+        setProducts(getProducts());
+        setProductCategories(getProductCategories());
+        
+        const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+        if (storedOrderItems) {
+          try {
+            setCurrentOrderItems(JSON.parse(storedOrderItems));
+          } catch (error) {
+            console.error("Failed to parse counter sale items from localStorage", error);
+            localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+          }
         }
-    };
-    
+    } catch (error) {
+        console.error("Failed to load products/categories", error);
+        toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os produtos.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
     loadInitialData();
 
-    const handleStorageChange = () => loadInitialData();
+    const handleStorageChange = (event: StorageEvent) => {
+      // Reload data if relevant keys are changed in another tab
+      if (event.key === PRODUCTS_KEY || event.key === PRODUCT_CATEGORIES_KEY || event.key === LOCAL_STORAGE_COUNTER_SALE_KEY) {
+        loadInitialData();
+      }
+    };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_COUNTER_SALE_KEY, JSON.stringify(currentOrderItems));
@@ -81,12 +86,20 @@ export default function CounterSaleClient() {
   const productsByCategoryDisplay = useMemo(() => groupProductsByCategoryId(filteredProducts, productCategories), [filteredProducts, productCategories]);
   const displayCategories = useMemo(() => {
     if (!productCategories.length) return [];
-    return Object.keys(productsByCategoryDisplay).sort();
+    const categoryOrder = productCategories.map(c => c.name);
+    return Object.keys(productsByCategoryDisplay).sort((a, b) => {
+        const indexA = categoryOrder.indexOf(a);
+        const indexB = categoryOrder.indexOf(b);
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+    });
   }, [productsByCategoryDisplay, productCategories]);
 
 
   useEffect(() => {
-    if (displayCategories.length > 0 && (activeDisplayCategory === 'Todos' || !displayCategories.includes(activeDisplayCategory))) {
+    // Set the first category as active if the current one is not available
+    if (displayCategories.length > 0 && !displayCategories.includes(activeDisplayCategory)) {
         setActiveDisplayCategory(displayCategories[0]);
     }
   }, [displayCategories, activeDisplayCategory]);
@@ -139,7 +152,6 @@ export default function CounterSaleClient() {
       totalAmount: finalTotal,
       payments: details.payments,
       changeGiven: details.changeGiven,
-      timestamp: new Date(),
       status: 'completed',
       cashTendered: details.cashTendered,
       leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
@@ -190,23 +202,17 @@ export default function CounterSaleClient() {
           <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
             <div className="w-full overflow-x-auto pb-2 px-4">
                 <TabsList className="whitespace-nowrap">
-                  <TabsTrigger value="Todos">Todos</TabsTrigger>
                   {displayCategories.map(categoryName => (
                     <TabsTrigger key={categoryName} value={categoryName}>{categoryName}</TabsTrigger>
                   ))}
                 </TabsList>
             </div>
             <ScrollArea className="flex-grow p-4">
-                <>
-                  <TabsContent value="Todos" className="mt-0">
-                    <ProductDisplay products={filteredProducts} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
+                {displayCategories.map(categoryName => (
+                  <TabsContent key={categoryName} value={categoryName} className="mt-0">
+                    <ProductDisplay products={productsByCategoryDisplay[categoryName] || []} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                   </TabsContent>
-                  {displayCategories.map(categoryName => (
-                    <TabsContent key={categoryName} value={categoryName} className="mt-0">
-                      <ProductDisplay products={productsByCategoryDisplay[categoryName]} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
-                    </TabsContent>
-                  ))}
-                </>
+                ))}
             </ScrollArea>
           </Tabs>
         </Card>

@@ -4,9 +4,18 @@ import type { Database } from './supabase';
 
 export type { Database } from './supabase';
 
-export type ProductCategory = Tables<'product_categories'>;
+export type ProductCategory = {
+  id: string;
+  name: string;
+  iconName: string;
+};
 
-export interface Product extends Omit<Tables<'products'>, 'is_combo' | 'combo_items'> {
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  categoryId: string;
+  stock?: number | null;
   isCombo?: boolean | null;
   comboItems?: number | null;
 }
@@ -27,7 +36,8 @@ export interface Payment {
   amount: number;
 }
 
-export interface Sale extends Omit<Tables<'sales'>, 'total_amount' | 'original_amount' | 'discount_amount' | 'cash_tendered' | 'change_given' | 'leave_change_as_credit' | 'timestamp' | 'items' | 'payments'> {
+export interface Sale {
+  id: string;
   timestamp: Date;
   items: OrderItem[];
   payments: Payment[];
@@ -36,13 +46,17 @@ export interface Sale extends Omit<Tables<'sales'>, 'total_amount' | 'original_a
   discountAmount: number;
   cashTendered?: number | null;
   changeGiven?: number | null;
+  status: 'completed' | 'pending';
   leaveChangeAsCredit?: boolean | null;
 }
 
 
-export interface ActiveOrder extends Omit<Tables<'active_orders'>, 'created_at' | 'items'> {
+export interface ActiveOrder {
+  id: string;
+  name: string;
   createdAt: Date;
   items: OrderItem[];
+  status?: 'open' | 'paid';
 }
 
 export interface CashAdjustment {
@@ -72,8 +86,15 @@ export interface BankAccount {
 }
 
 
-export interface FinancialEntry extends Omit<Tables<'financial_entries'>, 'timestamp'> {
+export interface FinancialEntry {
+    id: string;
+    description: string;
+    amount: number;
+    type: "expense" | "income";
+    source: "daily_cash" | "secondary_cash" | "bank_account";
     timestamp: Date;
+    saleId: string | null;
+    adjustmentId: string | null;
 }
 
 export interface TransactionFees {
