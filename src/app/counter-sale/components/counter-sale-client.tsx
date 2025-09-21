@@ -59,7 +59,9 @@ export default function CounterSaleClient() {
     loadInitialData();
 
     const handleStorageChange = (event: StorageEvent) => {
-      loadInitialData();
+      if (event.key === 'barmate_products_v2' || event.key === 'barmate_productCategories_v2' || event.key === LOCAL_STORAGE_COUNTER_SALE_KEY) {
+        loadInitialData();
+      }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);

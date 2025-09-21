@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Banknote, Edit, Check, CreditCard, Merge, Wallet } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -418,7 +418,7 @@ export default function OrdersClient() {
     const totalPaid = details.payments.reduce((sum, p) => sum + p.amount, 0);
     const effectiveOrderTotal = orderTotal - details.discountAmount;
 
-    if (allowPartialPayment && totalPaid < effectiveOrderTotal) {
+    if (totalPaid < effectiveOrderTotal) { // Simplified check for partial payment
         const paymentItems: OrderItem[] = details.payments.map(p => ({
             id: `payment-${p.method}-${Date.now()}`, name: `Pagamento Parcial (${p.method})`, price: -p.amount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null
         }));
@@ -493,7 +493,7 @@ export default function OrdersClient() {
     saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
-  }, [currentOrderId, orderTotal, toast, allowPartialPayment]);
+  }, [currentOrderId, orderTotal, toast]);
   
   if (isLoading) {
     return (
