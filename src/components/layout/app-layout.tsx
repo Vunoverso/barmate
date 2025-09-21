@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { ReactNode } from 'react';
@@ -12,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { migrateOldData } from '@/lib/constants';
 
 interface NavItem {
   href: string;
@@ -39,6 +38,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const version = "v1.3.2"; // Version number
 
   useEffect(() => {
+    // Run data migration once on app load
+    migrateOldData();
+    
     const handleStorageChange = () => {
         const storedName = localStorage.getItem('barName') || 'BarMate';
         setBarName(storedName);

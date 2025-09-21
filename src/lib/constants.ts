@@ -1,6 +1,5 @@
-
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, type LucideIcon, Wallet, CreditCard, QrCode } from 'lucide-react';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, type LucideIcon, CreditCard, QrCode, Wallet } from 'lucide-react';
 
 // --- LocalStorage Helper Functions ---
 const saveToLocalStorage = <T,>(key: string, value: T, options?: { silent?: boolean }) => {
@@ -24,8 +23,6 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
   try {
     const storedValue = window.localStorage.getItem(key);
     if (storedValue === null || storedValue === 'undefined') {
-      // Don't save default value here to prevent overwriting on first load in SSR environments.
-      // The calling components should handle initialization.
       return defaultValue;
     }
     return JSON.parse(storedValue);
@@ -1075,6 +1072,49 @@ export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
 export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0 };
 export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditRate: 0, pixRate: 0 };
 
+// --- Data Migration ---
+const MIGRATION_FLAG_KEY = 'barmate_migration_v2_completed';
+
+export const migrateOldData = () => {
+    if (typeof window === 'undefined' || localStorage.getItem(MIGRATION_FLAG_KEY)) {
+        return;
+    }
+
+    console.log("Iniciando migração de dados do localStorage...");
+
+    const migrateKey = (oldKey: string, newKey: string) => {
+        const oldData = localStorage.getItem(oldKey);
+        if (oldData) {
+            try {
+                // Check if new key already has data, if so, don't overwrite
+                if (!localStorage.getItem(newKey)) {
+                    localStorage.setItem(newKey, oldData);
+                }
+                localStorage.removeItem(oldKey);
+                console.log(`Migrado: ${oldKey} -> ${newKey}`);
+            } catch (e) {
+                console.error(`Falha ao migrar ${oldKey}:`, e);
+            }
+        }
+    };
+
+    // Lista de chaves antigas e novas
+    migrateKey('barmate_productCategories', KEY_PRODUCT_CATEGORIES);
+    migrateKey('barmate_products', KEY_PRODUCTS);
+    migrateKey('barmate_sales', KEY_SALES);
+    migrateKey('barmate_openOrders', KEY_OPEN_ORDERS);
+    migrateKey('barmate_financialEntries', KEY_FINANCIAL_ENTRIES);
+    migrateKey('barmate_cashRegisterStatus', KEY_CASH_REGISTER_STATUS);
+    migrateKey('barmate_secondaryCashBox', KEY_SECONDARY_CASH_BOX);
+    migrateKey('barmate_bankAccount', KEY_BANK_ACCOUNT);
+    migrateKey('barmate_transactionFees', KEY_TRANSACTION_FEES);
+    migrateKey('barmate_counterSaleOrderItems', 'barmate_counterSaleOrderItems_v2');
+
+
+    localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
+    console.log("Migração de dados concluída.");
+};
+
 
 // --- Data Accessor Functions ---
 
@@ -1165,12 +1205,34 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
 
 export const removeSale = (saleId: string) => {
   const currentSales = getSales();
+  const saleToRemove = currentSales.find(s => s.id === saleId);
+  if (!saleToRemove) return;
+
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
 
   const currentFinancials = getFinancialEntries();
-  const updatedFinancials = currentFinancials.filter(e => e.saleId !== saleId);
-  saveFinancialEntries(updatedFinancials);
+  const entriesFromThisSale = currentFinancials.filter(e => e.saleId === saleId);
+  const otherEntries = currentFinancials.filter(e => e.saleId !== saleId);
+
+  // Revert balance changes from this sale
+  let currentBank = getBankAccount();
+  let bankBalanceChanged = false;
+  
+  entriesFromThisSale.forEach(entry => {
+    if (entry.source === 'bank_account') {
+        currentBank.balance = entry.type === 'income' 
+            ? currentBank.balance - entry.amount 
+            : currentBank.balance + entry.amount;
+        bankBalanceChanged = true;
+    }
+  });
+
+  if (bankBalanceChanged) {
+      saveBankAccount(currentBank);
+  }
+
+  saveFinancialEntries(otherEntries);
 }
 
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
