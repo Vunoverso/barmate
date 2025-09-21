@@ -1,4 +1,5 @@
 
+
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -122,8 +123,18 @@ export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
 
 export const saveOpenOrders = async (orders: ActiveOrder[], options?: { silent?: boolean }) => {
     if (!supabase) return;
-    const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(orders as any);
-    if (error) console.error('Error saving open orders:', error);
+    
+    // Ensure every order has a user_id for upserting
+    const ordersWithUserId = orders.map(o => ({
+        ...o,
+        user_id: o.user_id || '1', // Default user_id if not present
+        created_at: o.createdAt.toISOString()
+    }));
+
+    const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(ordersWithUserId as any);
+    if (error) {
+        console.error('Error saving open orders:', error);
+    }
     if (!options?.silent) {
         window.dispatchEvent(new StorageEvent('storage', { key: TBL_OPEN_ORDERS }));
     }

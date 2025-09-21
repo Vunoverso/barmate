@@ -174,6 +174,7 @@ export default function OrdersClient() {
       name: orderName,
       items: [],
       createdAt: new Date(),
+      user_id: '1'
     };
     const updatedOrders = [...openOrders, newOrder];
     await saveOpenOrders(updatedOrders);
@@ -1181,4 +1182,5 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
 

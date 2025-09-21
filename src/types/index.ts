@@ -1,4 +1,5 @@
 
+
 import type { LucideIcon } from 'lucide-react';
 import type { Database } from './supabase';
 
@@ -57,6 +58,7 @@ export interface ActiveOrder {
   createdAt: Date;
   items: OrderItem[];
   status?: 'open' | 'paid';
+  user_id?: string;
 }
 
 export interface CashAdjustment {
