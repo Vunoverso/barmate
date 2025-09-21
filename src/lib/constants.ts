@@ -1,7 +1,7 @@
 
+
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
-import { supabase } from './supabaseClient';
 
 // --- LocalStorage Helper Functions ---
 const saveToLocalStorage = <T,>(key: string, value: T) => {
@@ -1124,21 +1124,36 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
 
   newSale.payments.forEach(p => {
     let feeRate = 0;
+    const isBankTransaction = ['debit', 'credit', 'pix'].includes(p.method);
+
     if (p.method === 'debit') feeRate = fees.debitRate;
     if (p.method === 'credit') feeRate = fees.creditRate;
     if (p.method === 'pix') feeRate = fees.pixRate;
 
-    if (feeRate > 0) {
-      const feeAmount = p.amount * (feeRate / 100);
-      if (feeAmount > 0) {
-        newFinancialEntries.push({
-          description: `Taxa ${p.method} venda #${newSale.id.slice(-6)}`,
-          amount: feeAmount,
-          type: 'expense',
-          source: 'bank_account',
-          saleId: newSale.id,
-          adjustmentId: null
-        });
+    if (isBankTransaction) {
+      // Add the income from the sale to the bank account
+      newFinancialEntries.push({
+        description: `Venda #${newSale.id.slice(-6)} via ${p.method}`,
+        amount: p.amount,
+        type: 'income',
+        source: 'bank_account',
+        saleId: newSale.id,
+        adjustmentId: null
+      });
+
+      // Add the transaction fee as an expense from the bank account
+      if (feeRate > 0) {
+        const feeAmount = p.amount * (feeRate / 100);
+        if (feeAmount > 0) {
+          newFinancialEntries.push({
+            description: `Taxa ${p.method} venda #${newSale.id.slice(-6)}`,
+            amount: feeAmount,
+            type: 'expense',
+            source: 'bank_account',
+            saleId: newSale.id,
+            adjustmentId: null
+          });
+        }
       }
     }
   });
@@ -1168,13 +1183,55 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
         timestamp: new Date()
     }));
 
+    // Update balances based on the new entries
+    newEntries.forEach(e => {
+        if (e.source === 'bank_account') {
+            const currentAccount = getBankAccount();
+            const newBalance = e.type === 'income' 
+                ? currentAccount.balance + e.amount 
+                : currentAccount.balance - e.amount;
+            saveBankAccount({ balance: newBalance });
+        }
+        // NOTE: 'daily_cash' and 'secondary_cash' are handled separately
+        // in their respective components to avoid double-counting or complex state management here.
+    });
+
+
     saveFinancialEntries([...currentEntries, ...newEntries]);
 };
 
 export const removeFinancialEntry = (entryId: string) => {
   const currentEntries = getFinancialEntries();
+  const entryToRemove = currentEntries.find(e => e.id === entryId);
+  if (!entryToRemove) return;
+
   const updatedEntries = currentEntries.filter(e => e.id !== entryId);
   saveFinancialEntries(updatedEntries);
+
+  // Revert balance changes upon deletion
+  if (entryToRemove.source === 'bank_account') {
+    const currentAccount = getBankAccount();
+    const newBalance = entryToRemove.type === 'income'
+        ? currentAccount.balance - entryToRemove.amount // Revert income by subtracting
+        : currentAccount.balance + entryToRemove.amount; // Revert expense by adding
+    saveBankAccount({ balance: newBalance });
+  } else if (entryToRemove.source === 'secondary_cash' && entryToRemove.type === 'expense') {
+     const currentBox = getSecondaryCashBox();
+     saveSecondaryCashBox({ balance: currentBox.balance + entryToRemove.amount });
+  } else if (entryToRemove.source === 'daily_cash' && entryToRemove.type === 'expense') {
+    const cashStatus = getCashRegisterStatus();
+    if(cashStatus.status === 'open') {
+        const adjustment: CashAdjustment = {
+            id: `adj-revert-${Date.now()}`,
+            amount: entryToRemove.amount,
+            type: 'in', // Revert an expense by adding money back
+            description: `Estorno despesa: ${entryToRemove.description}`,
+            timestamp: new Date().toISOString(),
+            isCorrection: true, // Mark as a system correction
+        };
+        saveCashRegisterStatus({...cashStatus, adjustments: [...(cashStatus.adjustments || []), adjustment]});
+    }
+  }
 }
 
 // --- UI Helpers ---
