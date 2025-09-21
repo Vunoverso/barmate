@@ -128,9 +128,12 @@ export default function FinancialClient() {
 
   const loadData = async () => {
     try {
+      // Local sync data
       setSecondaryCashBox(getSecondaryCashBox());
       setBankAccount(getBankAccount());
       setCashStatus(getCashRegisterStatus());
+      
+      // Cloud async data
       const [fetchedEntries, fetchedSales] = await Promise.all([getFinancialEntries(), getSales()]);
       setEntries(fetchedEntries);
       setSales(fetchedSales);

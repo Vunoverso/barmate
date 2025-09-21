@@ -80,14 +80,14 @@ export default function ProductManagement() {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
     await saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+    // No need to set state here, the storage event listener will trigger a re-fetch
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
   const handleEditProduct = async (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
     await saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+    // No need to set state here, the storage event listener will trigger a re-fetch
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
 
@@ -105,11 +105,11 @@ export default function ProductManagement() {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
     await saveProducts(updatedProducts);
-    setProducts(updatedProducts);
     setProductToDelete(null);
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
     }
+     // No need to set state here, the storage event listener will trigger a re-fetch
   };
 
   const filteredProducts = useMemo(() => {

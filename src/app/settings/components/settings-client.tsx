@@ -252,7 +252,7 @@ export default function SettingsClient() {
       cat.id === updatedCategory.id ? updatedCategory : cat
     );
     await saveProductCategories(updatedCategories);
-    setProductCategories(updatedCategories);
+    // Data re-fetch is handled by storage event listener
     toast({ title: "Categoria Atualizada", description: `Categoria "${updatedCategory.name}" salva com sucesso.`});
   };
 
@@ -265,7 +265,7 @@ export default function SettingsClient() {
     };
     const updatedCategories = [...productCategories, newCategory];
     await saveProductCategories(updatedCategories);
-    setProductCategories(updatedCategories);
+    // Data re-fetch is handled by storage event listener
     toast({ title: "Categoria Adicionada", description: `A categoria "${data.name}" foi criada com sucesso.`});
   };
 
@@ -278,9 +278,9 @@ export default function SettingsClient() {
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
     await saveProductCategories(updatedCategories);
-    setProductCategories(updatedCategories);
     toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
+    // Data re-fetch is handled by storage event listener
   };
 
   const handleExportData = async () => {
@@ -302,6 +302,7 @@ export default function SettingsClient() {
             'sales': sls,
             'active_orders': orders,
             'financial_entries': entries,
+            // Local data is also included
             'barmate_cashRegisterStatus_v2': getCashRegisterStatus(),
             'barmate_secondaryCashBox_v2': getSecondaryCashBox(),
             'barmate_bankAccount_v2': getBankAccount(),
@@ -347,22 +348,23 @@ export default function SettingsClient() {
               throw new Error("Arquivo de backup inválido.");
             }
             
-            // Cloud data
+            // Batch save operations with silent flag
             if (data['product_categories']) await saveProductCategories(data['product_categories']);
             if (data['products']) await saveProducts(data['products']);
-            if (data['sales']) await saveSales(data['sales']);
+            if (data['sales']) await saveSales(data['sales'], { silent: true });
             if (data['active_orders']) await saveOpenOrders(data['active_orders']);
-            if (data['financial_entries']) await saveFinancialEntries(data['financial_entries']);
+            if (data['financial_entries']) await saveFinancialEntries(data['financial_entries'], { silent: true });
             
-            // Local data
-            if (data['barmate_cashRegisterStatus_v2']) saveCashRegisterStatus(data['barmate_cashRegisterStatus_v2']);
-            if (data['barmate_secondaryCashBox_v2']) saveSecondaryCashBox(data['barmate_secondaryCashBox_v2']);
-            if (data['barmate_bankAccount_v2']) saveBankAccount(data['barmate_bankAccount_v2']);
-            if (data['barmate_transactionFees_v2']) saveTransactionFees(data['barmate_transactionFees_v2']);
+            // Local data is written silently to avoid event storm
+            if (data['barmate_cashRegisterStatus_v2']) saveCashRegisterStatus(data['barmate_cashRegisterStatus_v2'], { silent: true });
+            if (data['barmate_secondaryCashBox_v2']) saveSecondaryCashBox(data['barmate_secondaryCashBox_v2'], { silent: true });
+            if (data['barmate_bankAccount_v2']) saveBankAccount(data['barmate_bankAccount_v2'], { silent: true });
+            if (data['barmate_transactionFees_v2']) saveTransactionFees(data['barmate_transactionFees_v2'], { silent: true });
             if (data['barName']) localStorage.setItem('barName', data['barName']);
             
             toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
 
+            // Force a reload to ensure all components get the new data state
             setTimeout(() => window.location.reload(), 2000);
         } catch (innerError) {
             console.error("Import processing error:", innerError);

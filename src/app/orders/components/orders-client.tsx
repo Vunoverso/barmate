@@ -75,12 +75,14 @@ export default function OrdersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
- const fetchData = () => {
+ const fetchData = async () => {
     setIsLoading(true);
     try {
-      const fetchedProducts = getProducts();
-      const fetchedCategories = getProductCategories();
-      const fetchedOrders = getOpenOrders();
+      const [fetchedProducts, fetchedCategories, fetchedOrders] = await Promise.all([
+        getProducts(),
+        getProductCategories(),
+        getOpenOrders()
+      ]);
       
       setProducts(fetchedProducts);
       setProductCategories(fetchedCategories);
@@ -97,7 +99,7 @@ export default function OrdersClient() {
 
     } catch (error) {
         console.error("Failed to fetch initial data", error);
-        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados.", variant: "destructive" });
+        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados da nuvem.", variant: "destructive" });
     } finally {
         setIsLoading(false);
     }

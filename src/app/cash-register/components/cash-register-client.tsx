@@ -75,9 +75,11 @@ export default function CashRegisterClient() {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
+        // Sync (local)
         setSecondaryCashBox(getSecondaryCashBox());
         setBankAccount(getBankAccount());
         setCashStatus(getCashRegisterStatus());
+        // Async (cloud)
         const fetchedSales = await getSales();
         setSales(fetchedSales);
     } catch (e) {
