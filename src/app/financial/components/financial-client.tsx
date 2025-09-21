@@ -126,26 +126,28 @@ export default function FinancialClient() {
     defaultValues: { description: '', amount: 0, source: 'daily_cash' },
   });
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       setSecondaryCashBox(getSecondaryCashBox());
       setBankAccount(getBankAccount());
       setCashStatus(getCashRegisterStatus());
-      setEntries(getFinancialEntries());
-      setSales(getSales());
+      const [fetchedEntries, fetchedSales] = await Promise.all([getFinancialEntries(), getSales()]);
+      setEntries(fetchedEntries);
+      setSales(fetchedSales);
     } catch(e) {
-      console.error("Error loading data from localStorage", e);
-      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível ler os dados do armazenamento local.", variant: "destructive" });
+      console.error("Error loading data", e);
+      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível ler os dados.", variant: "destructive" });
     }
   };
   
   useEffect(() => {
-    loadData();
-    setDateRange({
-      from: addDays(new Date(), -30),
-      to: new Date(),
+    loadData().then(() => {
+        setDateRange({
+            from: addDays(new Date(), -30),
+            to: new Date(),
+        });
+        setIsMounted(true);
     });
-    setIsMounted(true);
 
     window.addEventListener('storage', loadData);
 
@@ -161,12 +163,10 @@ export default function FinancialClient() {
     const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
     
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        // If change was left as credit, the full cash tendered amount entered the drawer.
         if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
             return total + sale.cashTendered;
         }
         
-        // Otherwise, what entered the drawer is the sum of cash payments.
         const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
         return total + cashPayment;
     }, 0);
@@ -185,7 +185,6 @@ export default function FinancialClient() {
     return expectedCashInDrawer + secondaryCashBox.balance + bankAccount.balance;
   }, [expectedCashInDrawer, secondaryCashBox, bankAccount]);
 
-  // Filtering logic from reports
   const filterByDate = (items: (Sale | FinancialEntry)[]) => {
     if (!dateRange || !dateRange.from) return items;
     return items.filter(item => {
@@ -193,7 +192,7 @@ export default function FinancialClient() {
       if (dateRange?.from && itemDate < dateRange.from) return false;
       if (dateRange?.to) {
         const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999); // Include the whole "to" day
+        toDate.setHours(23, 59, 59, 999); 
         if (itemDate > toDate) return false;
       }
       return true;
@@ -216,8 +215,6 @@ export default function FinancialClient() {
   const feeExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !!e.saleId), [filteredEntries]);
   const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income'), [filteredEntries]);
 
-
-  // Pagination Logic
   const paginatedSales = useMemo(() => {
     const startIndex = (salesPagination.currentPage - 1) * salesPagination.itemsPerPage;
     return filteredSales.slice(startIndex, startIndex + salesPagination.itemsPerPage);
@@ -315,17 +312,14 @@ export default function FinancialClient() {
 
 
   const handleAddExpense = (data: ExpenseFormData) => {
-    // If the source is daily cash, show confirmation dialog first
     if (data.source === 'daily_cash') {
       setExpenseToConfirm(data);
       return;
     }
-    // Otherwise, proceed directly
     proceedWithAddExpense(data);
   };
 
-  const proceedWithAddExpense = (data: ExpenseFormData) => {
-    // Check for sufficient funds
+  const proceedWithAddExpense = async (data: ExpenseFormData) => {
     if (data.source === 'daily_cash') {
       if (cashStatus.status !== 'open') {
         toast({ title: "Ação Bloqueada", description: "O caixa diário está fechado. Não é possível registrar uma despesa dele.", variant: "destructive" });
@@ -349,9 +343,10 @@ export default function FinancialClient() {
       type: 'expense',
       source: data.source,
       timestamp: new Date(),
+      saleId: null,
+      adjustmentId: null
     };
 
-    // Deduct from source
     if (data.source === 'daily_cash' && cashStatus.status === 'open') {
       const currentCashStatus = getCashRegisterStatus();
       const sangriaAdjustment: CashAdjustment = {
@@ -370,7 +365,8 @@ export default function FinancialClient() {
       saveBankAccount({ balance: bankAccount.balance - data.amount });
     }
 
-    addFinancialEntry(newEntry as FinancialEntry);
+    await addFinancialEntry(newEntry as FinancialEntry);
+    await loadData();
     
     toast({ title: "Despesa Adicionada", description: "Sua nova despesa foi registrada com sucesso." });
     setIsExpenseDialogOpen(false);
@@ -398,7 +394,7 @@ export default function FinancialClient() {
         type: adjustmentAmount > 0 ? 'in' : 'out',
         description: 'Ajuste de saldo manual',
         timestamp: new Date().toISOString(),
-        isCorrection: true, // Mark it as a correction so it's not displayed
+        isCorrection: true,
     };
 
     const newState = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), newAdjustment] };
@@ -420,17 +416,15 @@ export default function FinancialClient() {
     setIsEditBankAccountDialogOpen(false);
   }
 
-  const handleDeleteEntry = () => {
+  const handleDeleteEntry = async () => {
     if (!entryToDelete) return;
     
-    // Do not allow deleting entries linked to sales from here.
     if(entryToDelete.saleId) {
         toast({ title: "Ação Bloqueada", description: "Para remover esta taxa, remova a venda correspondente.", variant: "destructive" });
         setEntryToDelete(null);
         return;
     }
 
-    // Refund the amount to the source for general expenses
     if (entryToDelete.type === 'expense') {
         if (entryToDelete.source === 'daily_cash' && cashStatus.status === 'open') {
             const currentCashStatus = getCashRegisterStatus();
@@ -448,14 +442,16 @@ export default function FinancialClient() {
        // This case needs to be defined if income entries can be deleted
     }
 
-    removeFinancialEntry(entryToDelete.id);
+    await removeFinancialEntry(entryToDelete.id);
+    await loadData();
     toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
     setEntryToDelete(null);
   };
   
-  const handleDeleteSale = () => {
+  const handleDeleteSale = async () => {
     if (!saleToDelete) return;
-    removeSale(saleToDelete.id);
+    await removeSale(saleToDelete.id);
+    await loadData();
     toast({
       title: "Venda Removida",
       description: "A venda e seu impacto financeiro foram revertidos.",

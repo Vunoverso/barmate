@@ -39,11 +39,12 @@ export default function CounterSaleClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
-  const loadInitialData = () => {
+  const loadInitialData = async () => {
     setIsLoading(true);
     try {
-        setProducts(getProducts());
-        setProductCategories(getProductCategories());
+        const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
+        setProducts(fetchedProducts);
+        setProductCategories(fetchedCategories);
         
         const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
         if (storedOrderItems) {
@@ -66,7 +67,6 @@ export default function CounterSaleClient() {
     loadInitialData();
 
     const handleStorageChange = (event: StorageEvent) => {
-      // Reload data if relevant keys are changed in another tab
       loadInitialData();
     };
     window.addEventListener('storage', handleStorageChange);
@@ -96,7 +96,6 @@ export default function CounterSaleClient() {
 
 
   useEffect(() => {
-    // Set the first category as active if the current one is not available
     if (displayCategories.length > 0 && !displayCategories.includes(activeDisplayCategory)) {
         setActiveDisplayCategory(displayCategories[0]);
     }

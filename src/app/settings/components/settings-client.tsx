@@ -187,20 +187,21 @@ export default function SettingsClient() {
   
   const { toast } = useToast();
 
-  const loadData = () => {
+  const loadData = async () => {
     const storedName = localStorage.getItem('barName') || 'BarMate';
     setBarName(storedName);
     setInitialBarName(storedName);
     setTransactionFees(getTransactionFees());
-    setProductCategories(getProductCategories());
+    const fetchedCategories = await getProductCategories();
+    setProductCategories(fetchedCategories);
   }
 
   useEffect(() => {
     loadData();
     setIsMounted(true);
-    window.addEventListener('storage', loadData);
+    window.addEventListener('storage', () => loadData());
     return () => {
-      window.removeEventListener('storage', loadData);
+      window.removeEventListener('storage', () => loadData());
     }
   }, []);
 
@@ -246,15 +247,16 @@ export default function SettingsClient() {
     setIsEditCategoryDialogOpen(true);
   };
 
-  const handleSaveCategory = (updatedCategory: ProductCategory) => {
+  const handleSaveCategory = async (updatedCategory: ProductCategory) => {
     const updatedCategories = productCategories.map(cat =>
       cat.id === updatedCategory.id ? updatedCategory : cat
     );
-    saveProductCategories(updatedCategories);
+    await saveProductCategories(updatedCategories);
+    setProductCategories(updatedCategories);
     toast({ title: "Categoria Atualizada", description: `Categoria "${updatedCategory.name}" salva com sucesso.`});
   };
 
-  const handleAddNewCategory = (data: { name: string; iconName: string }) => {
+  const handleAddNewCategory = async (data: { name: string; iconName: string }) => {
     const newId = `cat_${data.name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_${Date.now()}`;
     const newCategory: ProductCategory = {
         id: newId,
@@ -262,7 +264,8 @@ export default function SettingsClient() {
         iconName: data.iconName,
     };
     const updatedCategories = [...productCategories, newCategory];
-    saveProductCategories(updatedCategories);
+    await saveProductCategories(updatedCategories);
+    setProductCategories(updatedCategories);
     toast({ title: "Categoria Adicionada", description: `A categoria "${data.name}" foi criada com sucesso.`});
   };
 
@@ -270,24 +273,35 @@ export default function SettingsClient() {
     setCategoryToDelete(category);
   };
 
-  const handleDeleteCategory = () => {
+  const handleDeleteCategory = async () => {
     if (!categoryToDelete) return;
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
-    saveProductCategories(updatedCategories);
+    await saveProductCategories(updatedCategories);
+    setProductCategories(updatedCategories);
     toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
     setCategoryToDelete(null);
   };
 
-  const handleExportData = () => {
+  const handleExportData = async () => {
     toast({ title: "Exportando dados...", description: "Aguarde enquanto preparamos seu backup." });
     try {
+        const [
+            cats, prods, sls, orders, entries
+        ] = await Promise.all([
+            getProductCategories(),
+            getProducts(),
+            getSales(),
+            getOpenOrders(),
+            getFinancialEntries(),
+        ]);
+
         const backupData = {
-            'barmate_productCategories_v2': getProductCategories(),
-            'barmate_products_v2': getProducts(),
-            'barmate_sales_v2': getSales(),
-            'barmate_openOrders_v2': getOpenOrders(),
-            'barmate_financialEntries_v2': getFinancialEntries(),
+            'product_categories': cats,
+            'products': prods,
+            'sales': sls,
+            'active_orders': orders,
+            'financial_entries': entries,
             'barmate_cashRegisterStatus_v2': getCashRegisterStatus(),
             'barmate_secondaryCashBox_v2': getSecondaryCashBox(),
             'barmate_bankAccount_v2': getBankAccount(),
@@ -324,7 +338,7 @@ export default function SettingsClient() {
     toast({ title: "Importando dados...", description: "Isso pode levar alguns instantes. Não feche a página." });
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const text = e.target?.result as string;
             const data = JSON.parse(text);
@@ -333,16 +347,18 @@ export default function SettingsClient() {
               throw new Error("Arquivo de backup inválido.");
             }
             
-            const silentSave = { silent: true };
-            if (data['barmate_productCategories_v2']) saveProductCategories(data['barmate_productCategories_v2'], silentSave);
-            if (data['barmate_products_v2']) saveProducts(data['barmate_products_v2'], silentSave);
-            if (data['barmate_sales_v2']) saveSales(data['barmate_sales_v2'], silentSave);
-            if (data['barmate_openOrders_v2']) saveOpenOrders(data['barmate_openOrders_v2'], silentSave);
-            if (data['barmate_financialEntries_v2']) saveFinancialEntries(data['barmate_financialEntries_v2'], silentSave);
-            if (data['barmate_cashRegisterStatus_v2']) saveCashRegisterStatus(data['barmate_cashRegisterStatus_v2'], silentSave);
-            if (data['barmate_secondaryCashBox_v2']) saveSecondaryCashBox(data['barmate_secondaryCashBox_v2'], silentSave);
-            if (data['barmate_bankAccount_v2']) saveBankAccount(data['barmate_bankAccount_v2'], silentSave);
-            if (data['barmate_transactionFees_v2']) saveTransactionFees(data['barmate_transactionFees_v2'], silentSave);
+            // Cloud data
+            if (data['product_categories']) await saveProductCategories(data['product_categories']);
+            if (data['products']) await saveProducts(data['products']);
+            if (data['sales']) await saveSales(data['sales']);
+            if (data['active_orders']) await saveOpenOrders(data['active_orders']);
+            if (data['financial_entries']) await saveFinancialEntries(data['financial_entries']);
+            
+            // Local data
+            if (data['barmate_cashRegisterStatus_v2']) saveCashRegisterStatus(data['barmate_cashRegisterStatus_v2']);
+            if (data['barmate_secondaryCashBox_v2']) saveSecondaryCashBox(data['barmate_secondaryCashBox_v2']);
+            if (data['barmate_bankAccount_v2']) saveBankAccount(data['barmate_bankAccount_v2']);
+            if (data['barmate_transactionFees_v2']) saveTransactionFees(data['barmate_transactionFees_v2']);
             if (data['barName']) localStorage.setItem('barName', data['barName']);
             
             toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });

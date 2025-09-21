@@ -72,13 +72,14 @@ export default function CashRegisterClient() {
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
   const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
 
-  const loadInitialData = () => {
+  const loadInitialData = async () => {
     setIsLoading(true);
     try {
         setSecondaryCashBox(getSecondaryCashBox());
         setBankAccount(getBankAccount());
         setCashStatus(getCashRegisterStatus());
-        setSales(getSales());
+        const fetchedSales = await getSales();
+        setSales(fetchedSales);
     } catch (e) {
         console.error("Failed to load cash register data", e);
         toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados.", variant: "destructive" });
@@ -91,7 +92,6 @@ export default function CashRegisterClient() {
     loadInitialData();
 
     const handleStorageChange = (event: StorageEvent) => {
-        // We can be more specific here if needed, e.g. event.key === '..._v2'
         loadInitialData();
     };
 

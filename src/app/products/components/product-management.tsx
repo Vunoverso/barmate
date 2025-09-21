@@ -52,10 +52,12 @@ export default function ProductManagement() {
 
   const { toast } = useToast();
 
-  const fetchData = () => {
+  const fetchData = async () => {
+    setIsLoading(true);
     try {
-      setProducts(getProducts());
-      setProductCategories(getProductCategories());
+      const [fetchedProducts, fetchedCategories] = await Promise.all([getProducts(), getProductCategories()]);
+      setProducts(fetchedProducts);
+      setProductCategories(fetchedCategories);
     } catch (error) {
       console.error("Failed to fetch data:", error);
       toast({
@@ -70,20 +72,22 @@ export default function ProductManagement() {
 
   useEffect(() => {
     fetchData();
-    window.addEventListener('storage', fetchData); 
-    return () => window.removeEventListener('storage', fetchData);
+    window.addEventListener('storage', () => fetchData()); 
+    return () => window.removeEventListener('storage', () => fetchData());
   }, []);
 
-  const handleAddProduct = (product: Omit<Product, 'id'>) => {
+  const handleAddProduct = async (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
-    saveProducts(updatedProducts);
+    await saveProducts(updatedProducts);
+    setProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   };
 
-  const handleEditProduct = (updatedProduct: Product) => {
+  const handleEditProduct = async (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-    saveProducts(updatedProducts);
+    await saveProducts(updatedProducts);
+    setProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   };
 
@@ -97,11 +101,12 @@ export default function ProductManagement() {
     setIsDialogOpen(true);
   };
   
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
+    await saveProducts(updatedProducts);
+    setProducts(updatedProducts);
     setProductToDelete(null);
-    saveProducts(updatedProducts);
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
     }

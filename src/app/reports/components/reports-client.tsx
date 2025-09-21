@@ -69,10 +69,13 @@ export default function ReportsClient() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
 
-  const loadData = () => {
+  const loadData = async () => {
       try {
-          setSales(getSales());
-          setFinancialEntries(getFinancialEntries());
+          const [fetchedSales, fetchedEntries] = await Promise.all([getSales(), getFinancialEntries()]);
+          setSales(fetchedSales);
+          setFinancialEntries(fetchedEntries);
+
+          // Local data
           setSecondaryCashBox(getSecondaryCashBox());
           setBankAccount(getBankAccount());
           setCashStatus(getCashRegisterStatus());
@@ -196,9 +199,10 @@ export default function ReportsClient() {
 
   const confirmDeleteSale = (sale: Sale) => setSaleToDelete(sale);
 
-  const handleDeleteSale = () => {
+  const handleDeleteSale = async () => {
     if (!saleToDelete) return;
-    removeSale(saleToDelete.id);
+    await removeSale(saleToDelete.id);
+    await loadData();
     toast({
       title: "Venda Removida",
       description: "A venda e seu impacto financeiro foram revertidos.",

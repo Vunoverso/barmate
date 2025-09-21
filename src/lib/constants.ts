@@ -1,17 +1,15 @@
 
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, CircleDollarSign, CreditCard, QrCode, Package, Banknote, type LucideIcon, Wallet } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
-// --- LocalStorage Helper Functions ---
-const saveToLocalStorage = <T,>(key: string, value: T, options: { silent?: boolean } = {}) => {
+// --- LocalStorage Helper Functions (for non-critical data) ---
+const saveToLocalStorage = <T,>(key: string, value: T) => {
     if (typeof window === 'undefined') return;
     try {
         const serializedValue = JSON.stringify(value);
         window.localStorage.setItem(key, serializedValue);
-        // Only dispatch event if not silent
-        if (!options.silent) {
-          window.dispatchEvent(new StorageEvent('storage', { key }));
-        }
+        window.dispatchEvent(new StorageEvent('storage', { key }));
     } catch (error) {
         console.error(`Error saving to localStorage key "${key}":`, error);
     }
@@ -23,6 +21,8 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     }
     const storedValue = window.localStorage.getItem(key);
     if (storedValue === null || storedValue === 'undefined') {
+        // If nothing is in localStorage, save the default value for next time.
+        saveToLocalStorage(key, defaultValue);
         return defaultValue;
     }
     try {
@@ -33,18 +33,19 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     }
 };
 
-
 // --- DATA KEYS ---
-const PRODUCT_CATEGORIES_KEY = 'barmate_productCategories_v2';
-const PRODUCTS_KEY = 'barmate_products_v2';
-const SALES_KEY = 'barmate_sales_v2';
-const OPEN_ORDERS_KEY = 'barmate_openOrders_v2';
-const FINANCIAL_ENTRIES_KEY = 'barmate_financialEntries_v2';
-const CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus_v2';
-const SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox_v2';
-const BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
-const TRANSACTION_FEES_KEY = 'barmate_transactionFees_v2';
+// Supabase Tables (Cloud)
+const TBL_PRODUCT_CATEGORIES = 'product_categories';
+const TBL_PRODUCTS = 'products';
+const TBL_SALES = 'sales';
+const TBL_OPEN_ORDERS = 'active_orders';
+const TBL_FINANCIAL_ENTRIES = 'financial_entries';
 
+// LocalStorage Keys (Local)
+const LOCAL_CASH_REGISTER_STATUS_KEY = 'barmate_cashRegisterStatus_v2';
+const LOCAL_SECONDARY_CASH_BOX_KEY = 'barmate_secondaryCashBox_v2';
+const LOCAL_BANK_ACCOUNT_KEY = 'barmate_bankAccount_v2';
+const LOCAL_TRANSACTION_FEES_KEY = 'barmate_transactionFees_v2';
 
 // --- INITIAL DATA ---
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
@@ -190,74 +191,123 @@ export const INITIAL_PRODUCTS: Product[] = [
     { "id": "prod-1758309928671", "name": "Burguesa Lata", "price": 5, "categoryId": "cat_alcoolicas", "stock": 0, "isCombo": false },
     { "id": "prod-1758322472705", "name": "Caipirinha Menta", "price": 16, "categoryId": "cat_caipirinhas_1756501145617", "stock": 0, "isCombo": false }
 ];
-export const INITIAL_SALES: Sale[] = [];
-export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
-export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
 export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
 export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0 };
 export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditRate: 0, pixRate: 0 };
+export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
+export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 
 // --- Data Accessor Functions ---
 
-export const getProductCategories = (): ProductCategory[] => {
-    return getFromLocalStorage(PRODUCT_CATEGORIES_KEY, INITIAL_PRODUCT_CATEGORIES);
-};
-export const saveProductCategories = (categories: ProductCategory[], options: { silent?: boolean } = {}) => saveToLocalStorage(PRODUCT_CATEGORIES_KEY, categories, options);
+// CLOUD (Supabase)
+export const getProductCategories = async (): Promise<ProductCategory[]> => {
+    if (!supabase) return INITIAL_PRODUCT_CATEGORIES;
+    const { data, error } = await supabase.from(TBL_PRODUCT_CATEGORIES).select('*');
+    if (error) {
+        console.error('Error fetching product categories:', error);
+        return INITIAL_PRODUCT_CATEGORIES;
+    }
+    return data || INITIAL_PRODUCT_CATEGORIES;
+}
 
-export const getProducts = (): Product[] => {
-    return getFromLocalStorage(PRODUCTS_KEY, INITIAL_PRODUCTS);
-};
-export const saveProducts = (products: Product[], options: { silent?: boolean } = {}) => saveToLocalStorage(PRODUCTS_KEY, products, options);
+export const saveProductCategories = async (categories: ProductCategory[]) => {
+    if (!supabase) return;
+    const { error } = await supabase.from(TBL_PRODUCT_CATEGORIES).upsert(categories);
+    if (error) console.error('Error saving product categories:', error);
+}
 
-export const getSales = (): Sale[] => {
-    return getFromLocalStorage(SALES_KEY, INITIAL_SALES);
-};
-export const saveSales = (sales: Sale[], options: { silent?: boolean } = {}) => saveToLocalStorage(SALES_KEY, sales, options);
+export const getProducts = async (): Promise<Product[]> => {
+    if (!supabase) return INITIAL_PRODUCTS;
+    const { data, error } = await supabase.from(TBL_PRODUCTS).select('*');
+    if (error) {
+        console.error('Error fetching products:', error);
+        return INITIAL_PRODUCTS;
+    }
+    return data || INITIAL_PRODUCTS;
+}
 
-export const getOpenOrders = (): ActiveOrder[] => {
-    return getFromLocalStorage(OPEN_ORDERS_KEY, INITIAL_OPEN_ORDERS);
-};
-export const saveOpenOrders = (orders: ActiveOrder[], options: { silent?: boolean } = {}) => saveToLocalStorage(OPEN_ORDERS_KEY, orders, options);
+export const saveProducts = async (products: Product[]) => {
+    if (!supabase) return;
+    const { error } = await supabase.from(TBL_PRODUCTS).upsert(products);
+    if (error) console.error('Error saving products:', error);
+}
 
-export const getFinancialEntries = (): FinancialEntry[] => {
-    return getFromLocalStorage(FINANCIAL_ENTRIES_KEY, INITIAL_FINANCIAL_ENTRIES);
-};
-export const saveFinancialEntries = (entries: FinancialEntry[], options: { silent?: boolean } = {}) => saveToLocalStorage(FINANCIAL_ENTRIES_KEY, entries, options);
+export const getSales = async (): Promise<Sale[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from(TBL_SALES).select('*');
+     if (error) {
+        console.error('Error fetching sales:', error);
+        return [];
+    }
+    return (data as any) || [];
+}
 
-export const getCashRegisterStatus = (): CashRegisterStatus => {
-    return getFromLocalStorage(CASH_REGISTER_STATUS_KEY, INITIAL_CASH_REGISTER_STATUS);
-};
-export const saveCashRegisterStatus = (status: CashRegisterStatus, options: { silent?: boolean } = {}) => saveToLocalStorage(CASH_REGISTER_STATUS_KEY, status, options);
+export const saveSales = async (sales: Sale[]) => {
+     if (!supabase) return;
+    const { error } = await supabase.from(TBL_SALES).upsert(sales as any);
+    if (error) console.error('Error saving sales:', error);
+}
 
-export const getSecondaryCashBox = (): SecondaryCashBox => {
-    return getFromLocalStorage(SECONDARY_CASH_BOX_KEY, INITIAL_SECONDARY_CASH_BOX);
-};
-export const saveSecondaryCashBox = (box: SecondaryCashBox, options: { silent?: boolean } = {}) => saveToLocalStorage(SECONDARY_CASH_BOX_KEY, box, options);
 
-export const getBankAccount = (): BankAccount => {
-    return getFromLocalStorage(BANK_ACCOUNT_KEY, INITIAL_BANK_ACCOUNT);
+export const getOpenOrders = async (): Promise<ActiveOrder[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from(TBL_OPEN_ORDERS).select('*');
+    if (error) {
+        console.error('Error fetching open orders:', error);
+        return [];
+    }
+    return (data as any) || [];
 };
-export const saveBankAccount = (account: BankAccount, options: { silent?: boolean } = {}) => saveToLocalStorage(BANK_ACCOUNT_KEY, account, options);
 
-export const getTransactionFees = (): TransactionFees => {
-    return getFromLocalStorage(TRANSACTION_FEES_KEY, INITIAL_TRANSACTION_FEES);
+export const saveOpenOrders = async (orders: ActiveOrder[]) => {
+    if (!supabase) return;
+     const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(orders as any);
+    if (error) console.error('Error saving open orders:', error);
 };
-export const saveTransactionFees = (fees: TransactionFees, options: { silent?: boolean } = {}) => saveToLocalStorage(TRANSACTION_FEES_KEY, fees, options);
+
+export const getFinancialEntries = async (): Promise<FinancialEntry[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from(TBL_FINANCIAL_ENTRIES).select('*');
+    if (error) {
+        console.error('Error fetching financial entries:', error);
+        return [];
+    }
+    return (data as any) || [];
+};
+
+export const saveFinancialEntries = async (entries: FinancialEntry[]) => {
+    if (!supabase) return;
+    const { error } = await supabase.from(TBL_FINANCIAL_ENTRIES).upsert(entries as any);
+    if (error) console.error('Error saving financial entries:', error);
+};
+
+// LOCAL (LocalStorage)
+export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(LOCAL_CASH_REGISTER_STATUS_KEY, INITIAL_CASH_REGISTER_STATUS);
+export const saveCashRegisterStatus = (status: CashRegisterStatus) => saveToLocalStorage(LOCAL_CASH_REGISTER_STATUS_KEY, status);
+
+export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(LOCAL_SECONDARY_CASH_BOX_KEY, INITIAL_SECONDARY_CASH_BOX);
+export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToLocalStorage(LOCAL_SECONDARY_CASH_BOX_KEY, box);
+
+export const getBankAccount = (): BankAccount => getFromLocalStorage(LOCAL_BANK_ACCOUNT_KEY, INITIAL_BANK_ACCOUNT);
+export const saveBankAccount = (account: BankAccount) => saveToLocalStorage(LOCAL_BANK_ACCOUNT_KEY, account);
+
+export const getTransactionFees = (): TransactionFees => getFromLocalStorage(LOCAL_TRANSACTION_FEES_KEY, INITIAL_TRANSACTION_FEES);
+export const saveTransactionFees = (fees: TransactionFees) => saveToLocalStorage(LOCAL_TRANSACTION_FEES_KEY, fees);
 
 
 // --- Business Logic Functions ---
 
-export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Date }) => {
+export const addSale = async (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Date }) => {
   const newSale: Sale = {
     ...sale,
     id: `sale-${Date.now()}`,
     timestamp: sale.timestamp || new Date(),
   };
 
-  const currentSales = getSales();
+  const currentSales = await getSales();
   const updatedSales = [...currentSales, newSale];
-  saveSales(updatedSales);
+  await saveSales(updatedSales);
 
   const fees = getTransactionFees();
   const newFinancialEntries: FinancialEntry[] = [];
@@ -286,31 +336,37 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   });
 
   if (newFinancialEntries.length > 0) {
-    const currentFinancials = getFinancialEntries();
-    saveFinancialEntries([...currentFinancials, ...newFinancialEntries]);
+    await addFinancialEntry(newFinancialEntries);
   }
 };
 
-export const removeSale = (saleId: string) => {
-  const currentSales = getSales();
+export const removeSale = async (saleId: string) => {
+  const currentSales = await getSales();
   const updatedSales = currentSales.filter(s => s.id !== saleId);
-  saveSales(updatedSales);
+  await saveSales(updatedSales);
 
-  const currentFinancials = getFinancialEntries();
+  const currentFinancials = await getFinancialEntries();
   const updatedFinancials = currentFinancials.filter(e => e.saleId !== saleId);
-  saveFinancialEntries(updatedFinancials);
+  await saveFinancialEntries(updatedFinancials);
 }
 
-export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> & { timestamp?: Date }) => {
-    const currentEntries = getFinancialEntries();
-    const newEntry = { ...entry, id: `fin-${Date.now()}`, timestamp: entry.timestamp || new Date() };
-    saveFinancialEntries([...currentEntries, newEntry]);
+export const addFinancialEntry = async (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
+    const currentEntries = await getFinancialEntries();
+    const entriesToAdd = Array.isArray(entry) ? entry : [entry];
+
+    const newEntries = entriesToAdd.map(e => ({
+        ...e,
+        id: `fin-${Date.now()}-${Math.random()}`,
+        timestamp: new Date()
+    }));
+
+    await saveFinancialEntries([...currentEntries, ...newEntries]);
 };
 
-export const removeFinancialEntry = (entryId: string) => {
-  const currentEntries = getFinancialEntries();
+export const removeFinancialEntry = async (entryId: string) => {
+  const currentEntries = await getFinancialEntries();
   const updatedEntries = currentEntries.filter(e => e.id !== entryId);
-  saveFinancialEntries(updatedEntries);
+  await saveFinancialEntries(updatedEntries);
 }
 
 // --- UI Helpers ---
