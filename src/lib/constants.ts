@@ -1,3 +1,4 @@
+
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, type LucideIcon } from 'lucide-react';
 
@@ -1077,7 +1078,12 @@ export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 0, creditR
 const MIGRATION_FLAG_KEY = 'barmate_migration_v2_completed';
 
 export const migrateOldData = () => {
-    if (typeof window === 'undefined' || localStorage.getItem(MIGRATION_FLAG_KEY)) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    // Se a flag de migração já existe, não faz nada.
+    if (localStorage.getItem(MIGRATION_FLAG_KEY)) {
         return;
     }
 
@@ -1085,12 +1091,13 @@ export const migrateOldData = () => {
 
     const migrateKey = (oldKey: string, newKey: string) => {
         const oldData = localStorage.getItem(oldKey);
+        // A lógica chave é aqui: Se dados antigos existem, nós os usamos.
         if (oldData) {
             try {
-                // SOBRESCREVE a chave nova com os dados da chave antiga
+                // SOBRESCREVE a chave nova com os dados da chave antiga.
                 localStorage.setItem(newKey, oldData);
-                console.log(`Migrado: ${oldKey} -> ${newKey}`);
-                localStorage.removeItem(oldKey); // Remove a chave antiga após a migração bem-sucedida
+                console.log(`Migrado com sucesso: ${oldKey} -> ${newKey}`);
+                localStorage.removeItem(oldKey); // Remove a chave antiga após a migração bem-sucedida.
             } catch (e) {
                 console.error(`Falha ao migrar ${oldKey}:`, e);
             }
@@ -1108,8 +1115,14 @@ export const migrateOldData = () => {
     migrateKey('barmate_bankAccount', KEY_BANK_ACCOUNT);
     migrateKey('barmate_transactionFees', KEY_TRANSACTION_FEES);
     migrateKey('barmate_counterSaleOrderItems', KEY_COUNTER_SALE_ITEMS);
-    migrateKey('barName', 'barName'); // barName não mudou de versão, mas garantimos que está aqui.
+    
+    const barName = localStorage.getItem('barName');
+    if (barName) {
+        // barName não precisa de migração de chave, mas garantimos que não seja perdido.
+        console.log("Nome do bar preservado.");
+    }
 
+    // Marca que a migração foi concluída com sucesso para não rodar de novo.
     localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
     console.log("Migração de dados concluída.");
 };
