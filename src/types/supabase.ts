@@ -18,7 +18,6 @@ export type Database = {
           items: Json
           name: string
           status: string | null
-          user_id: string
         }
         Insert: {
           created_at?: string
@@ -26,7 +25,6 @@ export type Database = {
           items?: Json
           name: string
           status?: string | null
-          user_id?: string
         }
         Update: {
           created_at?: string
@@ -34,17 +32,8 @@ export type Database = {
           items?: Json
           name?: string
           status?: string | null
-          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "active_orders_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       financial_entries: {
         Row: {
@@ -56,7 +45,6 @@ export type Database = {
           source: string
           timestamp: string
           type: string
-          user_id: string
         }
         Insert: {
           adjustmentId?: string | null
@@ -67,7 +55,6 @@ export type Database = {
           source: string
           timestamp?: string
           type: string
-          user_id?: string
         }
         Update: {
           adjustmentId?: string | null
@@ -78,46 +65,26 @@ export type Database = {
           source?: string
           timestamp?: string
           type?: string
-          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "financial_entries_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       product_categories: {
         Row: {
           iconName: string
           id: string
           name: string
-          user_id: string
         }
         Insert: {
           iconName: string
           id?: string
           name: string
-          user_id?: string
         }
         Update: {
           iconName?: string
           id?: string
           name?: string
-          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "product_categories_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       products: {
         Row: {
@@ -128,7 +95,6 @@ export type Database = {
           name: string
           price: number
           stock: number | null
-          user_id: string
         }
         Insert: {
           categoryId: string
@@ -138,7 +104,6 @@ export type Database = {
           name: string
           price: number
           stock?: number | null
-          user_id?: string
         }
         Update: {
           categoryId?: string
@@ -148,7 +113,6 @@ export type Database = {
           name?: string
           price?: number
           stock?: number | null
-          user_id?: string
         }
         Relationships: [
           {
@@ -156,13 +120,6 @@ export type Database = {
             columns: ["categoryId"]
             isOneToOne: false
             referencedRelation: "product_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -180,7 +137,6 @@ export type Database = {
           status: string
           timestamp: string
           totalAmount: number
-          user_id: string
         }
         Insert: {
           cashTendered?: number | null
@@ -194,7 +150,6 @@ export type Database = {
           status: string
           timestamp?: string
           totalAmount: number
-          user_id?: string
         }
         Update: {
           cashTendered?: number | null
@@ -208,17 +163,8 @@ export type Database = {
           status?: string
           timestamp?: string
           totalAmount?: number
-          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "sales_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {

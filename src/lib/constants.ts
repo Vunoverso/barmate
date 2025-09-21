@@ -126,24 +126,29 @@ export const saveOpenOrders = async (orders: ActiveOrder[], options?: { silent?:
     if (!supabase) return;
 
     const ordersToUpsert = orders.map(o => {
-        return {
-            ...o,
-            user_id: o.user_id || '1',
-            created_at: new Date(o.createdAt).toISOString(),
-            items: JSON.parse(JSON.stringify(o.items)), // Deep copy and ensure it's valid JSON
-        };
+        // Create a copy to avoid mutating the original object
+        const orderCopy: any = { ...o };
+        
+        // Ensure created_at is a valid ISO string
+        if (orderCopy.createdAt instanceof Date) {
+            orderCopy.created_at = orderCopy.createdAt.toISOString();
+        } else if (typeof orderCopy.createdAt === 'string') {
+            orderCopy.created_at = new Date(orderCopy.createdAt).toISOString();
+        }
+
+        // Ensure items is valid JSON
+        orderCopy.items = JSON.parse(JSON.stringify(orderCopy.items));
+
+        // Remove the original 'createdAt' property as it doesn't exist in the DB
+        delete orderCopy.createdAt;
+
+        return orderCopy;
     });
 
-    // We can remove the `createdAt` property from the object as it is not a column in the database
-    // and `created_at` is already mapped. This is to avoid Supabase errors.
-    const sanitizedOrders = ordersToUpsert.map(({ createdAt, ...rest }) => rest);
-
-
-    const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(sanitizedOrders as any);
+    const { error } = await supabase.from(TBL_OPEN_ORDERS).upsert(ordersToUpsert);
 
     if (error) {
         console.error('Error saving open orders:', error);
-        // Throw the error so the calling function can catch it
         throw new Error(`Error saving open orders: ${JSON.stringify(error)}`);
     }
 
