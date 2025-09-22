@@ -403,8 +403,12 @@ export default function OrdersClient() {
     saveOpenOrders(updatedOrders);
   }, [currentOrderId]);
 
-  const orderTotal = useMemo(() => {
-    return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
+  const { orderTotal, consumedTotal } = useMemo(() => {
+    const total = currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
+    const consumed = currentOrderItems
+      .filter(item => item.price > 0)
+      .reduce((total, item) => total + item.price * item.quantity, 0);
+    return { orderTotal: total, consumedTotal: consumed };
   }, [currentOrderItems]);
   
   const handlePayment = useCallback((details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
@@ -704,7 +708,10 @@ export default function OrdersClient() {
                    {currentOrder && (
                     <div className="flex flex-col items-end shrink-0 ml-2">
                         {orderTotal < 0 ? (
+                          <div className="text-right">
                            <Badge variant="secondary" className="bg-amber-400 dark:bg-amber-600 text-black dark:text-white text-base">Em Crédito: {formatCurrency(Math.abs(orderTotal))}</Badge>
+                           <p className="text-xs text-muted-foreground mt-1">Consumo: {formatCurrency(consumedTotal)}</p>
+                          </div>
                         ) : (
                           <span className="text-primary font-bold text-xl">{formatCurrency(orderTotal)}</span>
                         )}
@@ -759,7 +766,7 @@ export default function OrdersClient() {
                           <div className="flex-shrink-0">
                             <IconComponent className="h-6 w-6 text-muted-foreground" />
                           </div>
-                          <div className="flex-grow">
+                          <div className="flex-grow min-w-0">
                             <p className="font-medium truncate text-xs">{item.name}</p>
                             <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
                           </div>
@@ -775,7 +782,7 @@ export default function OrdersClient() {
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                          <p className="font-semibold w-20 text-right text-sm">{formatCurrency(item.price * item.quantity)}</p>
+                          <p className="font-semibold w-16 text-right text-xs shrink-0">{formatCurrency(item.price * item.quantity)}</p>
                         </li>
                       );
                     })}
