@@ -240,21 +240,15 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
 
-  // This function will modify balances and create entries in one go.
   newSale.payments.forEach(p => {
     if (['debit', 'credit', 'pix'].includes(p.method)) {
-      const currentBank = getBankAccount();
       let feeRate = 0;
       if (p.method === 'debit') feeRate = fees.debitRate;
       if (p.method === 'credit') feeRate = fees.creditRate;
       if (p.method === 'pix') feeRate = fees.pixRate;
 
       const feeAmount = p.amount * (feeRate / 100);
-      const netAmount = p.amount - feeAmount;
-
-      saveBankAccount({ balance: currentBank.balance + netAmount });
       
-      // Add income from the sale to the bank account
       newFinancialEntries.push({
         description: `Venda #${newSale.id.slice(-6)} via ${p.method}`,
         amount: p.amount,
@@ -277,8 +271,6 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
     } else if (p.method === 'cash') {
         const cashStatus = getCashRegisterStatus();
         if (cashStatus.status === 'open') {
-             // Cash goes into the daily drawer, which is calculated dynamically and doesn't have a stored balance.
-             // We still create a financial entry for tracking purposes.
              newFinancialEntries.push({
                 description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
                 amount: p.amount,
@@ -288,9 +280,6 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
                 adjustmentId: null,
              })
         } else {
-            // If daily cash is closed, assume it goes to secondary box
-            const currentSecondary = getSecondaryCashBox();
-            saveSecondaryCashBox({ balance: currentSecondary.balance + p.amount });
             newFinancialEntries.push({
                 description: `Venda #${newSale.id.slice(-6)} em dinheiro (Caixa Fechado)`,
                 amount: p.amount,
@@ -331,7 +320,6 @@ export const removeSale = (saleId: string) => {
 
       saveBankAccount({ balance: currentBank.balance - netAmount });
     } else if (p.method === 'cash') {
-        // Reverting cash is tricky. Assume it was in secondary box if cash is closed, otherwise do nothing as daily cash is dynamic.
          const cashStatus = getCashRegisterStatus();
          if(cashStatus.status === 'closed') {
              const secondaryBox = getSecondaryCashBox();
@@ -424,4 +412,3 @@ export const formatCurrency = (value: number) => {
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }
-
