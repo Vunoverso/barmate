@@ -1,9 +1,10 @@
+
 "use client";
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store, Banknote } from 'lucide-react';
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store, Banknote, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -26,6 +27,7 @@ const mainNavItems: NavItem[] = [
   { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
   { href: '/orders', label: 'Comandas', icon: HandCoins },
   { href: '/products', label: 'Produtos', icon: Package },
+  { href: '/clients', label: 'Clientes', icon: Users },
   { href: '/financial', label: 'Financeiro', icon: LineChart },
 ];
 

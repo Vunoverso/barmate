@@ -1,6 +1,6 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, type LucideIcon } from 'lucide-react';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client } from '@/types';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, type LucideIcon } from 'lucide-react';
 
 // --- LocalStorage Helper Functions ---
 const saveToLocalStorage = <T,>(key: string, value: T, options?: { silent?: boolean }) => {
@@ -43,6 +43,7 @@ export const DATA_KEYS = [
     'barmate_products_v2',
     'barmate_sales_v2',
     'barmate_openOrders_v2',
+    'barmate_clients_v2',
     'barmate_financialEntries_v2',
     'barmate_cashRegisterStatus_v2',
     'barmate_secondaryCashBox_v2',
@@ -55,6 +56,7 @@ const KEY_PRODUCT_CATEGORIES = 'barmate_productCategories_v2';
 const KEY_PRODUCTS = 'barmate_products_v2';
 const KEY_SALES = 'barmate_sales_v2';
 const KEY_OPEN_ORDERS = 'barmate_openOrders_v2';
+const KEY_CLIENTS = 'barmate_clients_v2';
 const KEY_FINANCIAL_ENTRIES = 'barmate_financialEntries_v2';
 const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
 const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
@@ -112,6 +114,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 ];
 export const INITIAL_SALES: Sale[] = [];
 export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
+export const INITIAL_CLIENTS: Client[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
 export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
@@ -146,6 +149,7 @@ export const migrateOldData = () => {
         'barmate_products',
         'barmate_sales',
         'barmate_openOrders',
+        'barmate_clients',
         'barmate_financialEntries',
         'barmate_cashRegisterStatus',
         'barmate_secondaryCashBox',
@@ -159,6 +163,7 @@ export const migrateOldData = () => {
         KEY_PRODUCTS,
         KEY_SALES,
         KEY_OPEN_ORDERS,
+        KEY_CLIENTS,
         KEY_FINANCIAL_ENTRIES,
         KEY_CASH_REGISTER_STATUS,
         KEY_SECONDARY_CASH_BOX,
@@ -198,6 +203,9 @@ export const saveSales = (sales: Sale[]) => saveToLocalStorage(KEY_SALES, sales)
 
 export const getOpenOrders = (): ActiveOrder[] => getFromLocalStorage(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
 export const saveOpenOrders = (orders: ActiveOrder[]) => saveToLocalStorage(KEY_OPEN_ORDERS, orders);
+
+export const getClients = (): Client[] => getFromLocalStorage(KEY_CLIENTS, INITIAL_CLIENTS);
+export const saveClients = (clients: Client[]) => saveToLocalStorage(KEY_CLIENTS, clients);
 
 export const getFinancialEntries = (): FinancialEntry[] => getFromLocalStorage(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
 export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
@@ -371,7 +379,7 @@ export const removeFinancialEntry = (entryId: string) => {
 // --- UI Helpers ---
 
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
-  Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Wallet
+  Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Wallet, Users
 };
 
 export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: LucideIcon }[] = [
@@ -390,5 +398,3 @@ export const formatCurrency = (value: number) => {
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }
-
-    

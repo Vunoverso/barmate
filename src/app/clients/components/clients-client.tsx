@@ -1,0 +1,264 @@
+
+"use client";
+
+import type { Client } from '@/types';
+import { getClients, saveClients } from '@/lib/constants';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { PlusCircle, Edit, Trash2, Search, MoreHorizontal } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
+import { useForm, zodResolver } from '@mantine/form';
+import { z } from 'zod';
+
+const clientSchema = z.object({
+  name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+type ClientFormData = z.infer<typeof clientSchema>;
+
+export default function ClientsClient() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+
+  const { toast } = useToast();
+
+  const fetchData = useCallback(() => {
+    setIsLoading(true);
+    setClients(getClients());
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    window.addEventListener('storage', fetchData);
+    return () => window.removeEventListener('storage', fetchData);
+  }, [fetchData]);
+
+  const form = useForm<ClientFormData>({
+    validate: zodResolver(clientSchema),
+    initialValues: {
+      name: '',
+      phone: '',
+      notes: '',
+    },
+  });
+
+  useEffect(() => {
+    if (editingClient) {
+      form.setValues({
+        name: editingClient.name,
+        phone: editingClient.phone || '',
+        notes: editingClient.notes || '',
+      });
+    } else {
+      form.reset();
+    }
+  }, [editingClient, isDialogOpen]);
+
+  const handleSaveClient = (values: ClientFormData) => {
+    if (editingClient) {
+      const updatedClient = { ...editingClient, ...values };
+      const updatedClients = clients.map(c => c.id === editingClient.id ? updatedClient : c);
+      saveClients(updatedClients);
+      toast({ title: "Cliente Atualizado", description: `Os dados de ${values.name} foram atualizados.` });
+    } else {
+      const newClient = { id: `client-${Date.now()}`, ...values };
+      const updatedClients = [...clients, newClient];
+      saveClients(updatedClients);
+      toast({ title: "Cliente Adicionado", description: `${values.name} foi adicionado à sua lista de clientes.` });
+    }
+    setIsDialogOpen(false);
+    setEditingClient(null);
+  };
+  
+  const handleDeleteClient = () => {
+    if (!clientToDelete) return;
+    const updatedClients = clients.filter(c => c.id !== clientToDelete.id);
+    saveClients(updatedClients);
+    toast({ title: "Cliente Removido", description: `${clientToDelete.name} foi removido da lista.`, variant: "destructive" });
+    setClientToDelete(null);
+  };
+
+  const filteredClients = useMemo(() => {
+    return clients.filter(client =>
+      client.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ).sort((a,b) => a.name.localeCompare(b.name));
+  }, [clients, searchTerm]);
+
+  if (isLoading) {
+    return <p>Carregando clientes...</p>;
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-4 mb-4">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Buscar clientes por nome..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <Button onClick={() => { setEditingClient(null); setIsDialogOpen(true); }} className="ml-auto">
+          <PlusCircle className="mr-2 h-5 w-5" /> Adicionar Cliente
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Clientes</CardTitle>
+          <CardDescription>
+            Gerencie as informações dos seus clientes. Total de {filteredClients.length} clientes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Telefone</TableHead>
+                <TableHead>Observações</TableHead>
+                <TableHead><span className="sr-only">Ações</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredClients.length > 0 ? filteredClients.map(client => (
+                <TableRow key={client.id}>
+                  <TableCell className="font-medium">{client.name}</TableCell>
+                  <TableCell>{client.phone || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground truncate max-w-xs">{client.notes || '-'}</TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Menu de ações</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => { setEditingClient(client); setIsDialogOpen(true); }}>
+                          <Edit className="mr-2 h-4 w-4" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => setClientToDelete(client)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Remover
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              )) : (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-24 text-center">
+                    Nenhum cliente encontrado.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+        <CardFooter>
+          <div className="text-xs text-muted-foreground">
+            Mostrando <strong>{filteredClients.length}</strong> de <strong>{clients.length}</strong> clientes.
+          </div>
+        </CardFooter>
+      </Card>
+      
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingClient ? 'Editar Cliente' : 'Adicionar Novo Cliente'}</DialogTitle>
+            <DialogDescription>
+              {editingClient ? 'Atualize os dados do cliente.' : 'Preencha os dados do novo cliente.'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={form.onSubmit(handleSaveClient)} className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="name">Nome do Cliente</Label>
+              <Input id="name" placeholder="Ex: João da Silva" {...form.getInputProps('name')} />
+              {form.errors.name && <p className="text-sm font-medium text-destructive">{form.errors.name}</p>}
+            </div>
+            <div>
+              <Label htmlFor="phone">Telefone (Opcional)</Label>
+              <Input id="phone" placeholder="(99) 99999-9999" {...form.getInputProps('phone')} />
+            </div>
+            <div>
+              <Label htmlFor="notes">Observações (Opcional)</Label>
+              <Textarea id="notes" placeholder="Ex: Cliente prefere mesa perto da janela." {...form.getInputProps('notes')} />
+            </div>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+              <Button type="submit">Salvar</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      {clientToDelete && (
+        <AlertDialog open={!!clientToDelete} onOpenChange={() => setClientToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja remover o cliente "{clientToDelete.name}"? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteClient} className="bg-destructive hover:bg-destructive/90">
+                Remover
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </>
+  );
+}

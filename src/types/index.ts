@@ -11,6 +11,13 @@ export type ProductCategory = {
   iconName: string;
 };
 
+export interface Client {
+  id: string;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+}
+
 export interface Product {
   id: string;
   name: string;
