@@ -1,5 +1,6 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client } from '@/types';
+
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, type LucideIcon } from 'lucide-react';
 
 // --- LocalStorage Helper Functions ---
@@ -208,7 +209,11 @@ export const getClients = (): Client[] => getFromLocalStorage(KEY_CLIENTS, INITI
 export const saveClients = (clients: Client[]) => saveToLocalStorage(KEY_CLIENTS, clients);
 
 export const getFinancialEntries = (): FinancialEntry[] => getFromLocalStorage(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
-export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
+export const saveFinancialEntries = (entries: FinancialEntry[]) => {
+    saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
+    recalculateBalances(); // Recalculate balances whenever entries change
+};
+
 
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
@@ -224,6 +229,25 @@ export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: 
 
 
 // --- Business Logic Functions ---
+
+export const recalculateBalances = () => {
+    const entries = getFinancialEntries();
+
+    const bankTotal = entries
+        .filter(e => e.source === 'bank_account')
+        .reduce((sum, e) => sum + (e.type === 'income' ? e.amount : -e.amount), 0);
+    
+    saveBankAccount({ balance: bankTotal }, { silent: true });
+
+    const secondaryCashTotal = entries
+        .filter(e => e.source === 'secondary_cash')
+        .reduce((sum, e) => sum + (e.type === 'income' ? e.amount : -e.amount), 0);
+    
+    saveSecondaryCashBox({ balance: secondaryCashTotal }, { silent: true });
+    
+    // Dispatch a final storage event to notify all components of the updates
+    window.dispatchEvent(new StorageEvent('storage', { key: 'balancesRecalculated' }));
+}
 
 export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Date }) => {
   const newSale: Sale = {
@@ -289,27 +313,8 @@ export const removeSale = (saleId: string) => {
   saveSales(updatedSales);
 
   const currentFinancials = getFinancialEntries();
-  const entriesFromThisSale = currentFinancials.filter(e => e.saleId === saleId);
-  const otherEntries = currentFinancials.filter(e => e.saleId !== saleId);
-
-  // Revert balance changes from this sale
-  let currentBank = getBankAccount();
-  let bankBalanceChanged = false;
-  
-  entriesFromThisSale.forEach(entry => {
-    if (entry.source === 'bank_account') {
-        currentBank.balance = entry.type === 'income' 
-            ? currentBank.balance - entry.amount 
-            : currentBank.balance + entry.amount;
-        bankBalanceChanged = true;
-    }
-  });
-
-  if (bankBalanceChanged) {
-      saveBankAccount(currentBank);
-  }
-
-  saveFinancialEntries(otherEntries);
+  const updatedFinancials = currentFinancials.filter(e => e.saleId !== saleId);
+  saveFinancialEntries(updatedFinancials); // This will trigger recalculateBalances
 }
 
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
@@ -321,23 +326,6 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
         id: `fin-${Date.now()}-${Math.random()}`,
         timestamp: new Date()
     }));
-
-    // Update balances based on the new entries
-    let currentBank = getBankAccount();
-    let bankBalanceChanged = false;
-
-    newEntries.forEach(e => {
-        if (e.source === 'bank_account') {
-            currentBank.balance = e.type === 'income' 
-                ? currentBank.balance + e.amount 
-                : currentBank.balance - e.amount;
-            bankBalanceChanged = true;
-        }
-    });
-
-    if(bankBalanceChanged){
-        saveBankAccount(currentBank);
-    }
     
     saveFinancialEntries([...currentEntries, ...newEntries]);
 };
@@ -347,33 +335,21 @@ export const removeFinancialEntry = (entryId: string) => {
   const entryToRemove = currentEntries.find(e => e.id === entryId);
   if (!entryToRemove) return;
 
-  const updatedEntries = currentEntries.filter(e => e.id !== entryId);
-  saveFinancialEntries(updatedEntries);
-
-  // Revert balance changes upon deletion
-  if (entryToRemove.source === 'bank_account') {
-    const currentAccount = getBankAccount();
-    const newBalance = entryToRemove.type === 'income'
-        ? currentAccount.balance - entryToRemove.amount // Revert income by subtracting
-        : currentAccount.balance + entryToRemove.amount; // Revert expense by adding
-    saveBankAccount({ balance: newBalance });
-  } else if (entryToRemove.source === 'secondary_cash' && entryToRemove.type === 'expense') {
-     const currentBox = getSecondaryCashBox();
-     saveSecondaryCashBox({ balance: currentBox.balance + entryToRemove.amount });
-  } else if (entryToRemove.source === 'daily_cash' && entryToRemove.type === 'expense') {
-    const cashStatus = getCashRegisterStatus();
-    if(cashStatus.status === 'open') {
-        const adjustment: CashAdjustment = {
-            id: `adj-revert-${Date.now()}`,
-            amount: entryToRemove.amount,
-            type: 'in', // Revert an expense by adding money back
-            description: `Estorno despesa: ${entryToRemove.description}`,
-            timestamp: new Date().toISOString(),
-            isCorrection: true, // Mark as a system correction
-        };
-        saveCashRegisterStatus({...cashStatus, adjustments: [...(cashStatus.adjustments || []), adjustment]});
-    }
+  // Do not allow removing entries linked to a sale, as it would corrupt data.
+  if(entryToRemove.saleId) {
+      throw new Error("Cannot remove a financial entry linked to a sale. Please remove the sale instead.");
   }
+  
+  if (entryToRemove.source === 'daily_cash') {
+      const cashStatus = getCashRegisterStatus();
+      if(cashStatus.status === 'open') {
+          const updatedAdjustments = (cashStatus.adjustments || []).filter(adj => adj.id !== entryToRemove.adjustmentId);
+          saveCashRegisterStatus({ ...cashStatus, adjustments: updatedAdjustments });
+      }
+  }
+
+  const updatedEntries = currentEntries.filter(e => e.id !== entryId);
+  saveFinancialEntries(updatedEntries); // This will trigger recalculateBalances
 }
 
 // --- UI Helpers ---
