@@ -209,11 +209,7 @@ export const getClients = (): Client[] => getFromLocalStorage(KEY_CLIENTS, INITI
 export const saveClients = (clients: Client[]) => saveToLocalStorage(KEY_CLIENTS, clients);
 
 export const getFinancialEntries = (): FinancialEntry[] => getFromLocalStorage(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
-export const saveFinancialEntries = (entries: FinancialEntry[]) => {
-    saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
-    recalculateBalances(); // Recalculate balances whenever entries change
-};
-
+export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
 
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
@@ -230,25 +226,6 @@ export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: 
 
 // --- Business Logic Functions ---
 
-export const recalculateBalances = () => {
-    const entries = getFinancialEntries();
-
-    const bankTotal = entries
-        .filter(e => e.source === 'bank_account')
-        .reduce((sum, e) => sum + (e.type === 'income' ? e.amount : -e.amount), 0);
-    
-    saveBankAccount({ balance: bankTotal }, { silent: true });
-
-    const secondaryCashTotal = entries
-        .filter(e => e.source === 'secondary_cash')
-        .reduce((sum, e) => sum + (e.type === 'income' ? e.amount : -e.amount), 0);
-    
-    saveSecondaryCashBox({ balance: secondaryCashTotal }, { silent: true });
-    
-    // Dispatch a final storage event to notify all components of the updates
-    window.dispatchEvent(new StorageEvent('storage', { key: 'balancesRecalculated' }));
-}
-
 export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Date }) => {
   const newSale: Sale = {
     ...sale,
@@ -263,11 +240,21 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
 
+  // This function will modify balances and create entries in one go.
   newSale.payments.forEach(p => {
-    const isBankTransaction = ['debit', 'credit', 'pix'].includes(p.method);
+    if (['debit', 'credit', 'pix'].includes(p.method)) {
+      const currentBank = getBankAccount();
+      let feeRate = 0;
+      if (p.method === 'debit') feeRate = fees.debitRate;
+      if (p.method === 'credit') feeRate = fees.creditRate;
+      if (p.method === 'pix') feeRate = fees.pixRate;
 
-    if (isBankTransaction) {
-      // Add the income from the sale to the bank account
+      const feeAmount = p.amount * (feeRate / 100);
+      const netAmount = p.amount - feeAmount;
+
+      saveBankAccount({ balance: currentBank.balance + netAmount });
+      
+      // Add income from the sale to the bank account
       newFinancialEntries.push({
         description: `Venda #${newSale.id.slice(-6)} via ${p.method}`,
         amount: p.amount,
@@ -277,25 +264,42 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
         adjustmentId: null
       });
 
-      // Add the transaction fee as an expense from the bank account
-      let feeRate = 0;
-      if (p.method === 'debit') feeRate = fees.debitRate;
-      if (p.method === 'credit') feeRate = fees.creditRate;
-      if (p.method === 'pix') feeRate = fees.pixRate;
-
-      if (feeRate > 0) {
-        const feeAmount = p.amount * (feeRate / 100);
-        if (feeAmount > 0) {
-          newFinancialEntries.push({
-            description: `Taxa ${p.method} venda #${newSale.id.slice(-6)}`,
-            amount: feeAmount,
-            type: 'expense',
-            source: 'bank_account',
-            saleId: newSale.id,
-            adjustmentId: null
-          });
-        }
+      if (feeAmount > 0) {
+        newFinancialEntries.push({
+          description: `Taxa ${p.method} venda #${newSale.id.slice(-6)}`,
+          amount: feeAmount,
+          type: 'expense',
+          source: 'bank_account',
+          saleId: newSale.id,
+          adjustmentId: null
+        });
       }
+    } else if (p.method === 'cash') {
+        const cashStatus = getCashRegisterStatus();
+        if (cashStatus.status === 'open') {
+             // Cash goes into the daily drawer, which is calculated dynamically and doesn't have a stored balance.
+             // We still create a financial entry for tracking purposes.
+             newFinancialEntries.push({
+                description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
+                amount: p.amount,
+                type: 'income',
+                source: 'daily_cash',
+                saleId: newSale.id,
+                adjustmentId: null,
+             })
+        } else {
+            // If daily cash is closed, assume it goes to secondary box
+            const currentSecondary = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: currentSecondary.balance + p.amount });
+            newFinancialEntries.push({
+                description: `Venda #${newSale.id.slice(-6)} em dinheiro (Caixa Fechado)`,
+                amount: p.amount,
+                type: 'income',
+                source: 'secondary_cash',
+                saleId: newSale.id,
+                adjustmentId: null,
+             })
+        }
     }
   });
 
@@ -311,10 +315,34 @@ export const removeSale = (saleId: string) => {
 
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
+  
+  // Revert financial impacts
+  const fees = getTransactionFees();
+  saleToRemove.payments.forEach(p => {
+    if (['debit', 'credit', 'pix'].includes(p.method)) {
+      const currentBank = getBankAccount();
+      let feeRate = 0;
+      if (p.method === 'debit') feeRate = fees.debitRate;
+      if (p.method === 'credit') feeRate = fees.creditRate;
+      if (p.method === 'pix') feeRate = fees.pixRate;
+
+      const feeAmount = p.amount * (feeRate / 100);
+      const netAmount = p.amount - feeAmount;
+
+      saveBankAccount({ balance: currentBank.balance - netAmount });
+    } else if (p.method === 'cash') {
+        // Reverting cash is tricky. Assume it was in secondary box if cash is closed, otherwise do nothing as daily cash is dynamic.
+         const cashStatus = getCashRegisterStatus();
+         if(cashStatus.status === 'closed') {
+             const secondaryBox = getSecondaryCashBox();
+             saveSecondaryCashBox({ balance: secondaryBox.balance - p.amount });
+         }
+    }
+  });
 
   const currentFinancials = getFinancialEntries();
   const updatedFinancials = currentFinancials.filter(e => e.saleId !== saleId);
-  saveFinancialEntries(updatedFinancials); // This will trigger recalculateBalances
+  saveFinancialEntries(updatedFinancials); 
 }
 
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
@@ -326,6 +354,18 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
         id: `fin-${Date.now()}-${Math.random()}`,
         timestamp: new Date()
     }));
+
+    // Update balances based on the new entries
+    newEntries.forEach(e => {
+        const value = e.type === 'income' ? e.amount : -e.amount;
+        if (e.source === 'bank_account') {
+            const current = getBankAccount();
+            saveBankAccount({ balance: current.balance + value });
+        } else if (e.source === 'secondary_cash') {
+            const current = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: current.balance + value });
+        }
+    });
     
     saveFinancialEntries([...currentEntries, ...newEntries]);
 };
@@ -335,21 +375,31 @@ export const removeFinancialEntry = (entryId: string) => {
   const entryToRemove = currentEntries.find(e => e.id === entryId);
   if (!entryToRemove) return;
 
-  // Do not allow removing entries linked to a sale, as it would corrupt data.
   if(entryToRemove.saleId) {
       throw new Error("Cannot remove a financial entry linked to a sale. Please remove the sale instead.");
   }
   
+  // Revert balance change
+  const value = entryToRemove.type === 'income' ? entryToRemove.amount : -entryToRemove.amount;
+  if(entryToRemove.source === 'bank_account') {
+    const bank = getBankAccount();
+    saveBankAccount({ balance: bank.balance - value });
+  } else if (entryToRemove.source === 'secondary_cash') {
+    const secondary = getSecondaryCashBox();
+    saveSecondaryCashBox({ balance: secondary.balance - value });
+  }
+
+  // Remove from cash register adjustments if it's from daily_cash
   if (entryToRemove.source === 'daily_cash') {
       const cashStatus = getCashRegisterStatus();
-      if(cashStatus.status === 'open') {
+      if(cashStatus.status === 'open' && entryToRemove.adjustmentId) {
           const updatedAdjustments = (cashStatus.adjustments || []).filter(adj => adj.id !== entryToRemove.adjustmentId);
           saveCashRegisterStatus({ ...cashStatus, adjustments: updatedAdjustments });
       }
   }
 
   const updatedEntries = currentEntries.filter(e => e.id !== entryId);
-  saveFinancialEntries(updatedEntries); // This will trigger recalculateBalances
+  saveFinancialEntries(updatedEntries);
 }
 
 // --- UI Helpers ---
@@ -374,3 +424,4 @@ export const formatCurrency = (value: number) => {
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }
+

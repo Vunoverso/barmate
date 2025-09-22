@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
@@ -525,3 +526,4 @@ export default function ReportsClient() {
     </div>
   );
 }
+

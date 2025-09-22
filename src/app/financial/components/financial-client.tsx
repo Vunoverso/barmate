@@ -10,7 +10,8 @@ import {
   getCashRegisterStatus, getSales, PAYMENT_METHODS,
   removeSale,
   removeFinancialEntry,
-  addFinancialEntry
+  addFinancialEntry,
+  saveCashRegisterStatus,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -1127,3 +1128,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
