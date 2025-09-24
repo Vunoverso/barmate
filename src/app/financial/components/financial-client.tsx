@@ -251,9 +251,10 @@ export default function FinancialClient() {
   }, [incomeEntries, incomePagination.itemsPerPage]);
 
 
-  const totalRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
+  const salesRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
+  const otherIncome = useMemo(() => incomeEntries.filter(e => !e.saleId).reduce((sum, entry) => sum + entry.amount, 0), [incomeEntries]);
   const totalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0), [filteredEntries]);
-  const netBalance = useMemo(() => totalRevenue - totalExpenses, [totalRevenue, totalExpenses]);
+  const netBalance = useMemo(() => salesRevenue + otherIncome - totalExpenses, [salesRevenue, otherIncome, totalExpenses]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
     const combinedData = [...filteredSales, ...filteredEntries.filter(e => e.type === 'expense')];
@@ -623,12 +624,22 @@ export default function FinancialClient() {
           <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+                  <CardTitle className="text-sm font-medium">Receita de Vendas</CardTitle>
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(totalRevenue) : '******'}</div>
-                  <p className="text-xs text-muted-foreground">Total de vendas no período</p>
+                  <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(salesRevenue) : '******'}</div>
+                  <p className="text-xs text-muted-foreground">Faturamento de vendas no período.</p>
+              </CardContent>
+              </Card>
+              <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Outras Entradas</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(otherIncome) : '******'}</div>
+                  <p className="text-xs text-muted-foreground">Suprimentos e ajustes manuais.</p>
               </CardContent>
               </Card>
               <Card>
@@ -638,7 +649,7 @@ export default function FinancialClient() {
               </CardHeader>
               <CardContent>
                   <div className="text-2xl font-bold text-destructive">{isBalanceVisible ? formatCurrency(totalExpenses) : '******'}</div>
-                  <p className="text-xs text-muted-foreground">Total de saídas no período</p>
+                  <p className="text-xs text-muted-foreground">Saídas, taxas e despesas manuais.</p>
               </CardContent>
               </Card>
               <Card>
@@ -650,17 +661,7 @@ export default function FinancialClient() {
                   <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
                   {isBalanceVisible ? formatCurrency(netBalance) : '******'}
                   </div>
-                  <p className="text-xs text-muted-foreground">Receita - Despesas</p>
-              </CardContent>
-              </Card>
-              <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total de Vendas</CardTitle>
-                  <BarChart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                  <div className="text-2xl font-bold">+{filteredSales.length}</div>
-                  <p className="text-xs text-muted-foreground">Vendas realizadas no período</p>
+                  <p className="text-xs text-muted-foreground">(Vendas + Entradas) - Despesas</p>
               </CardContent>
               </Card>
           </CardContent>
@@ -1129,3 +1130,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
   );
 }
 
+
+    
