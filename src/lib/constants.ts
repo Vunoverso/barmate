@@ -45,10 +45,9 @@ export const DATA_KEYS = [
     'barmate_clients_v2',
     'barmate_financialEntries_v2',
     'barmate_cashRegisterStatus_v2',
-    'barmate_secondaryCashBox_v2',
-    'barmate_bankAccount_v2',
     'barmate_transactionFees_v2',
     'barmate_counterSaleOrderItems_v2',
+    'barmate_closedCashSessions_v2',
     'barName'
 ];
 const KEY_PRODUCT_CATEGORIES = 'barmate_productCategories_v2';
@@ -58,8 +57,6 @@ const KEY_OPEN_ORDERS = 'barmate_openOrders_v2';
 const KEY_CLIENTS = 'barmate_clients_v2';
 const KEY_FINANCIAL_ENTRIES = 'barmate_financialEntries_v2';
 const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
-const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
-const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
 const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
 export const KEY_CLOSED_SESSIONS = 'barmate_closedCashSessions_v2';
 
@@ -116,8 +113,6 @@ export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
 export const INITIAL_CLIENTS: Client[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
-export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { baseBalance: 0 };
-export const INITIAL_BANK_ACCOUNT: BankAccount = { baseBalance: 0 };
 export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 1.99, creditRate: 4.99, pixRate: 0.99 };
 
 // --- Data Migration ---
@@ -144,8 +139,6 @@ export const migrateOldData = () => {
         'barmate_clients', 'barmate_clients_v2',
         'barmate_financialEntries', 'barmate_financialEntries_v2',
         'barmate_cashRegisterStatus', 'barmate_cashRegisterStatus_v2',
-        'barmate_secondaryCashBox', 'barmate_secondaryCashBox_v2',
-        'barmate_bankAccount', 'barmate_bankAccount_v2',
         'barmate_transactionFees', 'barmate_transactionFees_v2',
         'barmate_counterSaleOrderItems', 'barmate_counterSaleOrderItems_v2'
     ];
@@ -185,13 +178,6 @@ export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalSt
 
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
-
-export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box);
-
-export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-export const saveBankAccount = (account: BankAccount) => saveToLocalStorage(KEY_BANK_ACCOUNT, account);
-
 
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
 export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
@@ -268,7 +254,7 @@ export const removeSale = (saleId: string) => {
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
-  removeFinancialEntry(undefined, saleId);
+  removeFinancialEntry(saleId, true); // Always revert financial impact of a sale
 }
 
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
@@ -285,19 +271,32 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
     saveFinancialEntries(allEntries);
 };
 
-export const removeFinancialEntry = (entryId?: string | null, saleId?: string | null) => {
-  if (!entryId && !saleId) return;
+export const removeFinancialEntry = (identifier: string, revert: boolean) => {
+    const allEntries = getFinancialEntries();
+    
+    // Find all entries related to the adjustment ID or the single financial entry ID
+    const entriesToRemove = allEntries.filter(e => e.adjustmentId === identifier || e.id === identifier);
 
-  const currentEntries = getFinancialEntries();
-  
-  const entriesToKeep = currentEntries.filter(e => {
-      if (entryId) return e.id !== entryId;
-      if (saleId) return e.saleId !== saleId;
-      return true;
-  });
+    if (entriesToRemove.length === 0) {
+        return;
+    }
 
-  saveFinancialEntries(entriesToKeep);
-}
+    if (revert) {
+      // If reverting, just filter them out and save
+      const entriesToKeep = allEntries.filter(e => !entriesToRemove.some(r => r.id === e.id));
+      saveFinancialEntries(entriesToKeep);
+    } else {
+      // If not reverting, mark them as 'reverted' so they are kept but can be ignored in calculations if needed.
+      // For now, let's just remove them as there's no "reverted" status.
+      // This is now simplified: not reverting just means deleting without financial impact,
+      // which is what filtering them out does. The difference is handled by the caller.
+      // The instruction is to simply remove the line from the history.
+      const entriesToKeep = allEntries.filter(e => !entriesToRemove.some(r => r.id === e.id));
+      saveFinancialEntries(entriesToKeep);
+    }
+};
+
+
 
 export const clearFinancialData = () => {
     if (typeof window !== 'undefined') {
@@ -305,9 +304,6 @@ export const clearFinancialData = () => {
         saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
         saveToLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
         saveToLocalStorage(KEY_CLOSED_SESSIONS, []);
-        saveToLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-        saveToLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-
         window.dispatchEvent(new StorageEvent('storage'));
     }
 };

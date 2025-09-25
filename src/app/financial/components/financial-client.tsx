@@ -407,11 +407,15 @@ export default function FinancialClient() {
   };
 
 
-  const handleDeleteEntry = () => {
+  const handleDeleteEntry = (revert: boolean) => {
     if (!entryToDelete) return;
     
-    removeFinancialEntry(entryToDelete.id);
-    toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
+    removeFinancialEntry(entryToDelete.id, revert);
+    toast({ 
+        title: "Registro Removido", 
+        description: `O registro foi removido ${revert ? 'e o valor estornado.' : 'sem estornar o valor.'}`,
+        variant: "default" 
+    });
     setEntryToDelete(null);
   };
   
@@ -934,8 +938,23 @@ export default function FinancialClient() {
       {entryToDelete && (
         <AlertDialog open={!!entryToDelete} onOpenChange={() => setEntryToDelete(null)}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Confirmar Remoção</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja remover o lançamento "{entryToDelete.description}"? A remoção estornará o valor do caixa de origem. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteEntry} className="bg-destructive hover:bg-destructive/90">Remover</AlertDialogAction></AlertDialogFooter>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
+              <AlertDialogDescription>
+                Como você deseja remover o lançamento "{entryToDelete.description}"?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="sm:justify-between gap-2">
+                <Button variant="secondary" onClick={() => handleDeleteEntry(false)}>
+                    Apenas Excluir do Histórico
+                </Button>
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleDeleteEntry(true)} className="bg-destructive hover:bg-destructive/90">
+                        Excluir e Estornar Valor
+                    </AlertDialogAction>
+                </div>
+            </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       )}

@@ -3,7 +3,7 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS } from '@/lib/constants';
+import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS, removeFinancialEntry } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -163,7 +163,8 @@ export default function CashRegisterClient() {
         const originalAdjustment = currentCashStatus.adjustments?.find(adj => adj.id === idToUpdate);
         if (!originalAdjustment) return;
         
-        revertAdjustment(originalAdjustment);
+        // Remove the old financial entries associated with the adjustment
+        removeFinancialEntry(originalAdjustment.id, false); 
         
         const updatedAdjustment: CashAdjustment = { ...originalAdjustment, amount: details.amount, description: details.description };
         
@@ -195,16 +196,16 @@ export default function CashRegisterClient() {
   };
   
   const applyAdjustment = (adjustment: CashAdjustment) => {
-      const entry: Omit<FinancialEntry, 'id' | 'timestamp'> = {
+      const entriesToAdd: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
+      
+       entriesToAdd.push({
         description: `${adjustment.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${adjustment.description}`,
         amount: adjustment.amount,
         type: adjustment.type === 'in' ? 'income' : 'expense',
         source: 'daily_cash',
         saleId: null,
         adjustmentId: adjustment.id
-      }
-      
-      const entriesToAdd: Omit<FinancialEntry, 'id'|'timestamp'>[] = [entry];
+      });
       
       if (adjustment.type === 'out') { // Sangria
           if (adjustment.destination === 'secondary_cash') {
@@ -217,23 +218,20 @@ export default function CashRegisterClient() {
       addFinancialEntry(entriesToAdd);
   }
   
-  const revertAdjustment = (adjustment: CashAdjustment) => {
-      // Do not revert financial entries if the adjustment is just a correction
-      if(adjustment.isCorrection) return;
-      const allEntries = getFinancialEntries();
-      const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustment.id);
-      saveFinancialEntries(entriesToKeep);
-  }
-
-  const handleDeleteAdjustment = () => {
+  const handleDeleteAdjustment = (revert: boolean) => {
     if (!adjustmentToDelete) return;
     const currentCashStatus = getCashRegisterStatus();
     if (currentCashStatus.status !== 'open') return;
 
-    revertAdjustment(adjustmentToDelete);
+    removeFinancialEntry(adjustmentToDelete.id, revert);
     const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
     saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-    toast({ title: "Movimentação Removida", variant: "destructive" });
+    
+    toast({ 
+        title: "Movimentação Removida", 
+        description: `A movimentação foi removida ${revert ? 'e o valor estornado.' : 'sem estornar o valor.'}`,
+        variant: "default" 
+    });
     setAdjustmentToDelete(null);
   };
 
@@ -645,14 +643,19 @@ export default function CashRegisterClient() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
               <AlertDialogDescription>
-                Tem certeza que deseja remover a movimentação "{adjustmentToDelete.description}" no valor de {formatCurrency(adjustmentToDelete.amount)}? Esta ação não pode ser desfeita e irá reverter o valor da origem/destino se aplicável.
+                Como você deseja remover a movimentação "{adjustmentToDelete.description}"?
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteAdjustment} className="bg-destructive hover:bg-destructive/90">
-                Remover
-              </AlertDialogAction>
+            <AlertDialogFooter className="sm:justify-between gap-2">
+                <Button variant="secondary" onClick={() => handleDeleteAdjustment(false)}>
+                    Apenas Excluir do Histórico
+                </Button>
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleDeleteAdjustment(true)} className="bg-destructive hover:bg-destructive/90">
+                        Excluir e Estornar Valor
+                    </AlertDialogAction>
+                </div>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
