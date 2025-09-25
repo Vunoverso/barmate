@@ -338,7 +338,6 @@ export default function CashRegisterClient() {
           saveBankAccount({ ...getBankAccount(), baseBalance: newBalance });
           setIsEditBankAccountDialogOpen(false);
       }
-      loadInitialData(); // Recarrega os dados para a UI refletir a mudança
       toast({ title: "Saldo Atualizado", description: `O saldo base foi ajustado para ${formatCurrency(newBalance)}.` });
   }
 
