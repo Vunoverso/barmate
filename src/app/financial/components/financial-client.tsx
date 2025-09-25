@@ -12,6 +12,8 @@ import {
   saveCashRegisterStatus,
   getCashRegisterStatus,
   saveFinancialEntries,
+  getVisuallyRemovedFinancialEntries,
+  saveVisuallyRemovedFinancialEntries,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -129,7 +131,7 @@ export default function FinancialClient() {
     setEntries(getFinancialEntries());
     setSales(getSales());
     setCashStatus(getCashRegisterStatus());
-    setVisuallyRemovedEntries([]);
+    setVisuallyRemovedEntries(getVisuallyRemovedFinancialEntries());
   }, []);
   
   useEffect(() => {
@@ -163,14 +165,14 @@ export default function FinancialClient() {
   
   const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+    
     const openingTime = new Date(cashStatus.openingTime);
     
-    // This logic now mirrors the one in cash-register-client.tsx
-    const sessionTransactions = entries.filter(e => 
-        e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime
+    const allSessionEntries = entries.filter(e => 
+      e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime
     );
-    
-    return sessionTransactions.reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+
+    return allSessionEntries.reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [cashStatus, entries]);
 
 
@@ -422,8 +424,10 @@ export default function FinancialClient() {
     if (revert) {
       removeFinancialEntry(entryToDelete.id, true);
     } else {
-      removeFinancialEntry(entryToDelete.id, false);
-      setVisuallyRemovedEntries(prev => [...prev, entryToDelete.id]);
+      const currentRemoved = getVisuallyRemovedFinancialEntries();
+      const newRemoved = [...currentRemoved, entryToDelete.id];
+      setVisuallyRemovedEntries(newRemoved);
+      saveVisuallyRemovedFinancialEntries(newRemoved);
     }
     
     toast({ 
@@ -1162,5 +1166,6 @@ function EditBalanceDialog({
     </Dialog>
   );
 }
+
 
 

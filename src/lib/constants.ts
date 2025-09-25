@@ -35,6 +35,34 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
   }
 };
 
+// --- SessionStorage Helper Functions ---
+const saveToSessionStorage = <T,>(key: string, value: T) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const serializedValue = JSON.stringify(value);
+      window.sessionStorage.setItem(key, serializedValue);
+    } catch (error) {
+      console.error(`Error saving to sessionStorage key "${key}":`, error);
+    }
+  }
+};
+
+const getFromSessionStorage = <T,>(key: string, defaultValue: T): T => {
+  if (typeof window === 'undefined') {
+    return defaultValue;
+  }
+  try {
+    const storedValue = window.sessionStorage.getItem(key);
+    if (storedValue === null || storedValue === 'undefined') {
+      return defaultValue;
+    }
+    return JSON.parse(storedValue);
+  } catch (error) {
+    console.error(`Error parsing sessionStorage key "${key}":`, error);
+    return defaultValue;
+  }
+};
+
 
 // --- DATA KEYS ---
 export const DATA_KEYS = [
@@ -61,6 +89,8 @@ const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
 export const KEY_CLOSED_SESSIONS = 'barmate_closedCashSessions_v2';
 const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
 const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
+const KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES = 'barmate_session_visuallyRemovedFinancialEntries';
+const KEY_VISUALLY_REMOVED_ADJUSTMENTS = 'barmate_session_visuallyRemovedAdjustments';
 
 
 // --- INITIAL DATA (CLEAN STATE) ---
@@ -192,6 +222,12 @@ export const saveSecondaryCashBox = (data: SecondaryCashBox) => saveToLocalStora
 export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
 export const saveBankAccount = (data: BankAccount) => saveToLocalStorage(KEY_BANK_ACCOUNT, data);
 
+export const getVisuallyRemovedFinancialEntries = (): string[] => getFromSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
+export const saveVisuallyRemovedFinancialEntries = (ids: string[]) => saveToSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
+
+export const getVisuallyRemovedAdjustments = (): string[] => getFromSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, []);
+export const saveVisuallyRemovedAdjustments = (ids: string[]) => saveToSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
+
 
 // --- Business Logic Functions ---
 
@@ -296,7 +332,7 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
 };
 
 export const removeFinancialEntry = (identifier: string, revert: boolean) => {
-    let allEntries = getFinancialEntries();
+    const allEntries = getFinancialEntries();
     const entriesToRemove = allEntries.filter(e => e.id === identifier || e.adjustmentId === identifier);
 
     if (entriesToRemove.length === 0) {
@@ -320,7 +356,6 @@ export const removeFinancialEntry = (identifier: string, revert: boolean) => {
       }
     }
     
-    // Always remove the original entries from the history
     const entriesToKeep = allEntries.filter(e => !entriesToRemove.some(r => r.id === e.id));
     saveFinancialEntries(entriesToKeep);
 };

@@ -3,7 +3,7 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS, removeFinancialEntry } from '@/lib/constants';
+import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS, removeFinancialEntry, getVisuallyRemovedAdjustments, saveVisuallyRemovedAdjustments } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -75,7 +75,7 @@ export default function CashRegisterClient() {
     setCashStatus(getCashRegisterStatus());
     setAllFinancialEntries(getFinancialEntries());
     setSales(getSales());
-    setVisuallyRemovedAdjustments([]);
+    setVisuallyRemovedAdjustments(getVisuallyRemovedAdjustments());
     setIsLoading(false);
   }, []);
 
@@ -231,7 +231,10 @@ export default function CashRegisterClient() {
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
       }
     } else {
-      setVisuallyRemovedAdjustments(prev => [...prev, adjustmentToDelete.id]);
+      const currentRemoved = getVisuallyRemovedAdjustments();
+      const newRemoved = [...currentRemoved, adjustmentToDelete.id];
+      setVisuallyRemovedAdjustments(newRemoved);
+      saveVisuallyRemovedAdjustments(newRemoved);
     }
     
     toast({ 
@@ -366,6 +369,7 @@ export default function CashRegisterClient() {
 
     const newStatus = { status: 'closed' as 'closed', adjustments: [] };
     saveCashRegisterStatus(newStatus);
+    saveVisuallyRemovedAdjustments([]); // Clear session removals
     
     setIsClosingDialog(false);
     toast({ title: "Caixa Fechado!", description: `O valor de ${formatCurrency(finalCashAmount)} foi transferido para o Caixa 02.`, variant: 'default' });
