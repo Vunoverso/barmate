@@ -288,7 +288,7 @@ export const removeSale = (saleId: string) => {
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
-  removeFinancialEntry(null, saleId);
+  removeFinancialEntry(undefined, saleId);
 }
 
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
