@@ -405,6 +405,7 @@ export default function OrdersClient() {
   }, [currentOrderId]);
 
   const { orderTotal, consumedTotal } = useMemo(() => {
+    if (!currentOrderItems) return { orderTotal: 0, consumedTotal: 0 };
     const total = currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
     const consumed = currentOrderItems
       .filter(item => item.price > 0)
@@ -423,7 +424,7 @@ export default function OrdersClient() {
     const totalPaid = details.payments.reduce((sum, p) => sum + p.amount, 0);
     const effectiveOrderTotal = orderTotal - details.discountAmount;
 
-    if (totalPaid < effectiveOrderTotal) { // Simplified check for partial payment
+    if (allowPartialPayment && totalPaid < effectiveOrderTotal) { // Explicit check for partial payment
         const paymentItems: OrderItem[] = details.payments.map(p => ({
             id: `payment-${p.method}-${Date.now()}`, name: `Pagamento Parcial (${p.method})`, price: -p.amount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null
         }));
@@ -438,8 +439,9 @@ export default function OrdersClient() {
         const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
         saveOpenOrders(newOpenOrders);
 
+        // For partial payments, we only log the payment itself as a "sale" of services
         addSale({
-            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), originalAmount: totalPaid, discountAmount: details.discountAmount, totalAmount: totalPaid - details.discountAmount, payments: details.payments, changeGiven: 0, status: 'completed', cashTendered: details.cashTendered
+            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), originalAmount: totalPaid, discountAmount: 0, totalAmount: totalPaid, payments: details.payments, changeGiven: 0, status: 'completed', cashTendered: details.cashTendered
         });
         
         toast({ title: "Pagamento Parcial Registrado", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
@@ -447,8 +449,9 @@ export default function OrdersClient() {
         return;
     }
     
+    // Full payment logic
     addSale({
-      items: currentOrderItems, originalAmount: currentOrderItems.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0), discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
+      items: currentOrder.items, originalAmount: consumedTotal, discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
     });
 
     const hasUnclaimedCombos = currentOrder.items.some(item => 
@@ -498,8 +501,10 @@ export default function OrdersClient() {
     saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
-  }, [currentOrderId, orderTotal, toast]);
+  }, [currentOrderId, orderTotal, consumedTotal, toast]);
   
+  const allowPartialPayment = true;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -854,7 +859,7 @@ export default function OrdersClient() {
         totalAmount={orderTotal}
         onSubmit={handlePayment}
         allowCredit={true}
-        allowPartialPayment={true}
+        allowPartialPayment={allowPartialPayment}
       />
 
       {orderToDelete && (
@@ -1171,3 +1176,5 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
         </Dialog>
     );
 }
+
+    
