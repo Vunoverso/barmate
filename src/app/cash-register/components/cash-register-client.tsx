@@ -224,17 +224,17 @@ export default function CashRegisterClient() {
     if (!adjustmentToDelete) return;
 
     if (revert) {
-      removeFinancialEntry(adjustmentToDelete.id, true);
-      const currentCashStatus = getCashRegisterStatus();
-      if (currentCashStatus.status === 'open') {
-        const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-        saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-      }
+        // This will revert the financial entries AND remove the adjustment from the cash status list
+        removeFinancialEntry(adjustmentToDelete.id, true);
+        const currentCashStatus = getCashRegisterStatus();
+        if (currentCashStatus.status === 'open') {
+            const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+            saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        }
     } else {
-      const currentRemoved = getVisuallyRemovedAdjustments();
-      const newRemoved = [...currentRemoved, adjustmentToDelete.id];
-      setVisuallyRemovedAdjustments(newRemoved);
-      saveVisuallyRemovedAdjustments(newRemoved);
+        // This will only hide the adjustment from the UI for the current session
+        setVisuallyRemovedAdjustments(prev => [...prev, adjustmentToDelete.id]);
+        saveVisuallyRemovedAdjustments([...visuallyRemovedAdjustments, adjustmentToDelete.id]);
     }
     
     toast({ 
@@ -491,7 +491,7 @@ export default function CashRegisterClient() {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="flex items-center gap-2"><ArrowUpCircle className="h-4 w-4 text-green-600"/>Suprimentos (Entradas)</span>
-                                    <span className="font-medium text-green-600">+ {formatCurrency(sessionSummary.totalIn - sessionSummary.openingBalance)}</span>
+                                    <span className="font-medium text-green-600">+ {formatCurrency(sessionSummary.totalIn)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-destructive"/>Sangrias (Saídas)</span>
@@ -962,5 +962,7 @@ function EditBalanceDialog({
     </Dialog>
   );
 }
+
+    
 
     
