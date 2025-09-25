@@ -60,8 +60,6 @@ const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
 export default function ReportsClient() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [financialEntries, setFinancialEntries] = useState<FinancialEntry[]>([]);
-  const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
-  const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -75,8 +73,6 @@ export default function ReportsClient() {
       try {
           setSales(getSales());
           setFinancialEntries(getFinancialEntries());
-          setSecondaryCashBox(getSecondaryCashBox());
-          setBankAccount(getBankAccount());
           setCashStatus(getCashRegisterStatus());
       } catch (error) {
           console.error("Failed to load report data from localStorage:", error);
@@ -146,16 +142,32 @@ export default function ReportsClient() {
   }, [filteredSales, filteredEntries]);
 
 
+  const secondaryCashBoxBalance = useMemo(() => 
+    financialEntries
+      .filter(e => e.source === 'secondary_cash')
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0), 
+    [financialEntries]
+  );
+  
+  const bankAccountBalance = useMemo(() => 
+    financialEntries
+      .filter(e => e.source === 'bank_account')
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0),
+    [financialEntries]
+  );
+
   const expectedCashInDrawer = useMemo(() => {
-    const allEntries = getFinancialEntries();
-    return allEntries
-        .filter(e => e.source === 'daily_cash')
+    if (cashStatus.status !== 'open') return 0;
+    const sessionStartTime = new Date(cashStatus.openingTime!).getTime();
+    
+    return financialEntries
+        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= sessionStartTime)
         .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-  }, [financialEntries]);
+  }, [cashStatus, financialEntries]);
 
   const totalGlobalBalance = useMemo(() => {
-    return expectedCashInDrawer + secondaryCashBox.balance + bankAccount.balance;
-  }, [expectedCashInDrawer, secondaryCashBox, bankAccount]);
+    return expectedCashInDrawer + secondaryCashBoxBalance + bankAccountBalance;
+  }, [expectedCashInDrawer, secondaryCashBoxBalance, bankAccountBalance]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
     const processEntries = (entries: FinancialEntry[], periodFormat: "yyyy-MM" | "yyyy-MM-dd", labelFormat: string, startOfWeek: boolean = false) => {
@@ -329,7 +341,7 @@ export default function ReportsClient() {
                     <PiggyBank className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(secondaryCashBox.balance)}</div>
+                    <div className="text-2xl font-bold">{formatCurrency(secondaryCashBoxBalance)}</div>
                 </CardContent>
             </Card>
             <Card>
@@ -338,7 +350,7 @@ export default function ReportsClient() {
                     <Landmark className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(bankAccount.balance)}</div>
+                    <div className="text-2xl font-bold">{formatCurrency(bankAccountBalance)}</div>
                 </CardContent>
             </Card>
         </div>
@@ -539,5 +551,7 @@ export default function ReportsClient() {
     </div>
   );
 }
+
+    
 
     
