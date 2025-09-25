@@ -11,7 +11,6 @@ import {
   removeFinancialEntry,
   addFinancialEntry,
   saveCashRegisterStatus,
-  recalculateAllBalances,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -157,8 +156,10 @@ export default function FinancialClient() {
   
  const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open') return 0;
-    const allEntries = getFinancialEntries();
-    return allEntries
+    const sessionStartTime = new Date(cashStatus.openingTime!).getTime();
+    const sessionEntries = getFinancialEntries().filter(e => new Date(e.timestamp).getTime() >= sessionStartTime);
+    
+    return sessionEntries
         .filter(e => e.source === 'daily_cash')
         .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [cashStatus, entries]);
@@ -248,7 +249,13 @@ export default function FinancialClient() {
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
     const processEntries = (entries: FinancialEntry[], periodFormat: "yyyy-MM" | "yyyy-MM-dd", labelFormat: string, startOfWeek: boolean = false) => {
-        return entries.reduce((acc, item) => {
+        const salesEntries = entries.filter(e => e.saleId && e.type === 'income');
+        const otherIncomes = entries.filter(e => !e.saleId && e.type === 'income');
+        const allExpenses = entries.filter(e => e.type === 'expense');
+
+        const combined = [...salesEntries, ...otherIncomes, ...allExpenses];
+
+        const grouped = combined.reduce((acc, item) => {
             let key, label;
             const date = new Date(item.timestamp);
             
@@ -263,7 +270,7 @@ export default function FinancialClient() {
             }
 
             if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
-
+            
             if (item.type === 'income') {
                 acc[key].income += item.amount;
             } else if (item.type === 'expense') {
@@ -272,6 +279,15 @@ export default function FinancialClient() {
 
             return acc;
         }, {} as Record<string, { period: string, income: number, expenses: number }>);
+        
+        return Object.values(grouped).sort((a,b) => {
+            const dateA = new Date(a.period.slice(3, 10) + '-' + a.period.slice(0, 2));
+            const dateB = new Date(b.period.slice(3, 10) + '-' + b.period.slice(0, 2));
+            if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+                return dateB.getTime() - dateA.getTime();
+            }
+            return b.period.localeCompare(a.period);
+        });
     };
 
     const monthly = processEntries(filteredEntries, "yyyy-MM", "MMMM yyyy");

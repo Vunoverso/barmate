@@ -227,8 +227,24 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
 
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
+  
+  // This calculates the total value paid with pre-existing credit, to exclude it from new income.
+  const creditPaidAmount = newSale.items
+    .filter(item => item.price < 0)
+    .reduce((sum, item) => sum + Math.abs(item.price * item.quantity), 0);
 
-  newSale.payments.forEach(p => {
+  let remainingPayments = [...newSale.payments];
+  let remainingCreditToApply = creditPaidAmount;
+
+  // Deduct credit amount from payments, starting with non-cash methods if possible.
+  for (const payment of remainingPayments) {
+      if (remainingCreditToApply <= 0) break;
+      const amountToDeduct = Math.min(payment.amount, remainingCreditToApply);
+      payment.amount -= amountToDeduct;
+      remainingCreditToApply -= amountToDeduct;
+  }
+  
+  remainingPayments.filter(p => p.amount > 0).forEach(p => {
     if (['debit', 'credit', 'pix'].includes(p.method)) {
       let feeRate = 0;
       if (p.method === 'debit') feeRate = fees.debitRate;
@@ -275,18 +291,32 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
 
 export const removeSale = (saleId: string) => {
   const currentSales = getSales();
-  const saleToRemove = currentSales.find(s => s.id === saleId);
-  if (!saleToRemove) return;
-
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
   const currentFinancials = getFinancialEntries();
+  const entriesToRemove = currentFinancials.filter(e => e.saleId === saleId);
   const updatedFinancials = currentFinancials.filter(e => e.saleId !== saleId);
-  saveFinancialEntries(updatedFinancials, { silent: true }); // Silent update first
-  
-  // Recalculate balances after removing entries
-  recalculateAllBalances();
+
+  // Revert balance changes
+  entriesToRemove.forEach(entry => {
+    updateBalance(entry.source, entry.amount, entry.type === 'income' ? 'expense' : 'income');
+  });
+
+  saveFinancialEntries(updatedFinancials);
+}
+
+const updateBalance = (source: FinancialEntry['source'], amount: number, type: 'income' | 'expense') => {
+  const change = type === 'income' ? amount : -amount;
+  if (source === 'bank_account') {
+    const account = getBankAccount();
+    saveBankAccount({ balance: account.balance + change });
+  } else if (source === 'secondary_cash') {
+    const box = getSecondaryCashBox();
+    saveSecondaryCashBox({ balance: box.balance + change });
+  } else if (source === 'daily_cash') {
+     // daily_cash balance is ephemeral and calculated from entries within a session, no separate balance to update.
+  }
 }
 
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
@@ -300,10 +330,11 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
     }));
 
     const allEntries = [...currentEntries, ...newEntries];
-    saveFinancialEntries(allEntries, { silent: true });
-    
-    // Instead of manually updating balances here, we recalculate everything
-    recalculateAllBalances();
+    saveFinancialEntries(allEntries);
+
+    newEntries.forEach(e => {
+      updateBalance(e.source, e.amount, e.type);
+    });
 };
 
 export const removeFinancialEntry = (entryId: string) => {
@@ -315,20 +346,11 @@ export const removeFinancialEntry = (entryId: string) => {
       throw new Error("Cannot remove a financial entry linked to a sale. Please remove the sale instead.");
   }
   
-  // Remove from cash register adjustments if it's from daily_cash
-  if (entryToRemove.adjustmentId) {
-      const cashStatus = getCashRegisterStatus();
-      if(cashStatus.status === 'open') {
-          const updatedAdjustments = (cashStatus.adjustments || []).filter(adj => adj.id !== entryToRemove.adjustmentId);
-          saveCashRegisterStatus({ ...cashStatus, adjustments: updatedAdjustments }, { silent: true });
-      }
-  }
+  // Revert balance change
+  updateBalance(entryToRemove.source, entryToRemove.amount, entryToRemove.type === 'income' ? 'expense' : 'income');
 
   const updatedEntries = currentEntries.filter(e => e.id !== entryId);
-  saveFinancialEntries(updatedEntries, { silent: true });
-
-  // Recalculate balances after removing the entry
-  recalculateAllBalances();
+  saveFinancialEntries(updatedEntries);
 }
 
 export function recalculateAllBalances() {
@@ -345,7 +367,6 @@ export function recalculateAllBalances() {
     saveBankAccount({ balance: bankBalance }, { silent: true });
     saveSecondaryCashBox({ balance: secondaryCashBalance }, { silent: true });
     
-    // Trigger a single storage event to notify all components to update
     window.dispatchEvent(new StorageEvent('storage', { key: 'barmate_bulk_update' }));
 }
 

@@ -233,7 +233,7 @@ export default function CashRegisterClient() {
           { description: 'Correção de Saldo Inicial (Saída)', amount: oldBalance, type: 'expense', source: 'daily_cash', saleId: null, adjustmentId: null },
           { description: 'Correção de Saldo Inicial (Entrada)', amount: newBalance, type: 'income', source: 'daily_cash', saleId: null, adjustmentId: null },
           // Adjust secondary cash to reflect the change
-          { description: 'Contrapartida Correção Saldo Inicial', amount: difference, type: 'expense', source: 'secondary_cash', saleId: null, adjustmentId: null }
+          { description: 'Contrapartida Correção Saldo Inicial', amount: difference, type: difference > 0 ? 'income' : 'expense', source: 'secondary_cash', saleId: null, adjustmentId: null }
       ]);
   
       const newStatus = { ...cashStatus, openingBalance: newBalance };
@@ -328,11 +328,6 @@ export default function CashRegisterClient() {
     const newStatus = { status: 'closed' as 'closed', adjustments: [] };
     saveCashRegisterStatus(newStatus);
     
-    // Clear all daily_cash financial entries
-    const allEntries = getFinancialEntries();
-    const entriesToKeep = allEntries.filter(e => e.source !== 'daily_cash');
-    saveFinancialEntries(entriesToKeep);
-
     setIsClosingDialog(false);
     toast({ title: "Caixa Fechado!", description: `O valor de ${formatCurrency(finalCashAmount)} foi transferido para o Caixa 02.`, variant: 'default' });
   };
