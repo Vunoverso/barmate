@@ -162,12 +162,12 @@ export default function FinancialClient() {
   }, [entries]);
   
   const expectedCashInDrawer = useMemo(() => {
-    if (!cashStatus || cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
-    const openingTime = new Date(cashStatus.openingTime).getTime();
-
-    // Correctly calculates the daily cash balance by summing all transactions since opening.
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+    const openingTime = new Date(cashStatus.openingTime);
+    
+    // This logic now mirrors the one in cash-register-client.tsx
     const sessionTransactions = entries.filter(e => 
-        e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= openingTime
+        e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime
     );
     
     return sessionTransactions.reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
@@ -422,11 +422,8 @@ export default function FinancialClient() {
     if (revert) {
       removeFinancialEntry(entryToDelete.id, true);
     } else {
-      if (entryToDelete.isCorrection) {
-         setVisuallyRemovedEntries(prev => [...prev, entryToDelete.id]);
-      } else {
-         removeFinancialEntry(entryToDelete.id, false);
-      }
+      removeFinancialEntry(entryToDelete.id, false);
+      setVisuallyRemovedEntries(prev => [...prev, entryToDelete.id]);
     }
     
     toast({ 
@@ -1165,4 +1162,5 @@ function EditBalanceDialog({
     </Dialog>
   );
 }
+
 
