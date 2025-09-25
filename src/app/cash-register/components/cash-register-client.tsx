@@ -225,15 +225,12 @@ export default function CashRegisterClient() {
 
     if (revert) {
       removeFinancialEntry(adjustmentToDelete.id, true);
-      
       const currentCashStatus = getCashRegisterStatus();
       if (currentCashStatus.status === 'open') {
         const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
       }
     } else {
-      // Just hide it visually for this session without affecting calculations
-      // Do not call removeFinancialEntry to avoid triggering storage events and recalculations
       setVisuallyRemovedAdjustments(prev => [...prev, adjustmentToDelete.id]);
     }
     
