@@ -108,6 +108,7 @@ export default function FinancialClient() {
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [expenseToConfirm, setExpenseToConfirm] = useState<ExpenseFormData | null>(null);
   const [visuallyRemovedEntries, setVisuallyRemovedEntries] = useState<string[]>([]);
+  const [balanceToEdit, setBalanceToEdit] = useState<{ type: 'secondary_cash' | 'bank_account', currentBalance: number } | null>(null);
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
@@ -204,7 +205,7 @@ export default function FinancialClient() {
 
   const filteredEntries = useMemo(() => {
     return (filterByDate(entries) as FinancialEntry[])
-        .filter(e => !visuallyRemovedEntries.includes(e.id))
+        .filter(e => !visuallyRemovedEntries.includes(e.id) && !e.isCorrection)
         .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries, dateRange, visuallyRemovedEntries]);
   
@@ -461,6 +462,35 @@ export default function FinancialClient() {
     downloadAsCSV(headers, csvData, `${filename}.csv`);
     toast({ title: "Relatório Geral CSV Exportado" });
   };
+  
+  const handleEditBalance = (newBalance: number) => {
+    if (!balanceToEdit) return;
+
+    const { type, currentBalance } = balanceToEdit;
+    const difference = newBalance - currentBalance;
+
+    if (Math.abs(difference) < 0.01) {
+        setBalanceToEdit(null);
+        return; // No change
+    }
+
+    addFinancialEntry({
+        description: 'Correção de saldo manual',
+        amount: Math.abs(difference),
+        type: difference > 0 ? 'income' : 'expense',
+        source: type,
+        saleId: null,
+        adjustmentId: null,
+        isCorrection: true,
+    });
+
+    toast({
+        title: "Saldo Corrigido",
+        description: `O saldo do ${SOURCE_MAP[type]} foi ajustado para ${formatCurrency(newBalance)}.`,
+    });
+    setBalanceToEdit(null);
+  };
+
 
   if (!isMounted) {
     return (
@@ -503,6 +533,9 @@ export default function FinancialClient() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Saldo Caixa 02</CardTitle>
+                     <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2" onClick={() => setBalanceToEdit({ type: 'secondary_cash', currentBalance: secondaryCashBoxBalance })}>
+                        <Edit className="h-4 w-4 text-muted-foreground" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(secondaryCashBoxBalance) : '******'}</div>
@@ -511,6 +544,9 @@ export default function FinancialClient() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Saldo Conta Bancária</CardTitle>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2" onClick={() => setBalanceToEdit({ type: 'bank_account', currentBalance: bankAccountBalance })}>
+                        <Edit className="h-4 w-4 text-muted-foreground" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(bankAccountBalance) : '******'}</div>
@@ -942,6 +978,15 @@ export default function FinancialClient() {
             </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {balanceToEdit && (
+        <EditBalanceDialog
+            isOpen={!!balanceToEdit}
+            onOpenChange={() => setBalanceToEdit(null)}
+            balanceInfo={balanceToEdit}
+            onSave={handleEditBalance}
+        />
+       )}
     </>
   );
 }
@@ -1039,6 +1084,70 @@ const SummaryTable = ({ data, isBalanceVisible }: { data: { period: string, inco
         </TableBody>
     </Table>
 );
+
+
+interface EditBalanceDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  balanceInfo: { type: 'secondary_cash' | 'bank_account', currentBalance: number };
+  onSave: (newBalance: number) => void;
+}
+
+function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBalanceDialogProps) {
+    const [newBalance, setNewBalance] = useState('');
+    const { toast } = useToast();
+
+    const title = balanceInfo.type === 'secondary_cash' ? 'Corrigir Saldo do Caixa 02' : 'Corrigir Saldo da Conta Bancária';
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const value = parseFloat(newBalance.replace(',', '.'));
+        if (isNaN(value)) {
+            toast({ title: "Valor Inválido", variant: "destructive" });
+            return;
+        }
+        onSave(value);
+        onOpenChange(false);
+    };
+
+    useEffect(() => {
+        if (!isOpen) {
+            setNewBalance('');
+        }
+    }, [isOpen]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <form onSubmit={handleSubmit}>
+                    <DialogHeader>
+                        <DialogTitle>{title}</DialogTitle>
+                        <DialogDescription>
+                            Digite o valor correto para o saldo. O sistema criará uma transação de correção invisível para ajustar a diferença. 
+                            Saldo atual: <strong>{formatCurrency(balanceInfo.currentBalance)}</strong>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Label htmlFor="new-balance">Novo Saldo (R$)</Label>
+                        <Input
+                            id="new-balance"
+                            type="number"
+                            step="0.01"
+                            value={newBalance}
+                            onChange={(e) => setNewBalance(e.target.value)}
+                            placeholder="Ex: 1500,00"
+                            autoFocus
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                        <Button type="submit">Salvar Novo Saldo</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
     
 
