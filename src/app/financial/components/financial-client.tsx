@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod, CashAdjustment } from '@/types';
@@ -161,15 +160,33 @@ export default function FinancialClient() {
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [entries]);
   
- const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+  const expectedCashInDrawer = useMemo(() => {
+    if (cashStatus.status !== 'open' || !cashStatus.openingBalance) return 0;
     
-    // This provides the most accurate real-time balance
-    const balance = entries
-      .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!))
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    const sessionEntries = entries
+        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!));
+    
+    const balance = sessionEntries
+        .reduce((acc, e) => {
+            return acc + (e.type === 'income' ? e.amount : -e.amount)
+        }, 0);
 
-    return balance;
+    // Find the opening adjustment to avoid double-counting it, since it's already in openingBalance.
+    const openingAdjustment = sessionEntries.find(e => e.adjustmentId && cashStatus.adjustments?.find(adj => adj.id === e.adjustmentId && adj.description === 'Valor de Abertura'));
+    
+    // If the opening adjustment is part of the entries, its value is already in the `balance`.
+    // The `openingBalance` is the definitive start. So, we adjust.
+    if(openingAdjustment) {
+      // `balance` contains the sum of all movements, including the opening.
+      // `openingBalance` is the value we want to start from.
+      // The total balance is `openingBalance` + (all other movements).
+      // `balance - openingAdjustment.amount` gives us the sum of all other movements.
+      return cashStatus.openingBalance + (balance - openingAdjustment.amount);
+    }
+    
+    // A fallback for a scenario where `openingBalance` exists but the entry is not found.
+    return cashStatus.openingBalance + balance;
+
   }, [cashStatus, entries]);
 
 
@@ -1153,4 +1170,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
         </Dialog>
     );
 }
-
