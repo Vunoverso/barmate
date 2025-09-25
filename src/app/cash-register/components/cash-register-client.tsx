@@ -66,8 +66,6 @@ export default function CashRegisterClient() {
   const [editingAdjustment, setEditingAdjustment] = useState<CashAdjustment | null>(null);
   const [adjustmentToDelete, setAdjustmentToDelete] = useState<CashAdjustment | null>(null);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
-  const [isEditBalanceDialogOpen, setIsEditBalanceDialogOpen] = useState(false);
-  const [editBalanceSource, setEditBalanceSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
   const [visuallyRemovedAdjustments, setVisuallyRemovedAdjustments] = useState<string[]>([]);
   
   const loadInitialData = useCallback(() => {
@@ -166,13 +164,12 @@ export default function CashRegisterClient() {
         if (!originalAdjustment) return;
         
         // Remove the old financial entries associated with the adjustment
-        const allEntries = getFinancialEntries();
-        const entriesToKeep = allEntries.filter(e => e.adjustmentId !== originalAdjustment.id);
-        saveFinancialEntries(entriesToKeep);
+        let allEntries = getFinancialEntries();
+        allEntries = allEntries.filter(e => e.adjustmentId !== originalAdjustment.id);
         
         const updatedAdjustment: CashAdjustment = { ...originalAdjustment, amount: details.amount, description: details.description };
         
-        applyAdjustment(updatedAdjustment);
+        applyAdjustment(updatedAdjustment, allEntries);
 
         const newAdjustments = currentCashStatus.adjustments?.map(adj => adj.id === idToUpdate ? updatedAdjustment : adj) || [];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
@@ -199,8 +196,9 @@ export default function CashRegisterClient() {
     setEditingAdjustment(null);
   };
   
-  const applyAdjustment = (adjustment: CashAdjustment) => {
+  const applyAdjustment = (adjustment: CashAdjustment, existingEntries?: FinancialEntry[]) => {
       const entriesToAdd: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
+      const currentEntries = existingEntries ?? getFinancialEntries();
       
        entriesToAdd.push({
         description: `${adjustment.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${adjustment.description}`,
@@ -219,14 +217,14 @@ export default function CashRegisterClient() {
               entriesToAdd.push({ description: `Depósito de Sangria: ${adjustment.description}`, amount: adjustment.amount, type: 'income', source: 'bank_account', saleId: null, adjustmentId: adjustment.id });
           }
       }
-      addFinancialEntry(entriesToAdd);
+      addFinancialEntry(entriesToAdd, currentEntries);
   }
   
   const handleDeleteAdjustment = (revert: boolean) => {
     if (!adjustmentToDelete) return;
 
     if (revert) {
-      const allEntries = getFinancialEntries();
+      let allEntries = getFinancialEntries();
       const entriesToRemove = allEntries.filter(e => e.adjustmentId === adjustmentToDelete.id);
       
       if(entriesToRemove.length > 0) {
@@ -239,18 +237,17 @@ export default function CashRegisterClient() {
             saleId: e.saleId,
             adjustmentId: `reversal-for-${e.adjustmentId}`
           }));
-        addFinancialEntry(reversalEntries);
+        addFinancialEntry(reversalEntries); // This will add and save
+      } else {
+        // If no financial entries, still need to remove from cash register status
+         const currentCashStatus = getCashRegisterStatus();
+         if (currentCashStatus.status === 'open') {
+             const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+             saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+         }
       }
 
-      const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustmentToDelete.id);
-      saveFinancialEntries(entriesToKeep);
-      
-      const currentCashStatus = getCashRegisterStatus();
-      if (currentCashStatus.status === 'open') {
-          const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-          saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-      }
-    } else {
+    } else { // Just hide visually
         const currentRemoved = getVisuallyRemovedAdjustments();
         const newRemoved = [...currentRemoved, adjustmentToDelete.id];
         setVisuallyRemovedAdjustments(newRemoved);
@@ -264,62 +261,6 @@ export default function CashRegisterClient() {
     });
     setAdjustmentToDelete(null);
   };
-
-
-  const handleEditBalance = (newBalance: number) => {
-    let source: 'secondary_cash' | 'bank_account' | 'daily_cash' = editBalanceSource;
-    let currentBalance = 0;
-    let balanceDescription = '';
-
-    if (source === 'secondary_cash') {
-      currentBalance = secondaryCashBoxBalance;
-      balanceDescription = "Ajuste de saldo manual do Caixa 02";
-    } else if (source === 'bank_account') {
-      currentBalance = bankAccountBalance;
-      balanceDescription = "Ajuste de saldo manual da Conta Bancária";
-    } else if (source === 'daily_cash') {
-        const currentCashStatus = getCashRegisterStatus();
-        if (currentCashStatus.status !== 'open') return;
-        currentBalance = sessionSummary.expectedCash;
-        balanceDescription = "Ajuste de saldo manual do Caixa Diário";
-    }
-
-    const difference = newBalance - currentBalance;
-    if (Math.abs(difference) < 0.01) {
-        toast({ title: "Saldo Inalterado", description: "O novo saldo é igual ao saldo atual." });
-        setIsEditBalanceDialogOpen(false);
-        return;
-    }
-
-    const adjustmentId = `adj-corr-${Date.now()}`;
-    const newAdjustment: CashAdjustment = {
-        id: adjustmentId,
-        amount: Math.abs(difference),
-        type: difference > 0 ? 'in' : 'out',
-        description: balanceDescription,
-        timestamp: new Date().toISOString(),
-        isCorrection: true
-    };
-    
-    addFinancialEntry({
-        description: balanceDescription,
-        amount: Math.abs(difference),
-        type: difference > 0 ? 'income' : 'expense',
-        source: source,
-        saleId: null,
-        adjustmentId: adjustmentId
-    });
-    
-    if (source === 'daily_cash') {
-        let currentCashStatus = getCashRegisterStatus();
-        const newAdjustments = [...(currentCashStatus.adjustments || []), newAdjustment];
-        saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-    }
-
-    toast({ title: "Saldo Corrigido", description: `Um ajuste de ${formatCurrency(difference)} foi feito.` });
-    setIsEditBalanceDialogOpen(false);
-  };
-
 
   const handleTransfer = (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
     const { amount, destination } = details;
@@ -359,12 +300,6 @@ export default function CashRegisterClient() {
 
     setIsTransferDialogOpen(false);
   }
-
-  const openEditBalanceDialog = (source: 'daily_cash' | 'secondary_cash' | 'bank_account') => {
-    setEditBalanceSource(source);
-    setIsEditBalanceDialogOpen(true);
-  };
-
 
   const handleCloseCashRegister = () => {
     const finalCashAmount = sessionSummary.expectedCash;
@@ -423,8 +358,8 @@ export default function CashRegisterClient() {
     
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
+    const totalIn = adjustments.filter(a => a.type === 'in' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
     const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
 
     const expectedCash = totalCashFromSales + totalIn - totalOut;
@@ -432,12 +367,12 @@ export default function CashRegisterClient() {
     return {
       openingBalance, sessionSales, totalSessionRevenue, cashRevenue, cardRevenue, pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
     };
-  }, [cashStatus, sales]);
+  }, [cashStatus, sales, visuallyRemovedAdjustments]);
 
   const sortedAdjustments = useMemo(() => {
     if (!cashStatus.adjustments) return [];
     return [...cashStatus.adjustments]
-        .filter(adj => !adj.isCorrection && !visuallyRemovedAdjustments.includes(adj.id)) 
+        .filter(adj => !visuallyRemovedAdjustments.includes(adj.id)) 
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [cashStatus.adjustments, visuallyRemovedAdjustments]);
 
@@ -624,7 +559,6 @@ export default function CashRegisterClient() {
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                         Caixa 02 (Secundário)
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditBalanceDialog('secondary_cash')}><Edit className="h-4 w-4" /></Button>
                     </CardTitle>
                     <CardDescription>Use para guardar valores separadamente.</CardDescription>
                 </CardHeader>
@@ -642,7 +576,6 @@ export default function CashRegisterClient() {
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                         Conta Bancária
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditBalanceDialog('bank_account')}><Edit className="h-4 w-4" /></Button>
                     </CardTitle>
                     <CardDescription>Saldo disponível na sua conta.</CardDescription>
                 </CardHeader>
@@ -697,12 +630,6 @@ export default function CashRegisterClient() {
         onOpenChange={setIsTransferDialogOpen}
         maxAmount={secondaryCashBoxBalance}
         onTransfer={handleTransfer}
-      />
-      <EditBalanceDialog
-        isOpen={isEditBalanceDialogOpen}
-        onOpenChange={setIsEditBalanceDialogOpen}
-        source={editBalanceSource}
-        onSave={handleEditBalance}
       />
     </>
   );
@@ -929,60 +856,7 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
   );
 }
 
-function EditBalanceDialog({ 
-  isOpen, onOpenChange, onSave, source 
-}: { 
-  isOpen: boolean, 
-  onOpenChange: (open: boolean) => void, 
-  onSave: (newBalance: number) => void, 
-  source: 'daily_cash' | 'secondary_cash' | 'bank_account'
-}) {
-  const [balance, setBalance] = useState<string>('');
-  const { toast } = useToast();
-
-  const sourceNameMap = {
-    daily_cash: 'Caixa Diário',
-    secondary_cash: 'Saldo do Caixa 02',
-    bank_account: 'Saldo da Conta Bancária',
-  };
-  const title = `Editar ${sourceNameMap[source]}`;
-  const description = `Defina o novo valor absoluto para este caixa. Uma transação de correção será criada para justificar a alteração no histórico.`;
-
-  useEffect(() => {
-    if(isOpen) {
-      setBalance('');
-    }
-  }, [isOpen])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const balanceValue = parseFloat(balance.replace(',', '.'));
-    if (isNaN(balanceValue) || balanceValue < 0) {
-      toast({ title: "Valor Inválido", description: "Por favor, insira um saldo válido.", variant: 'destructive' });
-      return;
-    }
-    onSave(balanceValue);
-  };
-  
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
-          <div className="py-4 space-y-2">
-            <Label htmlFor={`${source}-balance-edit`}>Novo Saldo (R$)</Label>
-            <Input id={`${source}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="text" placeholder="0,00" autoFocus />
-          </div>
-          <DialogFooter>
-            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-            <Button type="submit">Salvar</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
     
 
     
+
