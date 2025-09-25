@@ -363,16 +363,10 @@ export default function FinancialClient() {
     if (!entryToDelete) return;
 
     if (revert) {
-      const reversalEntry: Omit<FinancialEntry, 'id' | 'timestamp'> = {
-        description: `Estorno: ${entryToDelete.description}`,
-        amount: entryToDelete.amount,
-        type: entryToDelete.type === 'income' ? 'expense' : 'income',
-        source: entryToDelete.source,
-        saleId: entryToDelete.saleId,
-        adjustmentId: `reversal-for-${entryToDelete.adjustmentId || entryToDelete.id}`
-      };
-      addFinancialEntry(reversalEntry);
-
+      // Find and remove all entries related to the original one (reversal and original)
+      const allEntries = getFinancialEntries();
+      const entriesToKeep = allEntries.filter(e => e.id !== entryToDelete.id && e.adjustmentId !== `reversal-for-${entryToDelete.id}`);
+      saveFinancialEntries(entriesToKeep);
     } else {
       const currentRemoved = getVisuallyRemovedFinancialEntries();
       const newRemoved = [...currentRemoved, entryToDelete.id];
