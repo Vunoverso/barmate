@@ -389,7 +389,8 @@ export default function FinancialClient() {
         type: difference > 0 ? 'income' : 'expense',
         source: source,
         saleId: null,
-        adjustmentId: adjustmentId
+        adjustmentId: adjustmentId,
+        isCorrection: true,
     });
     
     if (source === 'daily_cash') {
@@ -417,7 +418,6 @@ export default function FinancialClient() {
     if (revert) {
       removeFinancialEntry(entryToDelete.id, true);
     } else {
-      removeFinancialEntry(entryToDelete.id, false);
       setVisuallyRemovedEntries(prev => [...prev, entryToDelete.id]);
     }
     
@@ -1157,4 +1157,3 @@ function EditBalanceDialog({
     </Dialog>
   );
 }
-

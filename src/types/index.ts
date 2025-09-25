@@ -104,6 +104,7 @@ export interface FinancialEntry {
     timestamp: Date;
     saleId: string | null;
     adjustmentId: string | null;
+    isCorrection?: boolean;
 }
 
 export interface TransactionFees {
@@ -115,5 +116,3 @@ export interface TransactionFees {
 
 // Helper for getting table row types
 type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
-
-    
