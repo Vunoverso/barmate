@@ -212,12 +212,6 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
   
-  const creditUsed = newSale.items
-    .filter(item => item.price < 0)
-    .reduce((sum, item) => sum + Math.abs(item.price * item.quantity), 0);
-
-  const netSaleValue = newSale.originalAmount - creditUsed;
-
   newSale.payments.forEach((p: Payment) => {
     if (p.amount <= 0) return;
 
@@ -310,8 +304,7 @@ export const clearFinancialData = () => {
         saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
         saveToLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
         saveToLocalStorage(KEY_CLOSED_SESSIONS, []);
-        saveToLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-        saveToLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
+        // We don't clear bank/secondary cash base balances, just the transactions
         window.dispatchEvent(new StorageEvent('storage'));
     }
 };
@@ -339,5 +332,3 @@ export const formatCurrency = (value: number) => {
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }
-
-    

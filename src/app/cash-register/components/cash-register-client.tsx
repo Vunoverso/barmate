@@ -3,7 +3,7 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS } from '@/lib/constants';
+import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -56,8 +56,6 @@ export default function CashRegisterClient() {
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed', adjustments: [] });
   const [allFinancialEntries, setAllFinancialEntries] = useState<FinancialEntry[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [secondaryCashBoxData, setSecondaryCashBoxData] = useState<SecondaryCashBox>(getSecondaryCashBox());
-  const [bankAccountData, setBankAccountData] = useState<BankAccount>(getBankAccount());
   const { toast } = useToast();
 
   // Dialog states
@@ -68,17 +66,14 @@ export default function CashRegisterClient() {
   const [editingAdjustment, setEditingAdjustment] = useState<CashAdjustment | null>(null);
   const [adjustmentToDelete, setAdjustmentToDelete] = useState<CashAdjustment | null>(null);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
-  const [isEditCaixa02DialogOpen, setIsEditCaixa02DialogOpen] = useState(false);
-  const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
-  const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
+  const [isEditBalanceDialogOpen, setIsEditBalanceDialogOpen] = useState(false);
+  const [editBalanceSource, setEditBalanceSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
   
   const loadInitialData = useCallback(() => {
     setIsLoading(true);
     setCashStatus(getCashRegisterStatus());
     setAllFinancialEntries(getFinancialEntries());
     setSales(getSales());
-    setSecondaryCashBoxData(getSecondaryCashBox());
-    setBankAccountData(getBankAccount());
     setIsLoading(false);
   }, []);
 
@@ -98,18 +93,16 @@ export default function CashRegisterClient() {
 
   // Calculated balances
   const secondaryCashBoxBalance = useMemo(() => {
-    const transactionSum = allFinancialEntries
+    return allFinancialEntries
       .filter(e => e.source === 'secondary_cash')
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-    return (secondaryCashBoxData.baseBalance || 0) + transactionSum;
-  }, [allFinancialEntries, secondaryCashBoxData]);
+  }, [allFinancialEntries]);
   
   const bankAccountBalance = useMemo(() => {
-    const transactionSum = allFinancialEntries
+    return allFinancialEntries
       .filter(e => e.source === 'bank_account')
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-      return (bankAccountData.baseBalance || 0) + transactionSum;
-  }, [allFinancialEntries, bankAccountData]);
+  }, [allFinancialEntries]);
 
 
   const handleOpenCashRegister = (openingBalance: number) => {
@@ -242,52 +235,52 @@ export default function CashRegisterClient() {
     setAdjustmentToDelete(null);
   };
 
-  const handleEditInitialBalance = (newBalance: number) => {
-      const cashStatus = getCashRegisterStatus();
-      if (cashStatus.status !== 'open' || !cashStatus.openingBalance) return;
+  const handleEditBalance = (newBalance: number) => {
+    let currentBalance = 0;
+    if (editBalanceSource === 'daily_cash') {
+      const { openingBalance = 0, adjustments = [] } = getCashRegisterStatus();
+      const adjustmentSum = adjustments.reduce((sum, adj) => sum + (adj.type === 'in' ? adj.amount : -adj.amount), 0);
+      currentBalance = sessionSummary.expectedCash;
+    } else if (editBalanceSource === 'secondary_cash') {
+      currentBalance = secondaryCashBoxBalance;
+    } else if (editBalanceSource === 'bank_account') {
+      currentBalance = bankAccountBalance;
+    }
+
+    const difference = newBalance - currentBalance;
+
+    if (Math.abs(difference) < 0.01) {
+      setIsEditBalanceDialogOpen(false);
+      return;
+    }
   
-      const openingAdjId = cashStatus.adjustments?.find(a => a.description === 'Valor de Abertura')?.id;
-      if (!openingAdjId) {
-          toast({ title: "Erro", description: "Não foi possível encontrar a transação de abertura original.", variant: "destructive"});
-          return;
-      }
-
-      revertAdjustment(cashStatus.adjustments?.find(a => a.id === openingAdjId)!);
-
-      addFinancialEntry([
-          {
-              description: `Abertura do Caixa Diário`,
-              amount: newBalance,
-              type: 'expense',
-              source: 'secondary_cash',
-              saleId: null,
-              adjustmentId: openingAdjId
-          },
-          {
-              description: `Valor de Abertura`,
-              amount: newBalance,
-              type: 'income',
-              source: 'daily_cash',
-              saleId: null,
-              adjustmentId: openingAdjId
-          }
-      ]);
-      
-      const newOpeningAdjustment = {
-          id: openingAdjId,
-          amount: newBalance,
-          type: 'in' as 'in',
-          description: 'Valor de Abertura',
-          timestamp: cashStatus.openingTime!,
+    const adjustmentId = `adj-corr-${Date.now()}`;
+    const newEntry: Omit<FinancialEntry, 'id' | 'timestamp'> = {
+      description: 'Ajuste de saldo manual',
+      amount: Math.abs(difference),
+      type: difference > 0 ? 'income' : 'expense',
+      source: editBalanceSource,
+      saleId: null,
+      adjustmentId: editBalanceSource === 'daily_cash' ? adjustmentId : null,
+    };
+    addFinancialEntry(newEntry);
+  
+    if (editBalanceSource === 'daily_cash' && cashStatus.status === 'open') {
+      const currentCashStatus = getCashRegisterStatus();
+      const newAdjustment: CashAdjustment = {
+        id: adjustmentId,
+        amount: Math.abs(difference),
+        type: difference > 0 ? 'in' : 'out',
+        description: 'Ajuste de saldo manual',
+        timestamp: new Date().toISOString(),
+        isCorrection: true,
       };
-      
-      const newAdjustments = cashStatus.adjustments?.map(adj => adj.id === openingAdjId ? newOpeningAdjustment : adj) || [];
-      const newStatus = { ...cashStatus, openingBalance: newBalance, adjustments: newAdjustments };
-      saveCashRegisterStatus(newStatus);
-
-
-      toast({ title: "Saldo Inicial Atualizado", description: `O saldo foi redefinido para ${formatCurrency(newBalance)}.` });
-      setIsEditInitialBalanceDialogOpen(false);
+      const newState = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), newAdjustment] };
+      saveCashRegisterStatus(newState);
+    }
+    
+    toast({ title: "Saldo Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
+    setIsEditBalanceDialogOpen(false);
   };
 
 
@@ -330,16 +323,10 @@ export default function CashRegisterClient() {
     setIsTransferDialogOpen(false);
   }
 
-  const handleEditBalance = (newBalance: number, source: 'secondary_cash' | 'bank_account') => {
-      if (source === 'secondary_cash') {
-          saveSecondaryCashBox({ baseBalance: newBalance });
-          setIsEditCaixa02DialogOpen(false);
-      } else if (source === 'bank_account') {
-          saveBankAccount({ baseBalance: newBalance });
-          setIsEditBankAccountDialogOpen(false);
-      }
-      toast({ title: "Saldo Atualizado", description: `O saldo base foi ajustado para ${formatCurrency(newBalance)}.` });
-  }
+  const openEditBalanceDialog = (source: 'daily_cash' | 'secondary_cash' | 'bank_account') => {
+    setEditBalanceSource(source);
+    setIsEditBalanceDialogOpen(true);
+  };
 
 
   const handleCloseCashRegister = () => {
@@ -383,23 +370,7 @@ export default function CashRegisterClient() {
 
     const cashRevenue = sessionSales.reduce((total, sale) => {
         const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        const creditUsed = sale.items.filter(i => i.price < 0).reduce((sum, i) => sum + Math.abs(i.price * i.quantity), 0);
-        
-        let netCash = cashPayment;
-        if(sale.leaveChangeAsCredit && sale.cashTendered) {
-          netCash = sale.cashTendered;
-        }
-        
-        if (creditUsed > 0 && sale.payments.some(p => p.method === 'cash')) {
-            const totalPaidWithMethods = sale.payments.reduce((sum, p) => sum + p.amount, 0);
-            if (totalPaidWithMethods < sale.originalAmount) {
-                const cashPortionOfPayment = cashPayment / totalPaidWithMethods;
-                const creditAppliedToCash = creditUsed * cashPortionOfPayment;
-                netCash -= creditAppliedToCash;
-            }
-        }
-        
-        return total + Math.max(0, netCash);
+        return total + cashPayment;
     }, 0);
     
     const cardRevenue = sessionSales.reduce((total, sale) => {
@@ -414,8 +385,8 @@ export default function CashRegisterClient() {
     
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
+    const totalIn = adjustments.filter(a => a.type === 'in' && !a.isCorrection).reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out' && !a.isCorrection).reduce((sum, a) => sum + a.amount, 0);
 
     const expectedCash = cashRevenue + totalIn - totalOut;
 
@@ -485,7 +456,7 @@ export default function CashRegisterClient() {
                             <p className="text-sm font-medium text-muted-foreground">Saldo Inicial</p>
                             <p className="text-2xl font-bold">{formatCurrency(sessionSummary.openingBalance)}</p>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditInitialBalanceDialogOpen(true)}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditBalanceDialog('daily_cash')}>
                             <Edit className="h-4 w-4" />
                         </Button>
                     </div>
@@ -617,7 +588,7 @@ export default function CashRegisterClient() {
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                         Caixa 02 (Secundário)
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditCaixa02DialogOpen(true)}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditBalanceDialog('secondary_cash')}><Edit className="h-4 w-4" /></Button>
                     </CardTitle>
                     <CardDescription>Use para guardar valores separadamente.</CardDescription>
                 </CardHeader>
@@ -635,7 +606,7 @@ export default function CashRegisterClient() {
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                         Conta Bancária
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditBankAccountDialogOpen(true)}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditBalanceDialog('bank_account')}><Edit className="h-4 w-4" /></Button>
                     </CardTitle>
                     <CardDescription>Saldo disponível na sua conta.</CardDescription>
                 </CardHeader>
@@ -687,31 +658,11 @@ export default function CashRegisterClient() {
         onTransfer={handleTransfer}
       />
       <EditBalanceDialog
-        isOpen={isEditCaixa02DialogOpen}
-        onOpenChange={setIsEditCaixa02DialogOpen}
-        currentBalance={secondaryCashBoxBalance}
-        onSave={(newBalance) => handleEditBalance(newBalance, 'secondary_cash')}
-        title="Editar Saldo do Caixa 02"
-        description="Ajuste o valor total do seu caixa secundário."
-        idPrefix="caixa02"
-      />
-      <EditBalanceDialog
-        isOpen={isEditBankAccountDialogOpen}
-        onOpenChange={setIsEditBankAccountDialogOpen}
-        currentBalance={bankAccountBalance}
-        onSave={(newBalance) => handleEditBalance(newBalance, 'bank_account')}
-        title="Editar Saldo da Conta Bancária"
-        description="Ajuste o saldo total da sua conta bancária."
-        idPrefix="bank"
-      />
-      <EditBalanceDialog
-        isOpen={isEditInitialBalanceDialogOpen}
-        onOpenChange={setIsEditInitialBalanceDialogOpen}
-        currentBalance={cashStatus.openingBalance || 0}
-        onSave={handleEditInitialBalance}
-        title="Editar Saldo Inicial do Caixa"
-        description="Ajuste o valor de abertura do caixa. Isso afetará o balanço final."
-        idPrefix="initial-balance"
+        isOpen={isEditBalanceDialogOpen}
+        onOpenChange={setIsEditBalanceDialogOpen}
+        source={editBalanceSource}
+        currentBalance={editBalanceSource === 'daily_cash' ? sessionSummary.expectedCash : (editBalanceSource === 'secondary_cash' ? secondaryCashBoxBalance : bankAccountBalance)}
+        onSave={handleEditBalance}
       />
     </>
   );
@@ -938,13 +889,29 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
   );
 }
 
-function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title, description, idPrefix }: { isOpen: boolean, onOpenChange: (open: boolean) => void, currentBalance: number, onSave: (newBalance: number) => void, title: string, description: string, idPrefix: string }) {
+function EditBalanceDialog({ 
+  isOpen, onOpenChange, currentBalance, onSave, source 
+}: { 
+  isOpen: boolean, 
+  onOpenChange: (open: boolean) => void, 
+  currentBalance: number, 
+  onSave: (newBalance: number) => void, 
+  source: 'daily_cash' | 'secondary_cash' | 'bank_account'
+}) {
   const [balance, setBalance] = useState<string>('');
   const { toast } = useToast();
 
+  const sourceNameMap = {
+    daily_cash: 'Caixa Diário',
+    secondary_cash: 'Caixa 02',
+    bank_account: 'Conta Bancária',
+  };
+  const title = `Editar Saldo de ${sourceNameMap[source]}`;
+  const description = `Ajuste o saldo total. O sistema criará uma transação de ajuste para que o saldo final corresponda a este novo valor.`;
+
   useEffect(() => {
     if(isOpen) {
-      setBalance(String(currentBalance.toFixed(2)).replace('.', ','));
+      setBalance(String(currentBalance.toFixed(2)).replace('.',','));
     }
   }, [isOpen, currentBalance])
 
@@ -964,8 +931,8 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
         <form onSubmit={handleSubmit}>
           <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
           <div className="py-4 space-y-2">
-            <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
-            <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="text" placeholder="0,00" autoFocus />
+            <Label htmlFor={`${source}-balance-edit`}>Novo Saldo Total (R$)</Label>
+            <Input id={`${source}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="text" placeholder="0,00" autoFocus />
           </div>
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
@@ -976,5 +943,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
-
-    
