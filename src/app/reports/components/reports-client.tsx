@@ -31,7 +31,7 @@ import { DatePickerWithRange } from '@/components/ui/date-picker-range';
 import type { DateRange } from "react-day-picker";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart, Landmark, PiggyBank, Banknote, TrendingUp } from 'lucide-react';
+import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart, Landmark, PiggyBank, Banknote, TrendingUp, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -51,7 +51,7 @@ import { SummaryTable } from './summary-table';
 
 
 const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
-  daily_cash: 'Caixa Principal',
+  daily_cash: 'Caixa Diário',
   secondary_cash: 'Caixa 02',
   bank_account: 'Conta Bancária',
 };
@@ -159,19 +159,13 @@ export default function ReportsClient() {
   const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
-    const openingTime = new Date(cashStatus.openingTime);
-    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
-    
-    const openingBalance = cashStatus.openingBalance || 0;
-    const adjustments = cashStatus.adjustments || [];
-    
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
-    const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
-    
-    const expectedCash = (openingBalance + totalCashFromSales + (totalIn - openingBalance)) - totalOut;
-    return expectedCash;
-  }, [cashStatus, sales]);
+    // This provides the most accurate real-time balance
+    const balance = financialEntries
+      .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!))
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+
+    return balance;
+  }, [cashStatus, financialEntries]);
 
 
   const totalGlobalBalance = useMemo(() => {
@@ -331,13 +325,13 @@ export default function ReportsClient() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{formatCurrency(totalGlobalBalance)}</div>
-                    <p className="text-xs text-muted-foreground">Caixa Principal + Caixa 02 + Banco</p>
+                    <p className="text-xs text-muted-foreground">Caixa Diário + Caixa 02 + Banco</p>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Caixa Principal (Aberto)</CardTitle>
-                    <Banknote className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-sm font-medium">Caixa Diário (Aberto)</CardTitle>
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{formatCurrency(expectedCashInDrawer)}</div>
@@ -351,6 +345,7 @@ export default function ReportsClient() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{formatCurrency(secondaryCashBoxBalance)}</div>
+                     <p className="text-xs text-muted-foreground">Caixa secundário / reserva</p>
                 </CardContent>
             </Card>
             <Card>
@@ -360,6 +355,7 @@ export default function ReportsClient() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{formatCurrency(bankAccountBalance)}</div>
+                     <p className="text-xs text-muted-foreground">Recebimentos de cartão/pix</p>
                 </CardContent>
             </Card>
         </div>
@@ -560,3 +556,4 @@ export default function ReportsClient() {
     </div>
   );
 }
+

@@ -161,23 +161,16 @@ export default function FinancialClient() {
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [entries]);
   
-  const expectedCashInDrawer = useMemo(() => {
+ const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
-    const openingTime = new Date(cashStatus.openingTime);
-    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
-    
-    const openingBalance = cashStatus.openingBalance || 0;
-    const adjustments = cashStatus.adjustments || [];
-    
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
-    const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
-    
-    // This calculation now mirrors the cash-register-client one
-    const expectedCash = (openingBalance + totalCashFromSales + (totalIn - openingBalance)) - totalOut;
-    return expectedCash;
-  }, [cashStatus, sales]);
+    // This provides the most accurate real-time balance
+    const balance = entries
+      .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!))
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+
+    return balance;
+  }, [cashStatus, entries]);
 
 
   const totalGlobalBalance = useMemo(() => {
@@ -377,7 +370,7 @@ export default function FinancialClient() {
       const currentRemoved = getVisuallyRemovedFinancialEntries();
       const newRemoved = [...currentRemoved, entryToDelete.id];
       saveVisuallyRemovedFinancialEntries(newRemoved);
-      // No need to call setVisuallyRemovedEntries here, as the storage event listener will trigger a reload.
+      setVisuallyRemovedEntries(newRemoved);
     }
     
     toast({ 
@@ -530,6 +523,7 @@ export default function FinancialClient() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Caixa Diário (Aberto)</CardTitle>
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(expectedCashInDrawer) : '******'}</div>
@@ -545,6 +539,7 @@ export default function FinancialClient() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(secondaryCashBoxBalance) : '******'}</div>
+                    <p className="text-xs text-muted-foreground">Caixa secundário / reserva</p>
                 </CardContent>
             </Card>
             <Card>
@@ -556,6 +551,7 @@ export default function FinancialClient() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(bankAccountBalance) : '******'}</div>
+                    <p className="text-xs text-muted-foreground">Recebimentos de cartão/pix</p>
                 </CardContent>
             </Card>
         </div>
@@ -1157,3 +1153,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
         </Dialog>
     );
 }
+

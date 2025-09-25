@@ -163,16 +163,33 @@ export default function CashRegisterClient() {
 
     if (idToUpdate && editingAdjustment) { // Editing existing adjustment
         const allEntries = getFinancialEntries();
+        // Update the original entry directly without creating estorno
         const newEntries = allEntries.map(entry => {
             if (entry.adjustmentId === idToUpdate) {
-                return {
+                 const updatedEntry = {
                     ...entry,
                     amount: details.amount,
                     description: `${editingAdjustment.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${details.description}`,
                 };
+                 // If the adjustment was a transfer out, update the corresponding income entry too
+                if (editingAdjustment.type === 'out' && editingAdjustment.destination) {
+                    const correspondingIncomeEntry = allEntries.find(e => e.adjustmentId === idToUpdate && e.type === 'income');
+                    if (correspondingIncomeEntry) {
+                        return allEntries.map(e => {
+                            if (e.id === correspondingIncomeEntry.id) {
+                                return { ...e, amount: details.amount, description: `Entrada de Sangria: ${details.description}`};
+                            }
+                            if (e.id === entry.id) {
+                                return updatedEntry;
+                            }
+                            return e;
+                        }).flat();
+                    }
+                }
+                return updatedEntry;
             }
             return entry;
-        });
+        }).flat();
         saveFinancialEntries(newEntries);
 
         const updatedAdjustment: CashAdjustment = { ...editingAdjustment, amount: details.amount, description: details.description };
@@ -229,28 +246,31 @@ export default function CashRegisterClient() {
   const handleDeleteAdjustment = (revert: boolean) => {
     if (!adjustmentToDelete) return;
 
-    const allEntries = getFinancialEntries();
-    const currentCashStatus = getCashRegisterStatus();
-    
     if (revert) {
-      if (currentCashStatus.status === 'open') {
-        const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-        saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-      }
-      const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustmentToDelete.id);
-      saveFinancialEntries(entriesToKeep);
+        // Find all financial entries related to this adjustmentId and remove them
+        const allEntries = getFinancialEntries();
+        const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustmentToDelete.id);
+        saveFinancialEntries(entriesToKeep);
+        
+        // Remove adjustment from cash register status
+        const currentCashStatus = getCashRegisterStatus();
+        if (currentCashStatus.status === 'open') {
+            const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+            saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        }
+
+        toast({ title: "Movimentação Revertida", description: "A movimentação e seus impactos financeiros foram estornados.", variant: "default" });
+
     } else { 
+        // Just hide it visually for this session
         const currentRemoved = getVisuallyRemovedAdjustments();
         const newRemoved = [...currentRemoved, adjustmentToDelete.id];
         saveVisuallyRemovedAdjustments(newRemoved);
         setVisuallyRemovedAdjustments(newRemoved); // Update local state immediately
+
+        toast({ title: "Movimentação Removida do Histórico", description: "A movimentação foi removida apenas da visualização da sessão atual.", variant: "default" });
     }
     
-    toast({ 
-        title: "Movimentação Removida", 
-        description: `A movimentação foi removida ${revert ? 'e o valor estornado.' : 'sem estornar o valor.'}`,
-        variant: "default" 
-    });
     setAdjustmentToDelete(null);
   };
 
@@ -351,11 +371,15 @@ export default function CashRegisterClient() {
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
     
-    const totalIn = adjustments.filter(a => a.type === 'in' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+    // Total 'in' adjustments, EXCLUDING the opening balance entry for the summary display
+    const totalIn = adjustments.filter(a => a.type === 'in' && a.description !== 'Valor de Abertura' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+    // Total 'out' adjustments
     const totalOut = adjustments.filter(a => a.type === 'out' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+    
     const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
     
-    const expectedCash = (openingBalance + totalCashFromSales + (totalIn - openingBalance)) - totalOut;
+    // Correct calculation for expected cash
+    const expectedCash = (openingBalance + totalCashFromSales + totalIn) - totalOut;
     
     return {
       openingBalance, sessionSales, totalSessionRevenue, cashRevenue, cardRevenue, pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
@@ -438,7 +462,7 @@ export default function CashRegisterClient() {
                                     <span className="font-medium text-blue-600">+ {formatCurrency(sessionSummary.cardRevenue + sessionSummary.pixRevenue)}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="flex items-center gap-2"><ArrowUpCircle className="h-4 w-4 text-green-600"/>Suprimentos (Entradas)</span>
+                                    <span className="flex items-center gap-2"><ArrowUpCircle className="h-4 w-4 text-green-600"/>Suprimentos (Entradas Adicionais)</span>
                                     <span className="font-medium text-green-600">+ {formatCurrency(sessionSummary.totalIn)}</span>
                                 </div>
                                 <div className="flex justify-between">
@@ -670,6 +694,8 @@ function OpenCashRegisterDialog({ isOpen, onOpenChange, onOpen, secondaryCashBal
 
 function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onClose: () => void, summary: any }) {
   const totalGeralVendas = summary.totalSessionRevenue;
+  const totalEntradasAdicionais = summary.totalIn; // This is already without opening balance
+
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -680,7 +706,7 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
         <div className="text-sm space-y-2 my-4">
             <div className="flex justify-between"><span>Saldo Inicial:</span> <strong>{formatCurrency(summary.openingBalance)}</strong></div>
             <div className="flex justify-between"><span>(+) Vendas em Dinheiro:</span> <span>{formatCurrency(summary.cashRevenue)}</span></div>
-            <div className="flex justify-between"><span>(+) Suprimentos:</span> <span>{formatCurrency(summary.totalIn)}</span></div>
+            <div className="flex justify-between"><span>(+) Suprimentos:</span> <span>{formatCurrency(totalEntradasAdicionais)}</span></div>
             <div className="flex justify-between"><span>(-) Sangrias:</span> <span>{formatCurrency(summary.totalOut)}</span></div>
             <Separator />
             <div className="flex justify-between text-base font-bold"><span>(=) Total em Caixa (Esperado):</span> <strong>{formatCurrency(summary.expectedCash)}</strong></div>
