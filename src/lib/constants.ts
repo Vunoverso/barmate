@@ -187,8 +187,9 @@ export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStora
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
 
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
 export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box);
+
+export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
 export const saveBankAccount = (account: BankAccount) => saveToLocalStorage(KEY_BANK_ACCOUNT, account);
 
 
@@ -243,7 +244,7 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
         });
       }
     } else if (p.method === 'cash') {
-        const netCash = p.amount;
+        const netCash = p.amount - (newSale.changeGiven || 0);
         if(netCash > 0) {
           newFinancialEntries.push({
              description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
@@ -304,7 +305,9 @@ export const clearFinancialData = () => {
         saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
         saveToLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
         saveToLocalStorage(KEY_CLOSED_SESSIONS, []);
-        // We don't clear bank/secondary cash base balances, just the transactions
+        saveToLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
+        saveToLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
+
         window.dispatchEvent(new StorageEvent('storage'));
     }
 };

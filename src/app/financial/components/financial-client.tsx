@@ -11,6 +11,10 @@ import {
   addFinancialEntry,
   saveCashRegisterStatus,
   getCashRegisterStatus,
+  saveBankAccount,
+  saveSecondaryCashBox,
+  getBankAccount,
+  getSecondaryCashBox,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -147,15 +151,19 @@ export default function FinancialClient() {
   }, [loadData]);
   
   const secondaryCashBoxBalance = useMemo(() => {
-    return entries
+    const { baseBalance = 0 } = getSecondaryCashBox();
+    const transactionSum = entries
       .filter(e => e.source === 'secondary_cash')
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    return baseBalance + transactionSum;
   }, [entries]);
   
   const bankAccountBalance = useMemo(() => {
-    return entries
+    const { baseBalance = 0 } = getBankAccount();
+    const transactionSum = entries
       .filter(e => e.source === 'bank_account')
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    return baseBalance + transactionSum;
   }, [entries]);
   
   const expectedCashInDrawer = useMemo(() => {
@@ -352,48 +360,13 @@ export default function FinancialClient() {
   };
   
   const handleEditBalance = (newBalance: number) => {
-    let currentBalance = 0;
     if (editBalanceSource === 'secondary_cash') {
-      currentBalance = secondaryCashBoxBalance;
+      saveSecondaryCashBox({ baseBalance: newBalance });
     } else if (editBalanceSource === 'bank_account') {
-      currentBalance = bankAccountBalance;
-    } else if (editBalanceSource === 'daily_cash') {
-      currentBalance = expectedCashInDrawer;
-    }
-  
-    const difference = newBalance - currentBalance;
-  
-    if (Math.abs(difference) < 0.01) {
-      setIsEditBalanceDialogOpen(false);
-      return;
-    }
-
-    const adjustmentId = `adj-corr-${Date.now()}`;
-    const newEntry: Omit<FinancialEntry, 'id' | 'timestamp'> = {
-        description: 'Ajuste de saldo manual',
-        amount: Math.abs(difference),
-        type: difference > 0 ? 'income' : 'expense',
-        source: editBalanceSource,
-        saleId: null,
-        adjustmentId: editBalanceSource === 'daily_cash' ? adjustmentId : null,
-    };
-    addFinancialEntry(newEntry);
-  
-    if (editBalanceSource === 'daily_cash' && cashStatus.status === 'open') {
-      const currentCashStatus = getCashRegisterStatus();
-      const newAdjustment: CashAdjustment = {
-        id: adjustmentId,
-        amount: Math.abs(difference),
-        type: difference > 0 ? 'in' : 'out',
-        description: 'Ajuste de saldo manual',
-        timestamp: new Date().toISOString(),
-        isCorrection: true,
-      };
-      const newState = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), newAdjustment] };
-      saveCashRegisterStatus(newState);
+      saveBankAccount({ baseBalance: newBalance });
     }
     
-    toast({ title: "Saldo Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
+    toast({ title: "Saldo Base Atualizado", description: `O saldo base foi ajustado.` });
     setIsEditBalanceDialogOpen(false);
   }
 
@@ -525,9 +498,7 @@ export default function FinancialClient() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Caixa Diário (Aberto)</CardTitle>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 -mr-4" onClick={() => openEditBalanceDialog('daily_cash')} disabled={cashStatus.status !== 'open'}>
-                        <Edit className="h-4 w-4" />
-                    </Button>
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(expectedCashInDrawer) : '******'}</div>
@@ -968,7 +939,6 @@ export default function FinancialClient() {
         isOpen={isEditBalanceDialogOpen}
         onOpenChange={setIsEditBalanceDialogOpen}
         source={editBalanceSource}
-        currentBalance={editBalanceSource === 'daily_cash' ? expectedCashInDrawer : (editBalanceSource === 'secondary_cash' ? secondaryCashBoxBalance : bankAccountBalance)}
         onSave={handleEditBalance}
       />
     </>
@@ -1070,11 +1040,10 @@ const SummaryTable = ({ data, isBalanceVisible }: { data: { period: string, inco
 );
 
 function EditBalanceDialog({ 
-  isOpen, onOpenChange, currentBalance, onSave, source 
+  isOpen, onOpenChange, onSave, source 
 }: { 
   isOpen: boolean, 
   onOpenChange: (open: boolean) => void, 
-  currentBalance: number, 
   onSave: (newBalance: number) => void, 
   source: 'daily_cash' | 'secondary_cash' | 'bank_account'
 }) {
@@ -1083,17 +1052,17 @@ function EditBalanceDialog({
 
   const sourceNameMap = {
     daily_cash: 'Caixa Diário',
-    secondary_cash: 'Caixa 02',
-    bank_account: 'Conta Bancária',
+    secondary_cash: 'Saldo Base do Caixa 02',
+    bank_account: 'Saldo Base da Conta Bancária',
   };
-  const title = `Editar Saldo de ${sourceNameMap[source]}`;
-  const description = `Ajuste o saldo total. O sistema criará um ajuste para corresponder a esse novo valor.`;
+  const title = `Editar ${sourceNameMap[source]}`;
+  const description = `Defina o valor base para este caixa. O saldo final será este valor mais todas as transações. Esta ação não cria uma transação no histórico.`;
 
   useEffect(() => {
     if(isOpen) {
-      setBalance(String(currentBalance.toFixed(2)).replace('.',','));
+      setBalance('');
     }
-  }, [isOpen, currentBalance])
+  }, [isOpen])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1111,7 +1080,7 @@ function EditBalanceDialog({
         <form onSubmit={handleSubmit}>
           <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
           <div className="py-4 space-y-2">
-            <Label htmlFor={`${source}-balance-edit`}>Novo Saldo Total (R$)</Label>
+            <Label htmlFor={`${source}-balance-edit`}>Novo Saldo Base (R$)</Label>
             <Input id={`${source}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="text" placeholder="0,00" autoFocus />
           </div>
           <DialogFooter>
