@@ -133,55 +133,43 @@ export const migrateOldData = () => {
     const migrateKey = (oldKey: string, newKey: string) => {
         const oldDataRaw = localStorage.getItem(oldKey);
         if (oldDataRaw) {
-            try {
-                // If old data exists, always overwrite the new key with it.
-                localStorage.setItem(newKey, oldDataRaw);
-                localStorage.removeItem(oldKey);
-                console.log(`Successfully migrated data from ${oldKey} to ${newKey}`);
-            } catch (e) {
-                console.error(`Failed to migrate ${oldKey}:`, e);
-            }
+            // If old data exists, always overwrite the new key with it.
+            localStorage.setItem(newKey, oldDataRaw);
+            localStorage.removeItem(oldKey);
+            console.log(`Successfully migrated data from ${oldKey} to ${newKey}`);
         }
     };
     
     // Previous key names used in the app's history
     const oldKeys = [
-        'barmate_productCategories',
-        'barmate_products',
-        'barmate_sales',
-        'barmate_openOrders',
-        'barmate_clients',
-        'barmate_financialEntries',
-        'barmate_cashRegisterStatus',
-        'barmate_secondaryCashBox',
-        'barmate_bankAccount',
-        'barmate_transactionFees',
-        'barmate_counterSaleOrderItems'
+        'barmate_productCategories', 'barmate_productCategories_v2',
+        'barmate_products', 'barmate_products_v2',
+        'barmate_sales', 'barmate_sales_v2',
+        'barmate_openOrders', 'barmate_openOrders_v2',
+        'barmate_clients', 'barmate_clients_v2',
+        'barmate_financialEntries', 'barmate_financialEntries_v2',
+        'barmate_cashRegisterStatus', 'barmate_cashRegisterStatus_v2',
+        'barmate_secondaryCashBox', 'barmate_secondaryCashBox_v2',
+        'barmate_bankAccount', 'barmate_bankAccount_v2',
+        'barmate_transactionFees', 'barmate_transactionFees_v2',
+        'barmate_counterSaleOrderItems', 'barmate_counterSaleOrderItems_v2'
     ];
     
-    const newKeys = [
-        KEY_PRODUCT_CATEGORIES,
-        KEY_PRODUCTS,
-        KEY_SALES,
-        KEY_OPEN_ORDERS,
-        KEY_CLIENTS,
-        KEY_FINANCIAL_ENTRIES,
-        KEY_CASH_REGISTER_STATUS,
-        KEY_SECONDARY_CASH_BOX,
-        KEY_BANK_ACCOUNT,
-        KEY_TRANSACTION_FEES,
-        KEY_COUNTER_SALE_ITEMS
-    ];
+    // De-duplicate keys to avoid trying to migrate the same source multiple times
+    const uniqueOldKeys = [...new Set(oldKeys)];
 
     console.log("Checking for old data to migrate...");
-    for (let i = 0; i < oldKeys.length; i++) {
-        migrateKey(oldKeys[i], newKeys[i]);
-    }
+    uniqueOldKeys.forEach(oldKey => {
+        // Target the latest key format (v2)
+        const newKey = `barmate_${oldKey.split('_')[1]}_v2`;
+        if (oldKey !== newKey) {
+            migrateKey(oldKey, newKey);
+        }
+    });
     
     // Special handling for barName which is not JSON
     const oldBarName = localStorage.getItem('barName');
     if (oldBarName) {
-        // No versioning on barName, just ensure it exists
         console.log("Bar name found, preserved.");
     }
     
@@ -269,26 +257,14 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
         });
       }
     } else if (p.method === 'cash') {
-        const cashStatus = getCashRegisterStatus();
-        if (cashStatus.status === 'open') {
-             newFinancialEntries.push({
-                description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
-                amount: p.amount,
-                type: 'income',
-                source: 'daily_cash',
-                saleId: newSale.id,
-                adjustmentId: null,
-             })
-        } else {
-            newFinancialEntries.push({
-                description: `Venda #${newSale.id.slice(-6)} em dinheiro (Caixa Fechado)`,
-                amount: p.amount,
-                type: 'income',
-                source: 'secondary_cash',
-                saleId: newSale.id,
-                adjustmentId: null,
-             })
-        }
+        newFinancialEntries.push({
+           description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
+           amount: p.amount,
+           type: 'income',
+           source: 'daily_cash',
+           saleId: newSale.id,
+           adjustmentId: null,
+        });
     }
   });
 
@@ -305,57 +281,29 @@ export const removeSale = (saleId: string) => {
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
   
-  // Revert financial impacts
-  const fees = getTransactionFees();
-  saleToRemove.payments.forEach(p => {
-    if (['debit', 'credit', 'pix'].includes(p.method)) {
-      const currentBank = getBankAccount();
-      let feeRate = 0;
-      if (p.method === 'debit') feeRate = fees.debitRate;
-      if (p.method === 'credit') feeRate = fees.creditRate;
-      if (p.method === 'pix') feeRate = fees.pixRate;
-
-      const feeAmount = p.amount * (feeRate / 100);
-      const netAmount = p.amount - feeAmount;
-
-      saveBankAccount({ balance: currentBank.balance - netAmount });
-    } else if (p.method === 'cash') {
-         const cashStatus = getCashRegisterStatus();
-         if(cashStatus.status === 'closed') {
-             const secondaryBox = getSecondaryCashBox();
-             saveSecondaryCashBox({ balance: secondaryBox.balance - p.amount });
-         }
-    }
-  });
-
   const currentFinancials = getFinancialEntries();
   const updatedFinancials = currentFinancials.filter(e => e.saleId !== saleId);
-  saveFinancialEntries(updatedFinancials); 
+  saveFinancialEntries(updatedFinancials, { silent: true }); // Silent update first
+  
+  // Recalculate balances after removing entries
+  recalculateAllBalances();
 }
 
 export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
     const currentEntries = getFinancialEntries();
     const entriesToAdd = Array.isArray(entry) ? entry : [entry];
 
-    const newEntries: FinancialEntry[] = entriesToAdd.map(e => ({
+    const newEntries: FinancialEntry[] = entriesToAdd.map((e, i) => ({
         ...e,
-        id: `fin-${Date.now()}-${Math.random()}`,
+        id: `fin-${Date.now()}-${i}`,
         timestamp: new Date()
     }));
 
-    // Update balances based on the new entries
-    newEntries.forEach(e => {
-        const value = e.type === 'income' ? e.amount : -e.amount;
-        if (e.source === 'bank_account') {
-            const current = getBankAccount();
-            saveBankAccount({ balance: current.balance + value });
-        } else if (e.source === 'secondary_cash') {
-            const current = getSecondaryCashBox();
-            saveSecondaryCashBox({ balance: current.balance + value });
-        }
-    });
+    const allEntries = [...currentEntries, ...newEntries];
+    saveFinancialEntries(allEntries, { silent: true });
     
-    saveFinancialEntries([...currentEntries, ...newEntries]);
+    // Instead of manually updating balances here, we recalculate everything
+    recalculateAllBalances();
 };
 
 export const removeFinancialEntry = (entryId: string) => {
@@ -367,27 +315,38 @@ export const removeFinancialEntry = (entryId: string) => {
       throw new Error("Cannot remove a financial entry linked to a sale. Please remove the sale instead.");
   }
   
-  // Revert balance change
-  const value = entryToRemove.type === 'income' ? entryToRemove.amount : -entryToRemove.amount;
-  if(entryToRemove.source === 'bank_account') {
-    const bank = getBankAccount();
-    saveBankAccount({ balance: bank.balance - value });
-  } else if (entryToRemove.source === 'secondary_cash') {
-    const secondary = getSecondaryCashBox();
-    saveSecondaryCashBox({ balance: secondary.balance - value });
-  }
-
   // Remove from cash register adjustments if it's from daily_cash
-  if (entryToRemove.source === 'daily_cash') {
+  if (entryToRemove.adjustmentId) {
       const cashStatus = getCashRegisterStatus();
-      if(cashStatus.status === 'open' && entryToRemove.adjustmentId) {
+      if(cashStatus.status === 'open') {
           const updatedAdjustments = (cashStatus.adjustments || []).filter(adj => adj.id !== entryToRemove.adjustmentId);
-          saveCashRegisterStatus({ ...cashStatus, adjustments: updatedAdjustments });
+          saveCashRegisterStatus({ ...cashStatus, adjustments: updatedAdjustments }, { silent: true });
       }
   }
 
   const updatedEntries = currentEntries.filter(e => e.id !== entryId);
-  saveFinancialEntries(updatedEntries);
+  saveFinancialEntries(updatedEntries, { silent: true });
+
+  // Recalculate balances after removing the entry
+  recalculateAllBalances();
+}
+
+export function recalculateAllBalances() {
+    const allEntries = getFinancialEntries();
+    
+    const bankBalance = allEntries
+        .filter(e => e.source === 'bank_account')
+        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+        
+    const secondaryCashBalance = allEntries
+        .filter(e => e.source === 'secondary_cash')
+        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+
+    saveBankAccount({ balance: bankBalance }, { silent: true });
+    saveSecondaryCashBox({ balance: secondaryCashBalance }, { silent: true });
+    
+    // Trigger a single storage event to notify all components to update
+    window.dispatchEvent(new StorageEvent('storage', { key: 'barmate_bulk_update' }));
 }
 
 // --- UI Helpers ---

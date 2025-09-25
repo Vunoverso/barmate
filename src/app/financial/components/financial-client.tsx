@@ -12,6 +12,7 @@ import {
   removeFinancialEntry,
   addFinancialEntry,
   saveCashRegisterStatus,
+  recalculateAllBalances,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -144,36 +145,24 @@ export default function FinancialClient() {
     });
     setIsMounted(true);
 
-    window.addEventListener('storage', loadData);
-
+    const handleStorageChange = (event: StorageEvent) => {
+        if(event.key === 'barmate_bulk_update' || event.key?.startsWith('barmate_')) {
+            loadData();
+        }
+    };
+    window.addEventListener('storage', handleStorageChange);
     return () => {
-      window.removeEventListener('storage', loadData);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, [loadData]);
   
  const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
-    
-    const openingTime = new Date(cashStatus.openingTime);
-    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
-    
-    const cashRevenue = sessionSales.reduce((total, sale) => {
-        if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
-            return total + sale.cashTendered;
-        }
-        
-        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        return total + cashPayment;
-    }, 0);
-
-
-    const openingBalance = cashStatus.openingBalance || 0;
-    const adjustments = cashStatus.adjustments || [];
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
-    
-    return openingBalance + cashRevenue + totalIn - totalOut;
-  }, [cashStatus, sales]);
+    if (cashStatus.status !== 'open') return 0;
+    const allEntries = getFinancialEntries();
+    return allEntries
+        .filter(e => e.source === 'daily_cash')
+        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+  }, [cashStatus, entries]);
 
 
    const totalGlobalBalance = useMemo(() => {
@@ -208,7 +197,7 @@ export default function FinancialClient() {
   
   const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId), [filteredEntries]);
   const feeExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !!e.saleId), [filteredEntries]);
-  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income'), [filteredEntries]);
+  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income' && !e.saleId), [filteredEntries]);
 
   const paginatedSales = useMemo(() => {
     const startIndex = (salesPagination.currentPage - 1) * salesPagination.itemsPerPage;
@@ -252,12 +241,12 @@ export default function FinancialClient() {
 
 
   const salesRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
-  const otherIncome = useMemo(() => incomeEntries.filter(e => !e.saleId).reduce((sum, entry) => sum + entry.amount, 0), [incomeEntries]);
-  const totalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0), [filteredEntries]);
+  const otherIncome = useMemo(() => incomeEntries.reduce((sum, entry) => sum + entry.amount, 0), [incomeEntries]);
+  const totalExpenses = useMemo(() => [...generalExpenses, ...feeExpenses].reduce((sum, entry) => sum + entry.amount, 0), [generalExpenses, feeExpenses]);
   const netBalance = useMemo(() => salesRevenue + otherIncome - totalExpenses, [salesRevenue, otherIncome, totalExpenses]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
-    const combinedData = [...filteredSales, ...filteredEntries.filter(e => e.type === 'expense')];
+    const combinedData = [...filteredSales, ...filteredEntries];
     
     const monthly = combinedData.reduce((acc, item) => {
         const monthKey = format(new Date(item.timestamp), "yyyy-MM");
@@ -265,8 +254,15 @@ export default function FinancialClient() {
 
         if (!acc[monthKey]) acc[monthKey] = { period: monthLabel, income: 0, expenses: 0 };
         
-        if ('totalAmount' in item) acc[monthKey].income += item.totalAmount;
-        else if(item.type === 'expense') acc[monthKey].expenses += item.amount;
+        if ('totalAmount' in item) { // It's a Sale, counts as income
+            acc[monthKey].income += item.totalAmount;
+        } else { // It's a FinancialEntry
+            if (item.type === 'income' && !item.saleId) {
+                acc[monthKey].income += item.amount;
+            } else if (item.type === 'expense') {
+                acc[monthKey].expenses += item.amount;
+            }
+        }
         
         return acc;
     }, {} as Record<string, { period: string, income: number, expenses: number }>);
@@ -280,8 +276,15 @@ export default function FinancialClient() {
 
         if (!acc[weekKey]) acc[weekKey] = { period: weekLabel, income: 0, expenses: 0 };
         
-        if ('totalAmount' in item) acc[weekKey].income += item.totalAmount;
-        else if (item.type === 'expense') acc[weekKey].expenses += item.amount;
+         if ('totalAmount' in item) { // It's a Sale, counts as income
+            acc[weekKey].income += item.totalAmount;
+        } else { // It's a FinancialEntry
+            if (item.type === 'income' && !item.saleId) {
+                acc[weekKey].income += item.amount;
+            } else if (item.type === 'expense') {
+                acc[weekKey].expenses += item.amount;
+            }
+        }
 
         return acc;
     }, {} as Record<string, { period: string, income: number, expenses: number }>);
@@ -334,15 +337,14 @@ export default function FinancialClient() {
     }
 
     const adjustmentId = `adj-exp-${Date.now()}`;
-    const newEntry: Omit<FinancialEntry, 'id'> = {
+    addFinancialEntry({
       description: data.description,
       amount: data.amount,
       type: 'expense',
       source: data.source,
-      timestamp: new Date(),
       saleId: null,
       adjustmentId: data.source === 'daily_cash' ? adjustmentId : null
-    };
+    });
 
     if (data.source === 'daily_cash' && cashStatus.status === 'open') {
       const currentCashStatus = getCashRegisterStatus();
@@ -356,11 +358,10 @@ export default function FinancialClient() {
       const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), sangriaAdjustment]};
       saveCashRegisterStatus(updatedStatus);
     }
-
-    addFinancialEntry(newEntry as FinancialEntry);
     
     toast({ title: "Despesa Adicionada", description: "Sua nova despesa foi registrada com sucesso." });
     setIsExpenseDialogOpen(false);
+    setExpenseToConfirm(null);
     form.reset({ description: '', amount: 0, source: 'daily_cash' });
   };
   
@@ -483,7 +484,7 @@ export default function FinancialClient() {
         amount: entry.amount,
         source: SOURCE_MAP[entry.source]
       })),
-       ...filteredEntries.filter(e => e.type === 'income').map(entry => ({
+       ...filteredEntries.filter(e => e.type === 'income' && !e.saleId).map(entry => ({
         timestamp: new Date(entry.timestamp),
         description: entry.description,
         type: 'Entrada',

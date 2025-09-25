@@ -281,11 +281,12 @@ export default function OrdersClient() {
     saveOpenOrders(newOpenOrders);
 
     if (source !== 'permuta') {
+        const entrySource = source === 'dinheiro' ? 'daily_cash' : 'bank_account';
         addFinancialEntry({
             description: `Crédito para ${orderToUpdate.name}: ${description}`,
             amount: amount,
             type: 'income',
-            source: source === 'dinheiro' ? 'daily_cash' : 'bank_account',
+            source: entrySource,
             saleId: null,
             adjustmentId: null
         });
