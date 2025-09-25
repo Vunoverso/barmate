@@ -5,9 +5,9 @@
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { 
   getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
-  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale, removeFinancialEntry, saveFinancialEntries, saveBankAccount, saveSecondaryCashBox, saveCashRegisterStatus
+  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale
 } from '@/lib/constants';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
   Table,
@@ -31,7 +31,7 @@ import { DatePickerWithRange } from '@/components/ui/date-picker-range';
 import type { DateRange } from "react-day-picker";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart, Landmark, PiggyBank, Banknote } from 'lucide-react';
+import { Download, ListFilter, MoreHorizontal, Trash2, TrendingDown, DollarSign, Scale, BarChart, Landmark, PiggyBank, Banknote, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -70,10 +70,9 @@ export default function ReportsClient() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
       setIsMounted(false);
       try {
-          // All data is now local
           setSales(getSales());
           setFinancialEntries(getFinancialEntries());
           setSecondaryCashBox(getSecondaryCashBox());
@@ -85,7 +84,7 @@ export default function ReportsClient() {
       } finally {
           setIsMounted(true);
       }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadData();
@@ -94,21 +93,26 @@ export default function ReportsClient() {
       to: new Date(),
     });
 
-    window.addEventListener('storage', loadData);
+    const handleStorageChange = () => {
+        loadData();
+    }
+    window.addEventListener('storage', handleStorageChange);
     
     return () => {
-      window.removeEventListener('storage', loadData);
+      window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [loadData]);
 
-  const filterByDate = (items: (Sale | FinancialEntry)[]) => {
+  const filterByDate = <T extends { timestamp: Date | string }>(items: T[]) => {
     if (!dateRange || !dateRange.from) return items;
     return items.filter(item => {
       const itemDate = new Date(item.timestamp);
-      if (dateRange?.from && itemDate < dateRange.from) return false;
+      const fromDate = new Date(dateRange.from!);
+      fromDate.setHours(0,0,0,0);
+      if (itemDate < fromDate) return false;
       if (dateRange?.to) {
         const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999); // Include the whole "to" day
+        toDate.setHours(23, 59, 59, 999);
         if (itemDate > toDate) return false;
       }
       return true;
@@ -127,30 +131,27 @@ export default function ReportsClient() {
     return (filterByDate(financialEntries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [financialEntries, dateRange]);
 
-  const totalRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
-  const totalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0), [filteredEntries]);
-  const netBalance = useMemo(() => totalRevenue - totalExpenses, [totalRevenue, totalExpenses]);
+
+  const { totalRevenue, otherIncome, totalExpenses, netBalance } = useMemo(() => {
+    const salesRevenue = filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+    const incomeEntries = filteredEntries.filter(e => e.type === 'income' && !e.saleId);
+    const expensesEntries = filteredEntries.filter(e => e.type === 'expense');
+
+    const otherIncomeTotal = incomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const totalExpensesTotal = expensesEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    
+    const netBalanceCalc = salesRevenue + otherIncomeTotal - totalExpensesTotal;
+
+    return { totalRevenue: salesRevenue, otherIncome: otherIncomeTotal, totalExpenses: totalExpensesTotal, netBalance: netBalanceCalc };
+  }, [filteredSales, filteredEntries]);
+
 
   const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
-    
-    const openingTime = new Date(cashStatus.openingTime);
-    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
-    
-    const cashRevenue = sessionSales.reduce((total, sale) => {
-        if (sale.leaveChangeAsCredit && sale.cashTendered && sale.cashTendered > 0) {
-            return total + sale.cashTendered;
-        }
-        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
-        return total + cashPayment;
-    }, 0);
-    const openingBalance = cashStatus.openingBalance || 0;
-    const adjustments = cashStatus.adjustments || [];
-    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
-    
-    return openingBalance + cashRevenue + totalIn - totalOut;
-  }, [cashStatus, sales]);
+    const allEntries = getFinancialEntries();
+    return allEntries
+        .filter(e => e.source === 'daily_cash')
+        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+  }, [financialEntries]);
 
   const totalGlobalBalance = useMemo(() => {
     return expectedCashInDrawer + secondaryCashBox.balance + bankAccount.balance;
@@ -158,12 +159,21 @@ export default function ReportsClient() {
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
     const processEntries = (entries: FinancialEntry[], periodFormat: "yyyy-MM" | "yyyy-MM-dd", labelFormat: string, startOfWeek: boolean = false) => {
-        return entries.reduce((acc, item) => {
+        const salesEntries = entries.filter(e => e.saleId && e.type === 'income');
+        const otherIncomes = entries.filter(e => !e.saleId && e.type === 'income');
+        const allExpenses = entries.filter(e => e.type === 'expense');
+
+        const combined = [...salesEntries, ...otherIncomes, ...allExpenses];
+
+        const grouped = combined.reduce((acc, item) => {
             let key, label;
             const date = new Date(item.timestamp);
             
             if (startOfWeek) {
-                const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1)); // Monday as start of week
+                const day = date.getDay();
+                const diff = date.getDate() - day + (day === 0 ? -6 : 1); 
+                const weekStart = new Date(date.setDate(diff));
+                weekStart.setHours(0,0,0,0);
                 const weekEnd = addDays(weekStart, 6);
                 key = format(weekStart, periodFormat);
                 label = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
@@ -173,7 +183,7 @@ export default function ReportsClient() {
             }
 
             if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
-
+            
             if (item.type === 'income') {
                 acc[key].income += item.amount;
             } else if (item.type === 'expense') {
@@ -182,6 +192,8 @@ export default function ReportsClient() {
 
             return acc;
         }, {} as Record<string, { period: string, income: number, expenses: number }>);
+        
+        return Object.values(grouped).sort((a,b) => new Date(b.period.slice(0,10)).getTime() - new Date(a.period.slice(0,10)).getTime());
     };
 
     const monthly = processEntries(filteredEntries, "yyyy-MM", "MMMM yyyy");
@@ -383,46 +395,46 @@ export default function ReportsClient() {
         </CardContent>
         <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
-                <p className="text-xs text-muted-foreground">Total de vendas no período</p>
-            </CardContent>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Receita de Vendas</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
+                    <p className="text-xs text-muted-foreground">Faturamento de vendas no período.</p>
+                </CardContent>
             </Card>
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Despesas Totais</CardTitle>
-                <TrendingDown className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
-                <p className="text-xs text-muted-foreground">Total de saídas no período</p>
-            </CardContent>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Outras Entradas</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{formatCurrency(otherIncome)}</div>
+                    <p className="text-xs text-muted-foreground">Suprimentos e ajustes manuais.</p>
+                </CardContent>
             </Card>
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Balanço Líquido</CardTitle>
-                <Scale className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                {formatCurrency(netBalance)}
-                </div>
-                <p className="text-xs text-muted-foreground">Receita - Despesas</p>
-            </CardContent>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Despesas Totais</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
+                    <p className="text-xs text-muted-foreground">Saídas, taxas e despesas manuais.</p>
+                </CardContent>
             </Card>
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total de Vendas</CardTitle>
-                <BarChart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">+{filteredSales.length}</div>
-                <p className="text-xs text-muted-foreground">Vendas realizadas no período</p>
-            </CardContent>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Balanço Líquido</CardTitle>
+                    <Scale className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                    {formatCurrency(netBalance)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">(Vendas + Entradas) - Despesas</p>
+                </CardContent>
             </Card>
         </CardContent>
       </Card>
@@ -527,3 +539,5 @@ export default function ReportsClient() {
     </div>
   );
 }
+
+    
