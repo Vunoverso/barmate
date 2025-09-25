@@ -4,7 +4,7 @@
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
 import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS } from '@/lib/constants';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from '@/components/ui/button';
@@ -72,6 +72,30 @@ export default function CashRegisterClient() {
   const [isEditBankAccountDialogOpen, setIsEditBankAccountDialogOpen] = useState(false);
   const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
   
+  const loadInitialData = useCallback(() => {
+    setIsLoading(true);
+    setCashStatus(getCashRegisterStatus());
+    setAllFinancialEntries(getFinancialEntries());
+    setSales(getSales());
+    setSecondaryCashBoxData(getSecondaryCashBox());
+    setBankAccountData(getBankAccount());
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadInitialData();
+
+    const handleStorageChange = (event: StorageEvent) => {
+        loadInitialData();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [loadInitialData]); 
+
+
   // Calculated balances
   const secondaryCashBoxBalance = useMemo(() => {
     const transactionSum = allFinancialEntries
@@ -86,30 +110,6 @@ export default function CashRegisterClient() {
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
       return (bankAccountData.baseBalance || 0) + transactionSum;
   }, [allFinancialEntries, bankAccountData]);
-
-
-  const loadInitialData = () => {
-    setIsLoading(true);
-    setCashStatus(getCashRegisterStatus());
-    setAllFinancialEntries(getFinancialEntries());
-    setSales(getSales());
-    setSecondaryCashBoxData(getSecondaryCashBox());
-    setBankAccountData(getBankAccount());
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    loadInitialData();
-
-    const handleStorageChange = (event: StorageEvent) => {
-        loadInitialData();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []); 
 
 
   const handleOpenCashRegister = (openingBalance: number) => {
@@ -338,6 +338,7 @@ export default function CashRegisterClient() {
           saveBankAccount({ ...getBankAccount(), baseBalance: newBalance });
           setIsEditBankAccountDialogOpen(false);
       }
+      loadInitialData(); // Recarrega os dados para a UI refletir a mudança
       toast({ title: "Saldo Atualizado", description: `O saldo base foi ajustado para ${formatCurrency(newBalance)}.` });
   }
 

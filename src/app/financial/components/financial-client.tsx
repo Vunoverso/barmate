@@ -370,6 +370,7 @@ export default function FinancialClient() {
           saveBankAccount({ ...getBankAccount(), baseBalance: newBalance });
           setIsEditBankAccountDialogOpen(false);
       }
+      loadData(); // Reload data to reflect new base balance
       toast({ title: "Saldo Atualizado", description: `O saldo base foi ajustado para ${formatCurrency(newBalance)}.` });
   }
 
