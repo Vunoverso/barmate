@@ -68,12 +68,14 @@ export default function CashRegisterClient() {
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [isEditBalanceDialogOpen, setIsEditBalanceDialogOpen] = useState(false);
   const [editBalanceSource, setEditBalanceSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
+  const [visuallyRemovedAdjustments, setVisuallyRemovedAdjustments] = useState<string[]>([]);
   
   const loadInitialData = useCallback(() => {
     setIsLoading(true);
     setCashStatus(getCashRegisterStatus());
     setAllFinancialEntries(getFinancialEntries());
     setSales(getSales());
+    setVisuallyRemovedAdjustments([]);
     setIsLoading(false);
   }, []);
 
@@ -220,12 +222,19 @@ export default function CashRegisterClient() {
   
   const handleDeleteAdjustment = (revert: boolean) => {
     if (!adjustmentToDelete) return;
-    const currentCashStatus = getCashRegisterStatus();
-    if (currentCashStatus.status !== 'open') return;
 
     removeFinancialEntry(adjustmentToDelete.id, revert);
-    const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-    saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+    
+    if (revert) {
+        const currentCashStatus = getCashRegisterStatus();
+        if (currentCashStatus.status === 'open') {
+            const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+            saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        }
+    } else {
+        // Just hide it visually for this session without affecting calculations
+        setVisuallyRemovedAdjustments(prev => [...prev, adjustmentToDelete.id]);
+    }
     
     toast({ 
         title: "Movimentação Removida", 
@@ -234,6 +243,7 @@ export default function CashRegisterClient() {
     });
     setAdjustmentToDelete(null);
   };
+
 
   const handleEditBalance = (newBalance: number) => {
     let source: 'secondary_cash' | 'bank_account' | 'daily_cash' = editBalanceSource;
@@ -405,9 +415,9 @@ export default function CashRegisterClient() {
   const sortedAdjustments = useMemo(() => {
     if (!cashStatus.adjustments) return [];
     return [...cashStatus.adjustments]
-        .filter(adj => !adj.isCorrection) 
+        .filter(adj => !adj.isCorrection && !visuallyRemovedAdjustments.includes(adj.id)) 
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [cashStatus.adjustments]);
+  }, [cashStatus.adjustments, visuallyRemovedAdjustments]);
 
 
   if (isLoading) {
