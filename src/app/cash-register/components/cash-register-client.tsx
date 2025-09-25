@@ -81,7 +81,7 @@ export default function CashRegisterClient() {
     loadInitialData();
 
     const handleStorageChange = (event: StorageEvent) => {
-        if (event.key === KEY_CASH_REGISTER_STATUS || event.key === KEY_FINANCIAL_ENTRIES || event.key === KEY_SALES) {
+        if (event.key === KEY_CASH_REGISTER_STATUS || event.key === KEY_FINANCIAL_ENTRIES || event.key === 'barmate_sales_v2') {
             loadInitialData();
         }
     };
@@ -158,22 +158,24 @@ export default function CashRegisterClient() {
   };
 
   const handleSaveAdjustment = (details: { amount: number; description: string; destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => {
-    if (idToUpdate) { // Editing existing adjustment
+    if (idToUpdate && editingAdjustment) { // Editing existing adjustment
         const allEntries = getFinancialEntries();
+        // Update the financial entry directly
         const newEntries = allEntries.map(entry => {
             if (entry.adjustmentId === idToUpdate) {
                 return {
                     ...entry,
                     amount: details.amount,
-                    description: `${entry.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${details.description}`,
+                    description: `${editingAdjustment.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${details.description}`,
                 };
             }
             return entry;
         });
         saveFinancialEntries(newEntries);
 
+        // Update the adjustment in cash status
         const currentCashStatus = getCashRegisterStatus();
-        const updatedAdjustment: CashAdjustment = { ...editingAdjustment!, amount: details.amount, description: details.description };
+        const updatedAdjustment: CashAdjustment = { ...editingAdjustment, amount: details.amount, description: details.description };
         const newAdjustments = currentCashStatus.adjustments?.map(adj => adj.id === idToUpdate ? updatedAdjustment : adj) || [];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
 
@@ -231,33 +233,19 @@ export default function CashRegisterClient() {
     if (!adjustmentToDelete) return;
 
     if (revert) {
-        // Revert the financial entries
-        const allEntries = getFinancialEntries();
-        const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = [];
-        const entriesToKeep = allEntries.filter(e => {
-            if (e.adjustmentId === adjustmentToDelete.id) {
-                reversalEntries.push({
-                    description: `Estorno: ${e.description}`,
-                    amount: e.amount,
-                    type: e.type === 'income' ? 'expense' : 'income',
-                    source: e.source,
-                    saleId: e.saleId,
-                    adjustmentId: `reversal-for-${e.adjustmentId}`
-                });
-                return false; // Remove original entry
-            }
-            return true;
-        });
-        saveFinancialEntries([...entriesToKeep, ...reversalEntries.map((e,i) => ({...e, id: `fin-rev-${Date.now()}-${i}`, timestamp: new Date()}))]);
-
-        // Remove adjustment from cash status
+        // Find and remove the adjustment from cash status
         const currentCashStatus = getCashRegisterStatus();
         if (currentCashStatus.status === 'open') {
             const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
             saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
         }
         
-    } else { // Just hide visually
+        // Find and remove related financial entries
+        const allEntries = getFinancialEntries();
+        const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustmentToDelete.id);
+        saveFinancialEntries(entriesToKeep);
+        
+    } else { // Just hide visually, saving to sessionStorage
         const currentRemoved = getVisuallyRemovedAdjustments();
         const newRemoved = [...currentRemoved, adjustmentToDelete.id];
         saveVisuallyRemovedAdjustments(newRemoved);
@@ -867,6 +855,8 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
     </Dialog>
   );
 }
+
+    
 
     
 
