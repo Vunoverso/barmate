@@ -162,23 +162,14 @@ export default function FinancialClient() {
   }, [entries]);
   
   const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open') return 0;
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
-    const salesInCash = sales.filter(sale => 
-        new Date(sale.timestamp) >= new Date(cashStatus.openingTime!)
-      ).reduce((sum, sale) => {
-          const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount || 0;
-          return sum + cashPayment;
-    }, 0);
+    const openingTime = new Date(cashStatus.openingTime).getTime();
 
-    const adjustments = cashStatus.adjustments || [];
-    const totalIn = adjustments.filter(a => a.type === 'in' && !visuallyRemovedEntries.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
-    const totalOut = adjustments.filter(a => a.type === 'out' && !visuallyRemovedEntries.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
-    
-    const openingBalance = cashStatus.openingBalance || 0;
-
-    // A lógica de cálculo deve espelhar a da tela de Gestão de Caixa
-    return (openingBalance + salesInCash + (totalIn - openingBalance)) - totalOut;
+    // This logic now mirrors the one in cash-register-client.tsx
+    return entries
+        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= openingTime)
+        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
 
   }, [cashStatus, sales, entries, visuallyRemovedEntries]);
 
@@ -380,7 +371,7 @@ export default function FinancialClient() {
       const currentRemoved = getVisuallyRemovedFinancialEntries();
       const newRemoved = [...currentRemoved, entryToDelete.id];
       saveVisuallyRemovedFinancialEntries(newRemoved);
-      setVisuallyRemovedEntries(newRemoved); 
+      // No need to call setVisuallyRemovedEntries here, as the storage event listener will trigger a reload.
     }
     
     toast({ 
