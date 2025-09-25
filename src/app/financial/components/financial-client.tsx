@@ -10,6 +10,7 @@ import {
   removeFinancialEntry,
   addFinancialEntry,
   saveCashRegisterStatus,
+  getCashRegisterStatus,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -97,7 +98,7 @@ const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
 export default function FinancialClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
-  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
+  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed', adjustments: [] });
   const [sales, setSales] = useState<Sale[]>([]);
   
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
@@ -158,8 +159,8 @@ export default function FinancialClient() {
   );
   
   const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open') return 0;
-    const sessionStartTime = new Date(cashStatus.openingTime!).getTime();
+    if (!cashStatus || cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+    const sessionStartTime = new Date(cashStatus.openingTime).getTime();
     
     return entries
         .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= sessionStartTime)
@@ -538,7 +539,7 @@ export default function FinancialClient() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(expectedCashInDrawer) : '******'}</div>
-                    <p className="text-xs text-muted-foreground">Status: <span className="capitalize">{cashStatus.status === 'open' ? 'Aberto' : 'Fechado'}</span></p>
+                    <p className="text-xs text-muted-foreground">Status: <span className="capitalize">{cashStatus?.status === 'open' ? 'Aberto' : 'Fechado'}</span></p>
                 </CardContent>
             </Card>
             <Card>
@@ -1118,3 +1119,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+  
