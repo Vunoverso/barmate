@@ -47,8 +47,8 @@ export const DATA_KEYS = [
     'barmate_clients_v2',
     'barmate_financialEntries_v2',
     'barmate_cashRegisterStatus_v2',
-    'barmate_secondaryCashBox_v2',
-    'barmate_bankAccount_v2',
+    'barmate_secondaryCashBox_v2', // Kept for structure, but balance is now calculated
+    'barmate_bankAccount_v2',     // Kept for structure, but balance is now calculated
     'barmate_transactionFees_v2',
     'barmate_counterSaleOrderItems_v2',
     'barName'
@@ -63,7 +63,6 @@ const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
 const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
 const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
 const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
-const KEY_COUNTER_SALE_ITEMS = 'barmate_counterSaleOrderItems_v2';
 
 
 // --- INITIAL DATA (CLEAN STATE) ---
@@ -133,14 +132,12 @@ export const migrateOldData = () => {
     const migrateKey = (oldKey: string, newKey: string) => {
         const oldDataRaw = localStorage.getItem(oldKey);
         if (oldDataRaw) {
-            // If old data exists, always overwrite the new key with it.
             localStorage.setItem(newKey, oldDataRaw);
             localStorage.removeItem(oldKey);
             console.log(`Successfully migrated data from ${oldKey} to ${newKey}`);
         }
     };
     
-    // Previous key names used in the app's history
     const oldKeys = [
         'barmate_productCategories', 'barmate_productCategories_v2',
         'barmate_products', 'barmate_products_v2',
@@ -155,19 +152,16 @@ export const migrateOldData = () => {
         'barmate_counterSaleOrderItems', 'barmate_counterSaleOrderItems_v2'
     ];
     
-    // De-duplicate keys to avoid trying to migrate the same source multiple times
     const uniqueOldKeys = [...new Set(oldKeys)];
 
     console.log("Checking for old data to migrate...");
     uniqueOldKeys.forEach(oldKey => {
-        // Target the latest key format (v2)
         const newKey = `barmate_${oldKey.split('_')[1]}_v2`;
         if (oldKey !== newKey) {
             migrateKey(oldKey, newKey);
         }
     });
     
-    // Special handling for barName which is not JSON
     const oldBarName = localStorage.getItem('barName');
     if (oldBarName) {
         console.log("Bar name found, preserved.");
@@ -175,7 +169,7 @@ export const migrateOldData = () => {
     
     localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
     console.log("Data migration check completed.");
-    window.dispatchEvent(new Event('storage')); // Trigger a storage event to reload data in components
+    window.dispatchEvent(new Event('storage')); 
 };
 
 
@@ -202,11 +196,13 @@ export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalSt
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
 
+// These functions now only get the structure, not a real balance. Balance is calculated.
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent?: boolean }) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box, options);
-
 export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
+// These save functions are now only for maintaining structure, balance is ignored.
+export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent?: boolean }) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box, options);
 export const saveBankAccount = (account: BankAccount, options?: { silent?: boolean }) => saveToLocalStorage(KEY_BANK_ACCOUNT, account, options);
+
 
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
 export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
@@ -228,7 +224,6 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
   
-  // This calculates the total value paid with pre-existing credit, to exclude it from new income.
   const creditPaidAmount = newSale.items
     .filter(item => item.price < 0)
     .reduce((sum, item) => sum + Math.abs(item.price * item.quantity), 0);
@@ -236,7 +231,6 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   let remainingPayments = JSON.parse(JSON.stringify(newSale.payments));
   let remainingCreditToApply = creditPaidAmount;
 
-  // Deduct credit amount from payments, starting with non-cash methods if possible.
   for (const payment of remainingPayments) {
       if (remainingCreditToApply <= 0) break;
       const amountToDeduct = Math.min(payment.amount, remainingCreditToApply);

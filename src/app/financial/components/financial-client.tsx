@@ -5,15 +5,11 @@
 import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod, CashAdjustment } from '@/types';
 import { 
   getFinancialEntries, formatCurrency, 
-  getSecondaryCashBox,
-  getBankAccount,
-  getCashRegisterStatus, getSales, PAYMENT_METHODS,
+  getSales, PAYMENT_METHODS,
   removeSale,
   removeFinancialEntry,
   addFinancialEntry,
   saveCashRegisterStatus,
-  saveSecondaryCashBox,
-  saveBankAccount,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -101,8 +97,6 @@ const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
 export default function FinancialClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
-  const [secondaryCashBox, setSecondaryCashBox] = useState<SecondaryCashBox>({ balance: 0 });
-  const [bankAccount, setBankAccount] = useState<BankAccount>({ balance: 0 });
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
   const [sales, setSales] = useState<Sale[]>([]);
   
@@ -123,7 +117,6 @@ export default function FinancialClient() {
   const [feesPagination, setFeesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
   const [incomePagination, setIncomePagination] = useState({ currentPage: 1, itemsPerPage: 10 });
 
-
   const { toast } = useToast();
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
@@ -131,25 +124,9 @@ export default function FinancialClient() {
   });
 
   const loadData = useCallback(() => {
-    const allEntries = getFinancialEntries();
-    setEntries(allEntries);
+    setEntries(getFinancialEntries());
     setSales(getSales());
-    
-    // Calculate balances from entries
-    const bankBalance = allEntries
-      .filter(e => e.source === 'bank_account')
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-    saveBankAccount({ balance: bankBalance }, { silent: true });
-    setBankAccount({ balance: bankBalance });
-      
-    const secondaryCashBalance = allEntries
-      .filter(e => e.source === 'secondary_cash')
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-    saveSecondaryCashBox({ balance: secondaryCashBalance }, { silent: true });
-    setSecondaryCashBox({ balance: secondaryCashBalance });
-    
     setCashStatus(getCashRegisterStatus());
-    
   }, []);
   
   useEffect(() => {
@@ -169,7 +146,18 @@ export default function FinancialClient() {
     };
   }, [loadData]);
   
- const expectedCashInDrawer = useMemo(() => {
+  // --- Calculated Balances ---
+  const secondaryCashBoxBalance = useMemo(() => 
+    entries.filter(e => e.source === 'secondary_cash').reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0), 
+    [entries]
+  );
+  
+  const bankAccountBalance = useMemo(() => 
+    entries.filter(e => e.source === 'bank_account').reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0),
+    [entries]
+  );
+  
+  const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open') return 0;
     const sessionStartTime = new Date(cashStatus.openingTime!).getTime();
     
@@ -178,10 +166,10 @@ export default function FinancialClient() {
         .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [cashStatus, entries]);
 
-
-   const totalGlobalBalance = useMemo(() => {
-    return expectedCashInDrawer + secondaryCashBox.balance + bankAccount.balance;
-  }, [expectedCashInDrawer, secondaryCashBox, bankAccount]);
+  const totalGlobalBalance = useMemo(() => {
+    return expectedCashInDrawer + secondaryCashBoxBalance + bankAccountBalance;
+  }, [expectedCashInDrawer, secondaryCashBoxBalance, bankAccountBalance]);
+  // --- End Calculated Balances ---
 
   const filterByDate = (items: (Sale | FinancialEntry)[]) => {
     if (!dateRange || !dateRange.from) return items;
@@ -346,10 +334,10 @@ export default function FinancialClient() {
         toast({ title: "Saldo Insuficiente", description: "O caixa diário não tem saldo suficiente para esta despesa.", variant: "destructive" });
         return;
       }
-    } else if (data.source === 'secondary_cash' && secondaryCashBox.balance < data.amount) {
+    } else if (data.source === 'secondary_cash' && secondaryCashBoxBalance < data.amount) {
       toast({ title: "Saldo Insuficiente", description: "O Caixa 02 não tem saldo suficiente para esta despesa.", variant: "destructive" });
       return;
-    } else if (data.source === 'bank_account' && bankAccount.balance < data.amount) {
+    } else if (data.source === 'bank_account' && bankAccountBalance < data.amount) {
       toast({ title: "Saldo Insuficiente", description: "A conta bancária não tem saldo suficiente para esta despesa.", variant: "destructive" });
       return;
     }
@@ -384,7 +372,7 @@ export default function FinancialClient() {
   };
   
   const handleEditBalance = (newBalance: number, source: 'secondary_cash' | 'bank_account') => {
-      const currentBalance = source === 'secondary_cash' ? secondaryCashBox.balance : bankAccount.balance;
+      const currentBalance = source === 'secondary_cash' ? secondaryCashBoxBalance : bankAccountBalance;
       const difference = newBalance - currentBalance;
       
       if (Math.abs(difference) < 0.01) {
@@ -580,7 +568,7 @@ export default function FinancialClient() {
                     <Button variant="ghost" size="icon" className="h-7 w-7 -mr-4" onClick={() => setIsEditCaixa02DialogOpen(true)}><Edit className="h-4 w-4" /></Button>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(secondaryCashBox.balance) : '******'}</div>
+                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(secondaryCashBoxBalance) : '******'}</div>
                 </CardContent>
             </Card>
             <Card>
@@ -589,7 +577,7 @@ export default function FinancialClient() {
                     <Button variant="ghost" size="icon" className="h-7 w-7 -mr-4" onClick={() => setIsEditBankAccountDialogOpen(true)}><Edit className="h-4 w-4" /></Button>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(bankAccount.balance) : '******'}</div>
+                    <div className="text-2xl font-bold">{isBalanceVisible ? formatCurrency(bankAccountBalance) : '******'}</div>
                 </CardContent>
             </Card>
         </div>
@@ -950,8 +938,8 @@ export default function FinancialClient() {
                   <FormItem className="space-y-3"><FormLabel>Origem do Dinheiro</FormLabel><FormControl>
                       <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
                         <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="daily_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Banknote className="h-4 w-4"/> Caixa Diário ({isBalanceVisible ? formatCurrency(expectedCashInDrawer) : '***'})</FormLabel></FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="secondary_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><PiggyBank className="h-4 w-4"/> Caixa 02 ({isBalanceVisible ? formatCurrency(secondaryCashBox.balance) : '***'})</FormLabel></FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="bank_account" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Landmark className="h-4 w-4"/> Conta Bancária ({isBalanceVisible ? formatCurrency(bankAccount.balance) : '***'})</FormLabel></FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="secondary_cash" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><PiggyBank className="h-4 w-4"/> Caixa 02 ({isBalanceVisible ? formatCurrency(secondaryCashBoxBalance) : '***'})</FormLabel></FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="bank_account" /></FormControl><FormLabel className="font-normal flex items-center gap-2"><Landmark className="h-4 w-4"/> Conta Bancária ({isBalanceVisible ? formatCurrency(bankAccountBalance) : '***'})</FormLabel></FormItem>
                       </RadioGroup>
                   </FormControl><FormMessage /></FormItem>
               )} />
@@ -1004,8 +992,8 @@ export default function FinancialClient() {
         </AlertDialog>
       )}
 
-      <EditBalanceDialog isOpen={isEditCaixa02DialogOpen} onOpenChange={setIsEditCaixa02DialogOpen} currentBalance={secondaryCashBox.balance} onSave={(newBalance) => handleEditBalance(newBalance, 'secondary_cash')} title="Editar Saldo do Caixa 02" description="Ajuste o valor total do seu caixa secundário." idPrefix="caixa02" />
-      <EditBalanceDialog isOpen={isEditBankAccountDialogOpen} onOpenChange={setIsEditBankAccountDialogOpen} currentBalance={bankAccount.balance} onSave={(newBalance) => handleEditBalance(newBalance, 'bank_account')} title="Editar Saldo da Conta Bancária" description="Ajuste o saldo total da sua conta bancária." idPrefix="bank" />
+      <EditBalanceDialog isOpen={isEditCaixa02DialogOpen} onOpenChange={setIsEditCaixa02DialogOpen} currentBalance={secondaryCashBoxBalance} onSave={(newBalance) => handleEditBalance(newBalance, 'secondary_cash')} title="Editar Saldo do Caixa 02" description="Ajuste o valor total do seu caixa secundário." idPrefix="caixa02" />
+      <EditBalanceDialog isOpen={isEditBankAccountDialogOpen} onOpenChange={setIsEditBankAccountDialogOpen} currentBalance={bankAccountBalance} onSave={(newBalance) => handleEditBalance(newBalance, 'bank_account')} title="Editar Saldo da Conta Bancária" description="Ajuste o saldo total da sua conta bancária." idPrefix="bank" />
       <EditBalanceDialog 
         isOpen={isEditCashInDrawerDialogOpen} 
         onOpenChange={setIsEditCashInDrawerDialogOpen} 
