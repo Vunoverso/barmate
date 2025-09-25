@@ -151,27 +151,36 @@ export default function FinancialClient() {
   
   const secondaryCashBoxBalance = useMemo(() => {
     return entries
-      .filter(e => e.source === 'secondary_cash')
+      .filter(e => e.source === 'secondary_cash' && !e.isCorrection)
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [entries]);
   
   const bankAccountBalance = useMemo(() => {
     return entries
-      .filter(e => e.source === 'bank_account')
+      .filter(e => e.source === 'bank_account' && !e.isCorrection)
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [entries]);
   
   const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+    if (cashStatus.status !== 'open') return 0;
     
-    const openingTime = new Date(cashStatus.openingTime);
-    
-    const allSessionEntries = entries.filter(e => 
-      e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime
-    );
+    const salesInCash = sales.filter(sale => 
+        new Date(sale.timestamp) >= new Date(cashStatus.openingTime!)
+      ).reduce((sum, sale) => {
+          const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount || 0;
+          return sum + cashPayment;
+    }, 0);
 
-    return allSessionEntries.reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-  }, [cashStatus, entries]);
+    const adjustments = cashStatus.adjustments || [];
+    const totalIn = adjustments.filter(a => a.type === 'in' && !visuallyRemovedEntries.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out' && !visuallyRemovedEntries.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+    
+    const openingBalance = cashStatus.openingBalance || 0;
+
+    // A lógica de cálculo deve espelhar a da tela de Gestão de Caixa
+    return (openingBalance + salesInCash + (totalIn - openingBalance)) - totalOut;
+
+  }, [cashStatus, sales, entries, visuallyRemovedEntries]);
 
 
   const totalGlobalBalance = useMemo(() => {
