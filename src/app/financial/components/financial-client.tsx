@@ -180,14 +180,20 @@ export default function FinancialClient() {
     if (currentCashStatus.status !== 'open' || !currentCashStatus.openingTime) {
       return 0;
     }
+    
     const openingTime = new Date(currentCashStatus.openingTime);
+    const openingBalance = currentCashStatus.openingBalance || 0;
+
     const sessionEntries = getFinancialEntries().filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime);
 
-    const balance = sessionEntries.reduce((acc, e) => {
-      return acc + (e.type === 'income' ? e.amount : -e.amount);
-    }, 0);
+    // Re-calculating the balance from opening, excluding the initial opening entry itself as it's already in openingBalance
+    const balanceFromMovements = sessionEntries
+      .filter(e => e.description !== 'Valor de Abertura') // Exclude the opening balance entry from sum
+      .reduce((acc, e) => {
+        return acc + (e.type === 'income' ? e.amount : -e.amount);
+      }, 0);
     
-    return balance;
+    return openingBalance + balanceFromMovements;
   }, [cashStatus, entries]);
 
 
