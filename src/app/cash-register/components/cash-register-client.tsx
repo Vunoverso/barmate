@@ -81,7 +81,7 @@ export default function CashRegisterClient() {
     loadInitialData();
 
     const handleStorageChange = (event: StorageEvent) => {
-        if (event.key === KEY_CASH_REGISTER_STATUS || event.key === KEY_FINANCIAL_ENTRIES || event.key === 'barmate_sales_v2') {
+        if (event.key === 'barmate_cashRegisterStatus_v2' || event.key === 'barmate_financialEntries_v2' || event.key === 'barmate_sales_v2') {
             loadInitialData();
         }
     };
@@ -158,9 +158,11 @@ export default function CashRegisterClient() {
   };
 
   const handleSaveAdjustment = (details: { amount: number; description: string; destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => {
+    const currentCashStatus = getCashRegisterStatus();
+    if (currentCashStatus.status !== 'open') return;
+
     if (idToUpdate && editingAdjustment) { // Editing existing adjustment
         const allEntries = getFinancialEntries();
-        // Update the financial entry directly
         const newEntries = allEntries.map(entry => {
             if (entry.adjustmentId === idToUpdate) {
                 return {
@@ -173,8 +175,6 @@ export default function CashRegisterClient() {
         });
         saveFinancialEntries(newEntries);
 
-        // Update the adjustment in cash status
-        const currentCashStatus = getCashRegisterStatus();
         const updatedAdjustment: CashAdjustment = { ...editingAdjustment, amount: details.amount, description: details.description };
         const newAdjustments = currentCashStatus.adjustments?.map(adj => adj.id === idToUpdate ? updatedAdjustment : adj) || [];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
@@ -182,9 +182,6 @@ export default function CashRegisterClient() {
         toast({ title: "Movimentação Atualizada!" });
 
     } else { // Creating new adjustment
-        const currentCashStatus = getCashRegisterStatus();
-        if (currentCashStatus.status !== 'open') return;
-        
         const newAdjustment: CashAdjustment = {
             id: `adj-${Date.now()}`,
             amount: details.amount,
@@ -232,24 +229,21 @@ export default function CashRegisterClient() {
   const handleDeleteAdjustment = (revert: boolean) => {
     if (!adjustmentToDelete) return;
 
+    const allEntries = getFinancialEntries();
+    const currentCashStatus = getCashRegisterStatus();
+    
     if (revert) {
-        // Find and remove the adjustment from cash status
-        const currentCashStatus = getCashRegisterStatus();
-        if (currentCashStatus.status === 'open') {
-            const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-            saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-        }
-        
-        // Find and remove related financial entries
-        const allEntries = getFinancialEntries();
-        const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustmentToDelete.id);
-        saveFinancialEntries(entriesToKeep);
-        
-    } else { // Just hide visually, saving to sessionStorage
+      if (currentCashStatus.status === 'open') {
+        const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+        saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+      }
+      const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustmentToDelete.id);
+      saveFinancialEntries(entriesToKeep);
+    } else { 
         const currentRemoved = getVisuallyRemovedAdjustments();
         const newRemoved = [...currentRemoved, adjustmentToDelete.id];
         saveVisuallyRemovedAdjustments(newRemoved);
-        setVisuallyRemovedAdjustments(newRemoved);
+        setVisuallyRemovedAdjustments(newRemoved); // Update local state immediately
     }
     
     toast({ 
@@ -360,8 +354,8 @@ export default function CashRegisterClient() {
     const totalIn = adjustments.filter(a => a.type === 'in' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
     const totalOut = adjustments.filter(a => a.type === 'out' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
     const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
-
-    const expectedCash = totalCashFromSales + totalIn - totalOut;
+    
+    const expectedCash = (openingBalance + totalCashFromSales + (totalIn - openingBalance)) - totalOut;
     
     return {
       openingBalance, sessionSales, totalSessionRevenue, cashRevenue, cardRevenue, pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
@@ -466,7 +460,7 @@ export default function CashRegisterClient() {
                                     <span>Saldo Final em Dinheiro (Esperado)</span>
                                     <strong>{formatCurrency(sessionSummary.expectedCash)}</strong>
                                 </div>
-                                <p className="text-xs text-muted-foreground pt-1">Vendas Dinheiro + Suprimentos - Sangrias</p>
+                                <p className="text-xs text-muted-foreground pt-1">Saldo Inicial + Vendas Dinheiro + Suprimentos - Sangrias</p>
                             </div>
                         </div>
                     </div>
@@ -855,6 +849,8 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
     </Dialog>
   );
 }
+
+    
 
     
 
