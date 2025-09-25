@@ -81,7 +81,9 @@ export default function CashRegisterClient() {
     loadInitialData();
 
     const handleStorageChange = (event: StorageEvent) => {
-        loadInitialData();
+        if (event.key === KEY_CASH_REGISTER_STATUS || event.key === KEY_FINANCIAL_ENTRIES || event.key === KEY_SALES) {
+            loadInitialData();
+        }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -156,26 +158,31 @@ export default function CashRegisterClient() {
   };
 
   const handleSaveAdjustment = (details: { amount: number; description: string; destination?: 'none' | 'secondary_cash' | 'bank_account' }, idToUpdate?: string) => {
-    let currentCashStatus = getCashRegisterStatus();
-    if (currentCashStatus.status !== 'open') return;
-
     if (idToUpdate) { // Editing existing adjustment
-        const originalAdjustment = currentCashStatus.adjustments?.find(adj => adj.id === idToUpdate);
-        if (!originalAdjustment) return;
-        
-        // Remove the old financial entries associated with the adjustment
-        let allEntries = getFinancialEntries();
-        allEntries = allEntries.filter(e => e.adjustmentId !== originalAdjustment.id);
-        
-        const updatedAdjustment: CashAdjustment = { ...originalAdjustment, amount: details.amount, description: details.description };
-        
-        applyAdjustment(updatedAdjustment, allEntries);
+        const allEntries = getFinancialEntries();
+        const newEntries = allEntries.map(entry => {
+            if (entry.adjustmentId === idToUpdate) {
+                return {
+                    ...entry,
+                    amount: details.amount,
+                    description: `${entry.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${details.description}`,
+                };
+            }
+            return entry;
+        });
+        saveFinancialEntries(newEntries);
 
+        const currentCashStatus = getCashRegisterStatus();
+        const updatedAdjustment: CashAdjustment = { ...editingAdjustment!, amount: details.amount, description: details.description };
         const newAdjustments = currentCashStatus.adjustments?.map(adj => adj.id === idToUpdate ? updatedAdjustment : adj) || [];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+
         toast({ title: "Movimentação Atualizada!" });
 
     } else { // Creating new adjustment
+        const currentCashStatus = getCashRegisterStatus();
+        if (currentCashStatus.status !== 'open') return;
+        
         const newAdjustment: CashAdjustment = {
             id: `adj-${Date.now()}`,
             amount: details.amount,
@@ -185,9 +192,10 @@ export default function CashRegisterClient() {
             destination: details.destination && details.destination !== 'none' ? details.destination : undefined
         };
         
-        applyAdjustment(newAdjustment);
         const newAdjustments = [...(currentCashStatus.adjustments || []), newAdjustment];
         saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        
+        applyAdjustment(newAdjustment);
         
         toast({ title: `Movimentação Registrada!`, description: `${adjustmentType === 'in' ? 'Suprimento' : 'Sangria'} de ${formatCurrency(details.amount)} adicionado.` });
     }
@@ -196,7 +204,7 @@ export default function CashRegisterClient() {
     setEditingAdjustment(null);
   };
   
-  const applyAdjustment = (adjustment: CashAdjustment, existingEntries?: FinancialEntry[]) => {
+  const applyAdjustment = (adjustment: CashAdjustment) => {
       const entriesToAdd: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
       
        entriesToAdd.push({
@@ -208,7 +216,7 @@ export default function CashRegisterClient() {
         adjustmentId: adjustment.id
       });
       
-      if (adjustment.type === 'out') { // Sangria
+      if (adjustment.type === 'out' && adjustment.destination) { 
           if (adjustment.destination === 'secondary_cash') {
               entriesToAdd.push({ description: `Entrada de Sangria: ${adjustment.description}`, amount: adjustment.amount, type: 'income', source: 'secondary_cash', saleId: null, adjustmentId: adjustment.id });
 
@@ -216,35 +224,39 @@ export default function CashRegisterClient() {
               entriesToAdd.push({ description: `Depósito de Sangria: ${adjustment.description}`, amount: adjustment.amount, type: 'income', source: 'bank_account', saleId: null, adjustmentId: adjustment.id });
           }
       }
-      addFinancialEntry(entriesToAdd, existingEntries);
+      addFinancialEntry(entriesToAdd);
   }
   
   const handleDeleteAdjustment = (revert: boolean) => {
     if (!adjustmentToDelete) return;
 
     if (revert) {
-      let allEntries = getFinancialEntries();
-      const entriesToRevert = allEntries.filter(e => e.adjustmentId === adjustmentToDelete.id);
-      
-      if(entriesToRevert.length > 0) {
-        const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = entriesToRevert
-          .map(e => ({
-            description: `Estorno: ${e.description}`,
-            amount: e.amount,
-            type: e.type === 'income' ? 'expense' : 'income',
-            source: e.source,
-            saleId: e.saleId,
-            adjustmentId: `reversal-for-${e.adjustmentId}`
-          }));
-        addFinancialEntry(reversalEntries);
-      }
-      
-      const currentCashStatus = getCashRegisterStatus();
-      if (currentCashStatus.status === 'open') {
-          const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-          saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-      }
+        // Revert the financial entries
+        const allEntries = getFinancialEntries();
+        const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = [];
+        const entriesToKeep = allEntries.filter(e => {
+            if (e.adjustmentId === adjustmentToDelete.id) {
+                reversalEntries.push({
+                    description: `Estorno: ${e.description}`,
+                    amount: e.amount,
+                    type: e.type === 'income' ? 'expense' : 'income',
+                    source: e.source,
+                    saleId: e.saleId,
+                    adjustmentId: `reversal-for-${e.adjustmentId}`
+                });
+                return false; // Remove original entry
+            }
+            return true;
+        });
+        saveFinancialEntries([...entriesToKeep, ...reversalEntries.map((e,i) => ({...e, id: `fin-rev-${Date.now()}-${i}`, timestamp: new Date()}))]);
 
+        // Remove adjustment from cash status
+        const currentCashStatus = getCashRegisterStatus();
+        if (currentCashStatus.status === 'open') {
+            const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+            saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        }
+        
     } else { // Just hide visually
         const currentRemoved = getVisuallyRemovedAdjustments();
         const newRemoved = [...currentRemoved, adjustmentToDelete.id];
@@ -466,7 +478,7 @@ export default function CashRegisterClient() {
                                     <span>Saldo Final em Dinheiro (Esperado)</span>
                                     <strong>{formatCurrency(sessionSummary.expectedCash)}</strong>
                                 </div>
-                                <p className="text-xs text-muted-foreground pt-1">Saldo Inicial + Vendas Dinheiro + Suprimentos - Sangrias</p>
+                                <p className="text-xs text-muted-foreground pt-1">Vendas Dinheiro + Suprimentos - Sangrias</p>
                             </div>
                         </div>
                     </div>
@@ -766,10 +778,10 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
               <Label htmlFor="adjustment-desc">Descrição</Label>
               <Input id="adjustment-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Troco inicial" />
             </div>
-            {type === 'out' && !isEditing && (
+            {type === 'out' && (
               <div className="space-y-2">
                 <Label htmlFor="adjustment-destination">Destino da Retirada</Label>
-                <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
+                <Select value={destination} onValueChange={(value) => setDestination(value as any)} disabled={isEditing}>
                   <SelectTrigger id="adjustment-destination">
                     <SelectValue placeholder="Selecione um destino..." />
                   </SelectTrigger>
@@ -779,6 +791,7 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
                     <SelectItem value="bank_account">Transferir para Conta Bancária</SelectItem>
                   </SelectContent>
                 </Select>
+                 {isEditing && <p className="text-xs text-muted-foreground">O destino não pode ser alterado após a criação.</p>}
               </div>
             )}
           </div>
@@ -854,6 +867,8 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
     </Dialog>
   );
 }
+
+    
 
     
 
