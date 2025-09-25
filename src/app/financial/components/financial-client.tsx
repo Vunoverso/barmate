@@ -250,59 +250,38 @@ export default function FinancialClient() {
   const netBalance = useMemo(() => salesRevenue + otherIncome - totalExpenses, [salesRevenue, otherIncome, totalExpenses]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
-    const processEntries = (entries: FinancialEntry[], periodFormat: "yyyy-MM" | "yyyy-MM-dd", labelFormat: string, startOfWeek: boolean = false) => {
-        const salesEntries = entries.filter(e => e.saleId && e.type === 'income');
-        const otherIncomes = entries.filter(e => !e.saleId && e.type === 'income');
-        const allExpenses = entries.filter(e => e.type === 'expense');
-
-        const combined = [...salesEntries, ...otherIncomes, ...allExpenses];
-
-        const grouped = combined.reduce((acc, item) => {
-            let key, label;
-            const date = new Date(item.timestamp);
-            
-            if (startOfWeek) {
-                const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1)); // Monday as start of week
-                const weekEnd = addDays(weekStart, 6);
-                key = format(weekStart, periodFormat);
-                label = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
-            } else {
-                key = format(date, periodFormat);
-                label = format(date, labelFormat, { locale: ptBR });
-            }
-
+    const processEntries = (entriesToProcess: FinancialEntry[]) => {
+        const monthly = entriesToProcess.reduce((acc, item) => {
+            const key = format(new Date(item.timestamp), "yyyy-MM");
+            const label = format(new Date(item.timestamp), "MMMM yyyy", { locale: ptBR });
             if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
-            
-            if (item.type === 'income') {
-                acc[key].income += item.amount;
-            } else if (item.type === 'expense') {
-                acc[key].expenses += item.amount;
-            }
+            if (item.type === 'income') acc[key].income += item.amount;
+            else acc[key].expenses += item.amount;
+            return acc;
+        }, {} as Record<string, { period: string, income: number, expenses: number }>);
 
+        const weekly = entriesToProcess.reduce((acc, item) => {
+            const date = new Date(item.timestamp);
+            const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1)); // Monday start
+            const weekEnd = addDays(weekStart, 6);
+            const key = format(weekStart, "yyyy-MM-dd");
+            const label = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
+            if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
+            if (item.type === 'income') acc[key].income += item.amount;
+            else acc[key].expenses += item.amount;
             return acc;
         }, {} as Record<string, { period: string, income: number, expenses: number }>);
         
-        return Object.values(grouped).sort((a,b) => {
-            const dateA = new Date(a.period.slice(3, 10) + '-' + a.period.slice(0, 2));
-            const dateB = new Date(b.period.slice(3, 10) + '-' + b.period.slice(0, 2));
-            if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-                return dateB.getTime() - dateA.getTime();
-            }
-            return b.period.localeCompare(a.period);
-        });
-    };
+        const processSummary = (group: any) => Object.values(group)
+            .map((value: any) => ({ ...value, balance: value.income - value.expenses }))
+            .sort((a,b) => new Date(b.period.split(' - ')[0].split('/').reverse().join('-')).getTime() - new Date(a.period.split(' - ')[0].split('/').reverse().join('-')).getTime());
 
-    const monthly = processEntries(filteredEntries, "yyyy-MM", "MMMM yyyy");
-    const weekly = processEntries(filteredEntries, "yyyy-MM-dd", "", true);
-
-    const processSummary = (group: any) => Object.entries(group)
-      .map(([key, value]: [string, any]) => ({ ...value, key, balance: value.income - value.expenses }))
-      .sort((a, b) => b.key.localeCompare(a.key));
-      
-    return {
-      monthlySummary: processSummary(monthly),
-      weeklySummary: processSummary(weekly)
+        return {
+            monthlySummary: processSummary(monthly),
+            weeklySummary: processSummary(weekly)
+        };
     };
+    return processEntries(filteredEntries);
   }, [filteredEntries]);
 
   // Pagination Handlers
