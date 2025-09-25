@@ -371,10 +371,7 @@ export default function FinancialClient() {
         saleId: entryToDelete.saleId,
         adjustmentId: `reversal-for-${entryToDelete.adjustmentId || entryToDelete.id}`
       };
-
-      const allEntries = getFinancialEntries();
-      const entriesToKeep = allEntries.filter(e => e.id !== entryToDelete.id);
-      saveFinancialEntries([...entriesToKeep, { ...reversalEntry, id: `fin-${Date.now()}`, timestamp: new Date() }]);
+      addFinancialEntry(reversalEntry);
 
     } else {
       const currentRemoved = getVisuallyRemovedFinancialEntries();
@@ -1049,3 +1046,5 @@ const SummaryTable = ({ data, isBalanceVisible }: { data: { period: string, inco
         </TableBody>
     </Table>
 );
+
+    
