@@ -163,12 +163,27 @@ export default function FinancialClient() {
   
   const expectedCashInDrawer = useMemo(() => {
     if (!cashStatus || cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
-    const sessionStartTime = new Date(cashStatus.openingTime).getTime();
+
+    const openingBalance = cashStatus.openingBalance || 0;
+    const adjustments = cashStatus.adjustments || [];
     
-    return entries
-        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= sessionStartTime)
-        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-  }, [cashStatus, entries]);
+    // Get all sales that happened since the cash register was opened
+    const openingTime = new Date(cashStatus.openingTime);
+    const sessionSales = getSales().filter(sale => new Date(sale.timestamp) >= openingTime);
+
+    // Calculate total cash from these sales
+    const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
+    
+    // Calculate total from adjustments
+    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
+
+    // The final expected cash is the cash from sales plus all ins, minus all outs.
+    // The opening balance is already included in the `totalIn`.
+    const expectedCash = totalCashFromSales + totalIn - totalOut;
+    return expectedCash;
+  }, [cashStatus]);
+
 
   const totalGlobalBalance = useMemo(() => {
     return expectedCashInDrawer + secondaryCashBoxBalance + bankAccountBalance;
@@ -414,10 +429,13 @@ export default function FinancialClient() {
 
   const handleDeleteEntry = (revert: boolean) => {
     if (!entryToDelete) return;
-    
+
     if (revert) {
       removeFinancialEntry(entryToDelete.id, true);
     } else {
+      // If we are not reverting, we still need to remove it from the financial history
+      removeFinancialEntry(entryToDelete.id, false);
+      // We also visually remove it immediately to avoid waiting for storage event
       setVisuallyRemovedEntries(prev => [...prev, entryToDelete.id]);
     }
     

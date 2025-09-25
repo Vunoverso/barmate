@@ -157,13 +157,16 @@ export default function ReportsClient() {
   );
 
   const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open') return 0;
-    const sessionStartTime = new Date(cashStatus.openingTime!).getTime();
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
+    const openingTime = new Date(cashStatus.openingTime).getTime();
+    
+    // This logic now mirrors the one in cash-register-client.tsx
     return financialEntries
-        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= sessionStartTime)
+        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= openingTime)
         .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [cashStatus, financialEntries]);
+
 
   const totalGlobalBalance = useMemo(() => {
     return expectedCashInDrawer + secondaryCashBoxBalance + bankAccountBalance;
