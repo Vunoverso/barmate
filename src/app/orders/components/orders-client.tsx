@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment } from '@/types';
-import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry } from '@/lib/constants';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry } from '@/types';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, saveBankAccount, getBankAccount, saveSecondaryCashBox, getSecondaryCashBox } from '@/lib/constants';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -282,14 +282,25 @@ export default function OrdersClient() {
 
     if (source !== 'permuta') {
         const entrySource = source === 'dinheiro' ? 'daily_cash' : 'bank_account';
-        addFinancialEntry({
+        const entry: Omit<FinancialEntry, 'id' | 'timestamp'> = {
             description: `Crédito para ${orderToUpdate.name}: ${description}`,
             amount: amount,
             type: 'income',
             source: entrySource,
             saleId: null,
             adjustmentId: null
-        });
+        };
+        addFinancialEntry(entry);
+        
+        if (entrySource === 'bank_account') {
+            const bank = getBankAccount();
+            saveBankAccount({ balance: bank.balance + amount });
+        } else if (entrySource === 'secondary_cash') {
+            const box = getSecondaryCashBox();
+            saveSecondaryCashBox({ balance: box.balance + amount });
+        }
+
+
         toast({ title: "Crédito Adicionado e Registrado", description: `${formatCurrency(amount)} adicionado à comanda e registrado como entrada.` });
     } else {
         toast({ title: "Crédito Adicionado", description: `${formatCurrency(amount)} adicionado à comanda como permuta/cortesia.` });

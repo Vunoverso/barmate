@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod, CashAdjustment } from '@/types';
@@ -11,6 +12,8 @@ import {
   removeFinancialEntry,
   addFinancialEntry,
   saveCashRegisterStatus,
+  saveSecondaryCashBox,
+  saveBankAccount,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -128,11 +131,25 @@ export default function FinancialClient() {
   });
 
   const loadData = useCallback(() => {
-    setSecondaryCashBox(getSecondaryCashBox());
-    setBankAccount(getBankAccount());
-    setCashStatus(getCashRegisterStatus());
-    setEntries(getFinancialEntries());
+    const allEntries = getFinancialEntries();
+    setEntries(allEntries);
     setSales(getSales());
+    
+    // Calculate balances from entries
+    const bankBalance = allEntries
+      .filter(e => e.source === 'bank_account')
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    saveBankAccount({ balance: bankBalance }, { silent: true });
+    setBankAccount({ balance: bankBalance });
+      
+    const secondaryCashBalance = allEntries
+      .filter(e => e.source === 'secondary_cash')
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    saveSecondaryCashBox({ balance: secondaryCashBalance }, { silent: true });
+    setSecondaryCashBox({ balance: secondaryCashBalance });
+    
+    setCashStatus(getCashRegisterStatus());
+    
   }, []);
   
   useEffect(() => {
@@ -144,9 +161,7 @@ export default function FinancialClient() {
     setIsMounted(true);
 
     const handleStorageChange = (event: StorageEvent) => {
-        if(event.key === 'barmate_bulk_update' || event.key?.startsWith('barmate_')) {
-            loadData();
-        }
+        loadData();
     };
     window.addEventListener('storage', handleStorageChange);
     return () => {
@@ -157,10 +172,9 @@ export default function FinancialClient() {
  const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open') return 0;
     const sessionStartTime = new Date(cashStatus.openingTime!).getTime();
-    const sessionEntries = getFinancialEntries().filter(e => new Date(e.timestamp).getTime() >= sessionStartTime);
     
-    return sessionEntries
-        .filter(e => e.source === 'daily_cash')
+    return entries
+        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= sessionStartTime)
         .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [cashStatus, entries]);
 
@@ -369,36 +383,49 @@ export default function FinancialClient() {
     form.reset({ description: '', amount: 0, source: 'daily_cash' });
   };
   
-  const handleEditBalance = (newBalance: number, source: 'daily_cash' | 'secondary_cash' | 'bank_account') => {
-      let currentBalance = 0;
-      if (source === 'daily_cash') {
-          currentBalance = expectedCashInDrawer;
-      } else if (source === 'secondary_cash') {
-          currentBalance = getSecondaryCashBox().balance;
-      } else {
-          currentBalance = getBankAccount().balance;
-      }
-
+  const handleEditBalance = (newBalance: number, source: 'secondary_cash' | 'bank_account') => {
+      const currentBalance = source === 'secondary_cash' ? secondaryCashBox.balance : bankAccount.balance;
       const difference = newBalance - currentBalance;
       
       if (Math.abs(difference) < 0.01) {
-          if (source === 'daily_cash') setIsEditCashInDrawerDialogOpen(false);
           if (source === 'secondary_cash') setIsEditCaixa02DialogOpen(false);
           if (source === 'bank_account') setIsEditBankAccountDialogOpen(false);
           return;
       }
 
-      const adjustmentId = `adj-corr-${Date.now()}`;
       addFinancialEntry({
           description: 'Ajuste de saldo manual',
           amount: Math.abs(difference),
           type: difference > 0 ? 'income' : 'expense',
           source: source,
           saleId: null,
-          adjustmentId: source === 'daily_cash' ? adjustmentId : null
+          adjustmentId: null,
       });
 
-      if (source === 'daily_cash' && cashStatus.status === 'open') {
+      toast({ title: "Saldo Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
+
+      if (source === 'secondary_cash') setIsEditCaixa02DialogOpen(false);
+      if (source === 'bank_account') setIsEditBankAccountDialogOpen(false);
+  }
+
+  const handleEditDailyCashBalance = (newBalance: number) => {
+      const difference = newBalance - expectedCashInDrawer;
+      if (Math.abs(difference) < 0.01) {
+        setIsEditCashInDrawerDialogOpen(false);
+        return;
+      }
+      
+      const adjustmentId = `adj-corr-${Date.now()}`;
+      addFinancialEntry({
+          description: 'Ajuste de saldo manual',
+          amount: Math.abs(difference),
+          type: difference > 0 ? 'income' : 'expense',
+          source: 'daily_cash',
+          saleId: null,
+          adjustmentId: adjustmentId
+      });
+
+      if (cashStatus.status === 'open') {
           const currentCashStatus = getCashRegisterStatus();
           const newAdjustment: CashAdjustment = {
               id: adjustmentId,
@@ -411,27 +438,17 @@ export default function FinancialClient() {
           const newState = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), newAdjustment] };
           saveCashRegisterStatus(newState);
       }
-
+      
       toast({ title: "Saldo Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
-
-      if (source === 'daily_cash') setIsEditCashInDrawerDialogOpen(false);
-      if (source === 'secondary_cash') setIsEditCaixa02DialogOpen(false);
-      if (source === 'bank_account') setIsEditBankAccountDialogOpen(false);
+      setIsEditCashInDrawerDialogOpen(false);
   }
 
 
   const handleDeleteEntry = () => {
     if (!entryToDelete) return;
     
-    try {
-        removeFinancialEntry(entryToDelete.id);
-        toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
-    } catch(error) {
-        if (error instanceof Error) {
-            toast({ title: "Ação Bloqueada", description: error.message, variant: "destructive" });
-        }
-    }
-    
+    removeFinancialEntry(entryToDelete.id);
+    toast({ title: "Registro Removido", description: `O registro foi removido com sucesso.`, variant: "destructive" });
     setEntryToDelete(null);
   };
   
@@ -993,7 +1010,7 @@ export default function FinancialClient() {
         isOpen={isEditCashInDrawerDialogOpen} 
         onOpenChange={setIsEditCashInDrawerDialogOpen} 
         currentBalance={expectedCashInDrawer} 
-        onSave={(newBalance) => handleEditBalance(newBalance, 'daily_cash')}
+        onSave={handleEditDailyCashBalance}
         title="Editar Saldo do Caixa Diário" 
         description="Ajuste o valor total atual do caixa diário. O sistema criará um ajuste interno para corresponder ao novo saldo." 
         idPrefix="cash-drawer"
