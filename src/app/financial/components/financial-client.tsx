@@ -151,13 +151,13 @@ export default function FinancialClient() {
   
   const secondaryCashBoxBalance = useMemo(() => {
     return entries
-      .filter(e => e.source === 'secondary_cash' && !e.isCorrection)
+      .filter(e => e.source === 'secondary_cash')
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [entries]);
   
   const bankAccountBalance = useMemo(() => {
     return entries
-      .filter(e => e.source === 'bank_account' && !e.isCorrection)
+      .filter(e => e.source === 'bank_account')
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [entries]);
   
@@ -174,6 +174,7 @@ export default function FinancialClient() {
     const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
     const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
     
+    // This calculation now mirrors the cash-register-client one
     const expectedCash = (openingBalance + totalCashFromSales + (totalIn - openingBalance)) - totalOut;
     return expectedCash;
   }, [cashStatus, sales]);
