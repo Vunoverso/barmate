@@ -198,7 +198,6 @@ export default function CashRegisterClient() {
   
   const applyAdjustment = (adjustment: CashAdjustment, existingEntries?: FinancialEntry[]) => {
       const entriesToAdd: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
-      const currentEntries = existingEntries ?? getFinancialEntries();
       
        entriesToAdd.push({
         description: `${adjustment.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${adjustment.description}`,
@@ -217,7 +216,7 @@ export default function CashRegisterClient() {
               entriesToAdd.push({ description: `Depósito de Sangria: ${adjustment.description}`, amount: adjustment.amount, type: 'income', source: 'bank_account', saleId: null, adjustmentId: adjustment.id });
           }
       }
-      addFinancialEntry(entriesToAdd, currentEntries);
+      addFinancialEntry(entriesToAdd, existingEntries);
   }
   
   const handleDeleteAdjustment = (revert: boolean) => {
@@ -225,10 +224,10 @@ export default function CashRegisterClient() {
 
     if (revert) {
       let allEntries = getFinancialEntries();
-      const entriesToRemove = allEntries.filter(e => e.adjustmentId === adjustmentToDelete.id);
+      const entriesToRevert = allEntries.filter(e => e.adjustmentId === adjustmentToDelete.id);
       
-      if(entriesToRemove.length > 0) {
-        const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = entriesToRemove
+      if(entriesToRevert.length > 0) {
+        const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = entriesToRevert
           .map(e => ({
             description: `Estorno: ${e.description}`,
             amount: e.amount,
@@ -237,21 +236,20 @@ export default function CashRegisterClient() {
             saleId: e.saleId,
             adjustmentId: `reversal-for-${e.adjustmentId}`
           }));
-        addFinancialEntry(reversalEntries); // This will add and save
-      } else {
-        // If no financial entries, still need to remove from cash register status
-         const currentCashStatus = getCashRegisterStatus();
-         if (currentCashStatus.status === 'open') {
-             const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-             saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-         }
+        addFinancialEntry(reversalEntries);
+      }
+      
+      const currentCashStatus = getCashRegisterStatus();
+      if (currentCashStatus.status === 'open') {
+          const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+          saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
       }
 
     } else { // Just hide visually
         const currentRemoved = getVisuallyRemovedAdjustments();
         const newRemoved = [...currentRemoved, adjustmentToDelete.id];
-        setVisuallyRemovedAdjustments(newRemoved);
         saveVisuallyRemovedAdjustments(newRemoved);
+        setVisuallyRemovedAdjustments(newRemoved);
     }
     
     toast({ 
@@ -358,12 +356,13 @@ export default function CashRegisterClient() {
     
     const openingBalance = cashStatus.openingBalance || 0;
     const adjustments = cashStatus.adjustments || [];
+    
     const totalIn = adjustments.filter(a => a.type === 'in' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
     const totalOut = adjustments.filter(a => a.type === 'out' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
     const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
 
     const expectedCash = totalCashFromSales + totalIn - totalOut;
-
+    
     return {
       openingBalance, sessionSales, totalSessionRevenue, cashRevenue, cardRevenue, pixRevenue, expectedCash, openingTime: cashStatus.openingTime, adjustments, totalIn, totalOut
     };
@@ -859,4 +858,3 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
     
 
     
-

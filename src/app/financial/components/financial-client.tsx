@@ -363,10 +363,6 @@ export default function FinancialClient() {
     if (!entryToDelete) return;
 
     if (revert) {
-      const allEntries = getFinancialEntries();
-      const entriesToKeep = allEntries.filter(e => e.id !== entryToDelete.id);
-      saveFinancialEntries(entriesToKeep);
-      
       const reversalEntry: Omit<FinancialEntry, 'id' | 'timestamp'> = {
         description: `Estorno: ${entryToDelete.description}`,
         amount: entryToDelete.amount,
@@ -376,13 +372,15 @@ export default function FinancialClient() {
         adjustmentId: `reversal-for-${entryToDelete.adjustmentId || entryToDelete.id}`
       };
 
-      addFinancialEntry(reversalEntry);
+      const allEntries = getFinancialEntries();
+      const entriesToKeep = allEntries.filter(e => e.id !== entryToDelete.id);
+      saveFinancialEntries([...entriesToKeep, { ...reversalEntry, id: `fin-${Date.now()}`, timestamp: new Date() }]);
 
     } else {
       const currentRemoved = getVisuallyRemovedFinancialEntries();
       const newRemoved = [...currentRemoved, entryToDelete.id];
-      setVisuallyRemovedEntries(newRemoved);
       saveVisuallyRemovedFinancialEntries(newRemoved);
+      setVisuallyRemovedEntries(newRemoved);
     }
     
     toast({ 
