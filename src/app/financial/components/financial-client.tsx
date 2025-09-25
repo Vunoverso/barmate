@@ -176,11 +176,12 @@ export default function FinancialClient() {
   }, [entries]);
   
  const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) {
+    const currentCashStatus = getCashRegisterStatus();
+    if (currentCashStatus.status !== 'open' || !currentCashStatus.openingTime) {
       return 0;
     }
-    const openingTime = new Date(cashStatus.openingTime);
-    const sessionEntries = entries.filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime);
+    const openingTime = new Date(currentCashStatus.openingTime);
+    const sessionEntries = getFinancialEntries().filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime);
 
     const balance = sessionEntries.reduce((acc, e) => {
       return acc + (e.type === 'income' ? e.amount : -e.amount);
