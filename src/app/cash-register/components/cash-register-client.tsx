@@ -3,7 +3,7 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry } from '@/lib/constants';
+import { getSales, formatCurrency, getSecondaryCashBox, saveSecondaryCashBox, getBankAccount, saveBankAccount, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS } from '@/lib/constants';
 import { useState, useEffect, useMemo } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -50,8 +50,6 @@ import { DoorClosed, DoorOpen, PiggyBank, CircleDollarSign, CreditCard, ArrowUpC
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-
-const CLOSED_SESSIONS_KEY = 'barmate_closedCashSessions_v2'; // Still local, as it's just a log
 
 export default function CashRegisterClient() {
   const [isLoading, setIsLoading] = useState(true);
@@ -375,9 +373,9 @@ export default function CashRegisterClient() {
       transferredToCaixa02: finalCashAmount,
     };
     
-    const allClosedSessions = JSON.parse(localStorage.getItem(CLOSED_SESSIONS_KEY) || '[]');
+    const allClosedSessions = JSON.parse(localStorage.getItem(KEY_CLOSED_SESSIONS) || '[]');
     allClosedSessions.push(closedSession);
-    localStorage.setItem(CLOSED_SESSIONS_KEY, JSON.stringify(allClosedSessions));
+    localStorage.setItem(KEY_CLOSED_SESSIONS, JSON.stringify(allClosedSessions));
 
     const newStatus = { status: 'closed' as 'closed', adjustments: [] };
     saveCashRegisterStatus(newStatus);

@@ -2,14 +2,14 @@
 "use client";
 
 import type { ProductCategory, TransactionFees } from '@/types';
-import { DATA_KEYS, getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, getTransactionFees, saveTransactionFees } from '@/lib/constants';
+import { DATA_KEYS, getProductCategories, saveProductCategories, LUCIDE_ICON_MAP, getTransactionFees, saveTransactionFees, clearFinancialData } from '@/lib/constants';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Edit3, Trash2, PlusCircle, Download, Upload } from 'lucide-react';
+import { Save, Edit3, Trash2, PlusCircle, Download, Upload, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -183,6 +183,7 @@ export default function SettingsClient() {
   const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
   const [isImporting, setIsImporting] = useState(false);
   const [importAlertOpen, setImportAlertOpen] = useState(false);
+  const [clearFinancialsAlertOpen, setClearFinancialsAlertOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
@@ -367,6 +368,17 @@ export default function SettingsClient() {
     };
     reader.readAsText(file);
   };
+  
+  const handleClearFinancialHistory = () => {
+    clearFinancialData();
+    setClearFinancialsAlertOpen(false);
+    toast({
+        title: "Histórico Financeiro Zerado",
+        description: "Todos os dados de vendas e financeiros foram removidos.",
+        variant: "default"
+    });
+    // We don't need a full page reload, components should update via 'storage' event listener
+  };
 
 
   if (!isMounted) {
@@ -481,7 +493,7 @@ export default function SettingsClient() {
                 <Button onClick={handleExportData}>
                     <Download className="mr-2 h-4 w-4" /> Exportar Backup
                 </Button>
-                <Button variant="destructive" onClick={handleTriggerImport} disabled={isImporting}>
+                <Button variant="outline" onClick={handleTriggerImport} disabled={isImporting}>
                     <Upload className="mr-2 h-4 w-4" /> Importar Backup
                 </Button>
                 <input
@@ -540,6 +552,20 @@ export default function SettingsClient() {
             </Table>
           </CardContent>
         </Card>
+
+         <Card className="border-destructive">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive"><AlertTriangle /> Zona de Perigo</CardTitle>
+                <CardDescription>
+                Ações nesta seção são permanentes e não podem ser desfeitas. Tenha cuidado.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-4">
+                <Button variant="destructive" onClick={() => setClearFinancialsAlertOpen(true)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Zerar Histórico Financeiro
+                </Button>
+            </CardContent>
+        </Card>
       </div>
 
       {editingCategory && (
@@ -576,6 +602,29 @@ export default function SettingsClient() {
                         className="bg-destructive hover:bg-destructive/90"
                     >
                         Entendi, continuar com a importação
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmar Ação Irreversível</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Tem certeza que deseja zerar **todo o histórico financeiro**? Isso inclui todas as vendas, despesas, entradas, saídas e o estado dos caixas. 
+                        Seus produtos, clientes e comandas abertas **não** serão afetados.
+                        <br/><br/>
+                        <strong>Esta ação não pode ser desfeita.</strong>
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={handleClearFinancialHistory}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
+                        Sim, zerar o histórico financeiro
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>

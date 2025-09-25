@@ -63,6 +63,7 @@ const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
 const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
 const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
 const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
+export const KEY_CLOSED_SESSIONS = 'barmate_closedCashSessions_v2';
 
 
 // --- INITIAL DATA (CLEAN STATE) ---
@@ -196,10 +197,9 @@ export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalSt
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
 
-// These functions now only get the structure, not a real balance. Balance is calculated.
+// These are not used to store balance anymore, but might be used for other metadata.
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
 export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-// These save functions are now only for maintaining structure, balance is ignored.
 export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent?: boolean }) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box, options);
 export const saveBankAccount = (account: BankAccount, options?: { silent?: boolean }) => saveToLocalStorage(KEY_BANK_ACCOUNT, account, options);
 
@@ -318,6 +318,17 @@ export const removeFinancialEntry = (entryId?: string | null, saleId?: string | 
 
   saveFinancialEntries(entriesToKeep);
 }
+
+export const clearFinancialData = () => {
+    if (typeof window !== 'undefined') {
+        saveToLocalStorage(KEY_SALES, []);
+        saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
+        saveToLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
+        saveToLocalStorage(KEY_CLOSED_SESSIONS, []);
+        // Trigger a storage event to notify all components to reload data
+        window.dispatchEvent(new StorageEvent('storage'));
+    }
+};
 
 
 // --- UI Helpers ---
