@@ -216,12 +216,6 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { s
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
 export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
 
-export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-export const saveSecondaryCashBox = (data: SecondaryCashBox) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, data);
-
-export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-export const saveBankAccount = (data: BankAccount) => saveToLocalStorage(KEY_BANK_ACCOUNT, data);
-
 export const getVisuallyRemovedFinancialEntries = (): string[] => getFromSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
 export const saveVisuallyRemovedFinancialEntries = (ids: string[]) => saveToSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
 
@@ -329,35 +323,6 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
 
     const allEntries = [...currentEntries, ...newEntries];
     saveFinancialEntries(allEntries);
-};
-
-export const removeFinancialEntry = (identifier: string, revert: boolean) => {
-    const allEntries = getFinancialEntries();
-    const entriesToRemove = allEntries.filter(e => e.id === identifier || e.adjustmentId === identifier);
-
-    if (entriesToRemove.length === 0) {
-        return;
-    }
-
-    if (revert) {
-      const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = entriesToRemove
-        .filter(e => e.isCorrection !== true) // Do not revert corrections
-        .map(e => ({
-          description: `Estorno: ${e.description}`,
-          amount: e.amount,
-          type: e.type === 'income' ? 'expense' : 'income', // Invert the type
-          source: e.source,
-          saleId: e.saleId,
-          adjustmentId: `reversal-for-${e.adjustmentId || e.id}`
-        }));
-      
-      if (reversalEntries.length > 0) {
-          addFinancialEntry(reversalEntries);
-      }
-    }
-    
-    const entriesToKeep = allEntries.filter(e => !entriesToRemove.some(r => r.id === e.id));
-    saveFinancialEntries(entriesToKeep);
 };
 
 

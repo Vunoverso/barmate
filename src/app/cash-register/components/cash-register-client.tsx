@@ -3,7 +3,7 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS, removeFinancialEntry, getVisuallyRemovedAdjustments, saveVisuallyRemovedAdjustments } from '@/lib/constants';
+import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS, getVisuallyRemovedAdjustments, saveVisuallyRemovedAdjustments, getSales as getAllSales, saveSales } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -166,7 +166,9 @@ export default function CashRegisterClient() {
         if (!originalAdjustment) return;
         
         // Remove the old financial entries associated with the adjustment
-        removeFinancialEntry(originalAdjustment.id, false); 
+        const allEntries = getFinancialEntries();
+        const entriesToKeep = allEntries.filter(e => e.adjustmentId !== originalAdjustment.id);
+        saveFinancialEntries(entriesToKeep);
         
         const updatedAdjustment: CashAdjustment = { ...originalAdjustment, amount: details.amount, description: details.description };
         
@@ -224,17 +226,35 @@ export default function CashRegisterClient() {
     if (!adjustmentToDelete) return;
 
     if (revert) {
-        // This will revert the financial entries AND remove the adjustment from the cash status list
-        removeFinancialEntry(adjustmentToDelete.id, true);
-        const currentCashStatus = getCashRegisterStatus();
-        if (currentCashStatus.status === 'open') {
-            const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
-            saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-        }
+      const allEntries = getFinancialEntries();
+      const entriesToRemove = allEntries.filter(e => e.adjustmentId === adjustmentToDelete.id);
+      
+      if(entriesToRemove.length > 0) {
+        const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = entriesToRemove
+          .map(e => ({
+            description: `Estorno: ${e.description}`,
+            amount: e.amount,
+            type: e.type === 'income' ? 'expense' : 'income',
+            source: e.source,
+            saleId: e.saleId,
+            adjustmentId: `reversal-for-${e.adjustmentId}`
+          }));
+        addFinancialEntry(reversalEntries);
+      }
+
+      const entriesToKeep = allEntries.filter(e => e.adjustmentId !== adjustmentToDelete.id);
+      saveFinancialEntries(entriesToKeep);
+      
+      const currentCashStatus = getCashRegisterStatus();
+      if (currentCashStatus.status === 'open') {
+          const newAdjustments = currentCashStatus.adjustments?.filter(adj => adj.id !== adjustmentToDelete.id) || [];
+          saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+      }
     } else {
-        // This will only hide the adjustment from the UI for the current session
-        setVisuallyRemovedAdjustments(prev => [...prev, adjustmentToDelete.id]);
-        saveVisuallyRemovedAdjustments([...visuallyRemovedAdjustments, adjustmentToDelete.id]);
+        const currentRemoved = getVisuallyRemovedAdjustments();
+        const newRemoved = [...currentRemoved, adjustmentToDelete.id];
+        setVisuallyRemovedAdjustments(newRemoved);
+        saveVisuallyRemovedAdjustments(newRemoved);
     }
     
     toast({ 
@@ -740,7 +760,7 @@ function CloseCashRegisterDialog({ isOpen, onOpenChange, onClose, summary }: { i
         <div className="text-sm space-y-2 my-4">
             <div className="flex justify-between"><span>Saldo Inicial:</span> <strong>{formatCurrency(summary.openingBalance)}</strong></div>
             <div className="flex justify-between"><span>(+) Vendas em Dinheiro:</span> <span>{formatCurrency(summary.cashRevenue)}</span></div>
-            <div className="flex justify-between"><span>(+) Suprimentos:</span> <span>{formatCurrency(summary.totalIn - summary.openingBalance)}</span></div>
+            <div className="flex justify-between"><span>(+) Suprimentos:</span> <span>{formatCurrency(summary.totalIn)}</span></div>
             <div className="flex justify-between"><span>(-) Sangrias:</span> <span>{formatCurrency(summary.totalOut)}</span></div>
             <Separator />
             <div className="flex justify-between text-base font-bold"><span>(=) Total em Caixa (Esperado):</span> <strong>{formatCurrency(summary.expectedCash)}</strong></div>

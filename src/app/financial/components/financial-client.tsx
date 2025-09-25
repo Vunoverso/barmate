@@ -7,7 +7,6 @@ import {
   getFinancialEntries, formatCurrency, 
   getSales, PAYMENT_METHODS,
   removeSale,
-  removeFinancialEntry,
   addFinancialEntry,
   saveCashRegisterStatus,
   getCashRegisterStatus,
@@ -422,7 +421,28 @@ export default function FinancialClient() {
     if (!entryToDelete) return;
 
     if (revert) {
-      removeFinancialEntry(entryToDelete.id, true);
+      const allEntries = getFinancialEntries();
+      const entriesToRemove = allEntries.filter(e => e.id === entryToDelete.id);
+      
+      if(entriesToRemove.length > 0) {
+        const reversalEntries: Omit<FinancialEntry, 'id' | 'timestamp'>[] = entriesToRemove
+          .filter(e => e.isCorrection !== true)
+          .map(e => ({
+            description: `Estorno: ${e.description}`,
+            amount: e.amount,
+            type: e.type === 'income' ? 'expense' : 'income',
+            source: e.source,
+            saleId: e.saleId,
+            adjustmentId: `reversal-for-${e.adjustmentId || e.id}`
+          }));
+        if(reversalEntries.length > 0) {
+            addFinancialEntry(reversalEntries);
+        }
+      }
+
+      const entriesToKeep = allEntries.filter(e => e.id !== entryToDelete.id);
+      saveFinancialEntries(entriesToKeep);
+
     } else {
       const currentRemoved = getVisuallyRemovedFinancialEntries();
       const newRemoved = [...currentRemoved, entryToDelete.id];
@@ -1166,6 +1186,7 @@ function EditBalanceDialog({
     </Dialog>
   );
 }
+
 
 
 
