@@ -108,6 +108,7 @@ export default function FinancialClient() {
   const [isEditBalanceDialogOpen, setIsEditBalanceDialogOpen] = useState(false);
   const [editBalanceSource, setEditBalanceSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
   const [expenseToConfirm, setExpenseToConfirm] = useState<ExpenseFormData | null>(null);
+  const [visuallyRemovedEntries, setVisuallyRemovedEntries] = useState<string[]>([]);
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string[]>([]);
@@ -128,6 +129,7 @@ export default function FinancialClient() {
     setEntries(getFinancialEntries());
     setSales(getSales());
     setCashStatus(getCashRegisterStatus());
+    setVisuallyRemovedEntries([]);
   }, []);
   
   useEffect(() => {
@@ -198,8 +200,10 @@ export default function FinancialClient() {
   }, [sales, dateRange, paymentMethodFilter]);
 
   const filteredEntries = useMemo(() => {
-    return (filterByDate(entries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [entries, dateRange]);
+    return (filterByDate(entries) as FinancialEntry[])
+        .filter(e => !visuallyRemovedEntries.includes(e.id))
+        .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [entries, dateRange, visuallyRemovedEntries]);
   
   const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId), [filteredEntries]);
   const feeExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !!e.saleId), [filteredEntries]);
@@ -410,7 +414,13 @@ export default function FinancialClient() {
   const handleDeleteEntry = (revert: boolean) => {
     if (!entryToDelete) return;
     
-    removeFinancialEntry(entryToDelete.id, revert);
+    if (revert) {
+      removeFinancialEntry(entryToDelete.id, true);
+    } else {
+      removeFinancialEntry(entryToDelete.id, false);
+      setVisuallyRemovedEntries(prev => [...prev, entryToDelete.id]);
+    }
+    
     toast({ 
         title: "Registro Removido", 
         description: `O registro foi removido ${revert ? 'e o valor estornado.' : 'sem estornar o valor.'}`,
@@ -1147,3 +1157,4 @@ function EditBalanceDialog({
     </Dialog>
   );
 }
+
