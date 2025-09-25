@@ -56,6 +56,8 @@ export default function CashRegisterClient() {
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed', adjustments: [] });
   const [allFinancialEntries, setAllFinancialEntries] = useState<FinancialEntry[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [secondaryCashBoxData, setSecondaryCashBoxData] = useState<SecondaryCashBox>(getSecondaryCashBox());
+  const [bankAccountData, setBankAccountData] = useState<BankAccount>(getBankAccount());
   const { toast } = useToast();
 
   // Dialog states
@@ -71,19 +73,19 @@ export default function CashRegisterClient() {
   const [isEditInitialBalanceDialogOpen, setIsEditInitialBalanceDialogOpen] = useState(false);
   
   // Calculated balances
-  const secondaryCashBoxBalance = useMemo(() => 
-    allFinancialEntries
+  const secondaryCashBoxBalance = useMemo(() => {
+    const transactionSum = allFinancialEntries
       .filter(e => e.source === 'secondary_cash')
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0), 
-    [allFinancialEntries]
-  );
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    return (secondaryCashBoxData.baseBalance || 0) + transactionSum;
+  }, [allFinancialEntries, secondaryCashBoxData]);
   
-  const bankAccountBalance = useMemo(() => 
-    allFinancialEntries
+  const bankAccountBalance = useMemo(() => {
+    const transactionSum = allFinancialEntries
       .filter(e => e.source === 'bank_account')
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0),
-    [allFinancialEntries]
-  );
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+      return (bankAccountData.baseBalance || 0) + transactionSum;
+  }, [allFinancialEntries, bankAccountData]);
 
 
   const loadInitialData = () => {
@@ -91,6 +93,8 @@ export default function CashRegisterClient() {
     setCashStatus(getCashRegisterStatus());
     setAllFinancialEntries(getFinancialEntries());
     setSales(getSales());
+    setSecondaryCashBoxData(getSecondaryCashBox());
+    setBankAccountData(getBankAccount());
     setIsLoading(false);
   };
 
@@ -118,7 +122,6 @@ export default function CashRegisterClient() {
       return;
     }
     
-    // Create entries to represent the transfer
     const openingAdjustmentId = `adj-open-${Date.now()}`;
     addFinancialEntry([
         {
@@ -248,12 +251,9 @@ export default function CashRegisterClient() {
           toast({ title: "Erro", description: "Não foi possível encontrar a transação de abertura original.", variant: "destructive"});
           return;
       }
-      // Revert old opening entries
-      const allEntries = getFinancialEntries();
-      const entriesToKeep = allEntries.filter(e => e.adjustmentId !== openingAdjId);
-      saveFinancialEntries(entriesToKeep);
 
-      // Re-create opening entries with new balance
+      revertAdjustment(cashStatus.adjustments?.find(a => a.id === openingAdjId)!);
+
       addFinancialEntry([
           {
               description: `Abertura do Caixa Diário`,
@@ -331,28 +331,14 @@ export default function CashRegisterClient() {
   }
 
   const handleEditBalance = (newBalance: number, source: 'secondary_cash' | 'bank_account') => {
-      const currentBalance = source === 'secondary_cash' ? secondaryCashBoxBalance : bankAccountBalance;
-      const difference = newBalance - currentBalance;
-      
-      if (Math.abs(difference) < 0.01) {
-        if(source === 'secondary_cash') setIsEditCaixa02DialogOpen(false);
-        else setIsEditBankAccountDialogOpen(false);
-        return;
+      if (source === 'secondary_cash') {
+          saveSecondaryCashBox({ ...getSecondaryCashBox(), baseBalance: newBalance });
+          setIsEditCaixa02DialogOpen(false);
+      } else if (source === 'bank_account') {
+          saveBankAccount({ ...getBankAccount(), baseBalance: newBalance });
+          setIsEditBankAccountDialogOpen(false);
       }
-
-      addFinancialEntry({
-          description: 'Ajuste de saldo manual',
-          amount: Math.abs(difference),
-          type: difference > 0 ? 'income' : 'expense',
-          source: source,
-          saleId: null,
-          adjustmentId: null,
-      });
-
-      toast({ title: "Saldo Atualizado", description: `O saldo foi ajustado para ${formatCurrency(newBalance)}.` });
-      
-      if(source === 'secondary_cash') setIsEditCaixa02DialogOpen(false);
-      else setIsEditBankAccountDialogOpen(false);
+      toast({ title: "Saldo Atualizado", description: `O saldo base foi ajustado para ${formatCurrency(newBalance)}.` });
   }
 
 
@@ -406,7 +392,7 @@ export default function CashRegisterClient() {
         
         if (creditUsed > 0 && sale.payments.some(p => p.method === 'cash')) {
             const totalPaidWithMethods = sale.payments.reduce((sum, p) => sum + p.amount, 0);
-            if (totalPaidWithMethods < sale.originalAmount) { // Means credit was used
+            if (totalPaidWithMethods < sale.originalAmount) {
                 const cashPortionOfPayment = cashPayment / totalPaidWithMethods;
                 const creditAppliedToCash = creditUsed * cashPortionOfPayment;
                 netCash -= creditAppliedToCash;
@@ -958,7 +944,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
 
   useEffect(() => {
     if(isOpen) {
-      setBalance(String(currentBalance));
+      setBalance(String(currentBalance.toFixed(2)).replace('.', ','));
     }
   }, [isOpen, currentBalance])
 
@@ -979,7 +965,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
           <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
           <div className="py-4 space-y-2">
             <Label htmlFor={`${idPrefix}-balance-edit`}>Novo Saldo Total (R$)</Label>
-            <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="0.01" placeholder="0,00" autoFocus />
+            <Input id={`${idPrefix}-balance-edit`} value={balance} onChange={(e) => setBalance(e.target.value)} type="text" placeholder="0,00" autoFocus />
           </div>
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>

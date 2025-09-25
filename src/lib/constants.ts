@@ -30,8 +30,6 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     return JSON.parse(storedValue);
   } catch (error) {
     console.error(`Error parsing localStorage key "${key}":`, error);
-    // If parsing fails, return the default value to prevent app crash
-    // And also save the default value to reset the corrupted data
     saveToLocalStorage(key, defaultValue);
     return defaultValue;
   }
@@ -47,8 +45,8 @@ export const DATA_KEYS = [
     'barmate_clients_v2',
     'barmate_financialEntries_v2',
     'barmate_cashRegisterStatus_v2',
-    'barmate_secondaryCashBox_v2', // Kept for structure, but balance is now calculated
-    'barmate_bankAccount_v2',     // Kept for structure, but balance is now calculated
+    'barmate_secondaryCashBox_v2',
+    'barmate_bankAccount_v2',
     'barmate_transactionFees_v2',
     'barmate_counterSaleOrderItems_v2',
     'barName'
@@ -118,8 +116,8 @@ export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
 export const INITIAL_CLIENTS: Client[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
-export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0 };
-export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0 };
+export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0, baseBalance: 0 };
+export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0, baseBalance: 0 };
 export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 1.99, creditRate: 4.99, pixRate: 0.99 };
 
 // --- Data Migration ---
@@ -135,7 +133,6 @@ export const migrateOldData = () => {
         if (oldDataRaw) {
             localStorage.setItem(newKey, oldDataRaw);
             localStorage.removeItem(oldKey);
-            console.log(`Successfully migrated data from ${oldKey} to ${newKey}`);
         }
     };
     
@@ -155,7 +152,6 @@ export const migrateOldData = () => {
     
     const uniqueOldKeys = [...new Set(oldKeys)];
 
-    console.log("Checking for old data to migrate...");
     uniqueOldKeys.forEach(oldKey => {
         const newKey = `barmate_${oldKey.split('_')[1]}_v2`;
         if (oldKey !== newKey) {
@@ -163,13 +159,6 @@ export const migrateOldData = () => {
         }
     });
     
-    const oldBarName = localStorage.getItem('barName');
-    if (oldBarName) {
-        console.log("Bar name found, preserved.");
-    }
-    
-    localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-    console.log("Data migration check completed.");
     window.dispatchEvent(new Event('storage')); 
 };
 
@@ -197,11 +186,10 @@ export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalSt
 export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
 
-// These are not used to store balance anymore, but might be used for other metadata.
 export const getSecondaryCashBox = (): SecondaryCashBox => getFromLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
 export const getBankAccount = (): BankAccount => getFromLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-export const saveSecondaryCashBox = (box: SecondaryCashBox, options?: { silent?: boolean }) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box, options);
-export const saveBankAccount = (account: BankAccount, options?: { silent?: boolean }) => saveToLocalStorage(KEY_BANK_ACCOUNT, account, options);
+export const saveSecondaryCashBox = (box: SecondaryCashBox) => saveToLocalStorage(KEY_SECONDARY_CASH_BOX, box);
+export const saveBankAccount = (account: BankAccount) => saveToLocalStorage(KEY_BANK_ACCOUNT, account);
 
 
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
@@ -325,7 +313,8 @@ export const clearFinancialData = () => {
         saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
         saveToLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
         saveToLocalStorage(KEY_CLOSED_SESSIONS, []);
-        // Trigger a storage event to notify all components to reload data
+        saveToLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
+        saveToLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
         window.dispatchEvent(new StorageEvent('storage'));
     }
 };
@@ -353,5 +342,3 @@ export const formatCurrency = (value: number) => {
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }
-
-  

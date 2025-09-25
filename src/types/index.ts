@@ -88,10 +88,12 @@ export interface CashRegisterStatus {
 
 export interface SecondaryCashBox {
   balance: number;
+  baseBalance?: number;
 }
 
 export interface BankAccount {
   balance: number;
+  baseBalance?: number;
 }
 
 
