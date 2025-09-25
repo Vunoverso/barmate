@@ -176,12 +176,16 @@ export default function FinancialClient() {
   }, [entries]);
   
  const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
-    
-    const balance = entries
-      .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!))
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) {
+      return 0;
+    }
+    const openingTime = new Date(cashStatus.openingTime);
+    const sessionEntries = entries.filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime);
 
+    const balance = sessionEntries.reduce((acc, e) => {
+      return acc + (e.type === 'income' ? e.amount : -e.amount);
+    }, 0);
+    
     return balance;
   }, [cashStatus, entries]);
 
@@ -1232,7 +1236,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
                     <DialogHeader>
                         <DialogTitle>{title}</DialogTitle>
                         <DialogDescription>
-                            Digite o valor correto para o saldo. O sistema criará uma transação de correção invisível para ajustar a diferença. 
+                            Digite o valor correto para o saldo. O sistema criará uma transação de correção para ajustar a diferença. 
                             Saldo atual: <strong>{formatCurrency(balanceInfo.currentBalance)}</strong>
                         </DialogDescription>
                     </DialogHeader>
@@ -1257,5 +1261,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
         </Dialog>
     );
 }
-
-    
