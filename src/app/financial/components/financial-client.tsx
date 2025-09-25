@@ -46,7 +46,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart, Eye, EyeOff, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { PlusCircle, Trash2, TrendingDown, MoreHorizontal, Download, Edit, Landmark, PiggyBank, Wallet, Banknote, ListFilter, DollarSign, Scale, BarChart, Eye, EyeOff, ChevronLeft, ChevronRight, TrendingUp, ArrowRightLeft } from 'lucide-react';
 import { addDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { ptBR } from "date-fns/locale";
@@ -96,6 +96,20 @@ const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
   bank_account: 'Conta Bancária',
 };
 
+// Helper function to identify transfer entries
+const isTransferEntry = (entry: FinancialEntry): boolean => {
+    if (entry.isCorrection) return false;
+    // Sangrias or Suprimentos that are transfers between internal accounts
+    if (entry.adjustmentId) {
+        const desc = entry.description.toLowerCase();
+        if (desc.includes('transferência') || desc.includes('abertura') || desc.includes('fechamento') || desc.includes('sangria') || desc.includes('suprimento')) {
+            // Check if there is a corresponding opposite entry for the same adjustmentId
+            return true;
+        }
+    }
+    return false;
+};
+
 export default function FinancialClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
@@ -117,6 +131,7 @@ export default function FinancialClient() {
   const [expensesPagination, setExpensesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
   const [feesPagination, setFeesPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
   const [incomePagination, setIncomePagination] = useState({ currentPage: 1, itemsPerPage: 10 });
+  const [transfersPagination, setTransfersPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
 
   const { toast } = useToast();
   const form = useForm<ExpenseFormData>({
@@ -160,33 +175,14 @@ export default function FinancialClient() {
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [entries]);
   
-  const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingBalance) return 0;
+ const expectedCashInDrawer = useMemo(() => {
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
-    const sessionEntries = entries
-        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!));
-    
-    const balance = sessionEntries
-        .reduce((acc, e) => {
-            return acc + (e.type === 'income' ? e.amount : -e.amount)
-        }, 0);
+    const balance = entries
+      .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!))
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
 
-    // Find the opening adjustment to avoid double-counting it, since it's already in openingBalance.
-    const openingAdjustment = sessionEntries.find(e => e.adjustmentId && cashStatus.adjustments?.find(adj => adj.id === e.adjustmentId && adj.description === 'Valor de Abertura'));
-    
-    // If the opening adjustment is part of the entries, its value is already in the `balance`.
-    // The `openingBalance` is the definitive start. So, we adjust.
-    if(openingAdjustment) {
-      // `balance` contains the sum of all movements, including the opening.
-      // `openingBalance` is the value we want to start from.
-      // The total balance is `openingBalance` + (all other movements).
-      // `balance - openingAdjustment.amount` gives us the sum of all other movements.
-      return cashStatus.openingBalance + (balance - openingAdjustment.amount);
-    }
-    
-    // A fallback for a scenario where `openingBalance` exists but the entry is not found.
-    return cashStatus.openingBalance + balance;
-
+    return balance;
   }, [cashStatus, entries]);
 
 
@@ -225,9 +221,36 @@ export default function FinancialClient() {
         .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [entries, dateRange, visuallyRemovedEntries]);
   
-  const generalExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !e.saleId), [filteredEntries]);
-  const feeExpenses = useMemo(() => filteredEntries.filter(e => e.type === 'expense' && !!e.saleId), [filteredEntries]);
-  const incomeEntries = useMemo(() => filteredEntries.filter(e => e.type === 'income' && !e.saleId), [filteredEntries]);
+  const { operationalEntries, transferEntries } = useMemo(() => {
+    const operational: FinancialEntry[] = [];
+    const transfers: FinancialEntry[] = [];
+    const adjustmentIds = new Set<string>();
+
+    // First pass: identify all adjustment IDs that are part of a transfer
+    filteredEntries.forEach(entry => {
+        if (entry.adjustmentId) {
+            const pair = filteredEntries.find(e => e.adjustmentId === entry.adjustmentId && e.id !== entry.id && e.type !== entry.type);
+            if (pair) {
+                adjustmentIds.add(entry.adjustmentId);
+            }
+        }
+    });
+
+    // Second pass: categorize entries
+    filteredEntries.forEach(entry => {
+        if (entry.adjustmentId && adjustmentIds.has(entry.adjustmentId)) {
+            transfers.push(entry);
+        } else {
+            operational.push(entry);
+        }
+    });
+    
+    return { operationalEntries: operational, transferEntries: transfers };
+  }, [filteredEntries]);
+
+  const generalExpenses = useMemo(() => operationalEntries.filter(e => e.type === 'expense' && !e.saleId), [operationalEntries]);
+  const feeExpenses = useMemo(() => operationalEntries.filter(e => e.type === 'expense' && !!e.saleId), [operationalEntries]);
+  const incomeEntries = useMemo(() => operationalEntries.filter(e => e.type === 'income' && !e.saleId), [operationalEntries]);
 
   const paginatedSales = useMemo(() => {
     const startIndex = (salesPagination.currentPage - 1) * salesPagination.itemsPerPage;
@@ -269,6 +292,16 @@ export default function FinancialClient() {
     return Math.ceil(incomeEntries.length / incomePagination.itemsPerPage);
   }, [incomeEntries, incomePagination.itemsPerPage]);
 
+  const paginatedTransfers = useMemo(() => {
+    const startIndex = (transfersPagination.currentPage - 1) * transfersPagination.itemsPerPage;
+    return transferEntries.slice(startIndex, startIndex + transfersPagination.itemsPerPage);
+  }, [transferEntries, transfersPagination]);
+
+  const totalTransferPages = useMemo(() => {
+      if (transferEntries.length === 0) return 1;
+      return Math.ceil(transferEntries.length / transfersPagination.itemsPerPage);
+  }, [transferEntries, transfersPagination.itemsPerPage]);
+
 
   const salesRevenue = useMemo(() => filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0), [filteredSales]);
   const otherIncome = useMemo(() => incomeEntries.reduce((sum, entry) => sum + entry.amount, 0), [incomeEntries]);
@@ -307,8 +340,8 @@ export default function FinancialClient() {
             weeklySummary: processSummary(weekly)
         };
     };
-    return processEntries(filteredEntries);
-  }, [filteredEntries]);
+    return processEntries(operationalEntries);
+  }, [operationalEntries]);
 
   // Pagination Handlers
   const handleSalesPageChange = (page: number) => setSalesPagination(prev => ({ ...prev, currentPage: page }));
@@ -319,6 +352,8 @@ export default function FinancialClient() {
   const handleFeesItemsPerPageChange = (items: number) => setFeesPagination({ currentPage: 1, itemsPerPage: items });
   const handleIncomePageChange = (page: number) => setIncomePagination(prev => ({ ...prev, currentPage: page }));
   const handleIncomeItemsPerPageChange = (items: number) => setIncomePagination({ currentPage: 1, itemsPerPage: items });
+  const handleTransfersPageChange = (page: number) => setTransfersPagination(prev => ({ ...prev, currentPage: page }));
+  const handleTransfersItemsPerPageChange = (items: number) => setTransfersPagination({ currentPage: 1, itemsPerPage: items });
 
 
   const handleAddExpense = (data: ExpenseFormData) => {
@@ -444,14 +479,14 @@ export default function FinancialClient() {
           source: paymentMethods
         };
       }),
-      ...filteredEntries.filter(e => e.type === 'expense').map(entry => ({
+      ...operationalEntries.filter(e => e.type === 'expense').map(entry => ({
         timestamp: new Date(entry.timestamp),
         description: entry.description,
         type: 'Despesa',
         amount: entry.amount,
         source: SOURCE_MAP[entry.source]
       })),
-       ...filteredEntries.filter(e => e.type === 'income' && !e.saleId).map(entry => ({
+       ...operationalEntries.filter(e => e.type === 'income' && !e.saleId).map(entry => ({
         timestamp: new Date(entry.timestamp),
         description: entry.description,
         type: 'Entrada',
@@ -684,11 +719,12 @@ export default function FinancialClient() {
         </Accordion>
       
         <Tabs defaultValue="sales" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="sales">Vendas</TabsTrigger>
                 <TabsTrigger value="income">Entradas</TabsTrigger>
                 <TabsTrigger value="expenses">Despesas</TabsTrigger>
                 <TabsTrigger value="fees">Taxas</TabsTrigger>
+                <TabsTrigger value="transfers">Transferências</TabsTrigger>
             </TabsList>
             <TabsContent value="sales">
                 <Card>
@@ -910,6 +946,57 @@ export default function FinancialClient() {
                         />
                     </CardFooter>
                 </Card>
+            </TabsContent>
+            <TabsContent value="transfers">
+              <Card>
+                <CardHeader>
+                    <CardTitle>Histórico de Transferências</CardTitle>
+                    <CardDescription>Movimentações entre caixas, aberturas, fechamentos e sangrias.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader><TableRow>
+                            <TableHead>Descrição</TableHead>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Origem</TableHead>
+                            <TableHead>Valor</TableHead>
+                            <TableHead><span className="sr-only">Ações</span></TableHead>
+                        </TableRow></TableHeader>
+                        <TableBody>
+                        {paginatedTransfers.length > 0 ? paginatedTransfers.map(entry => (
+                            <TableRow key={entry.id}>
+                            <TableCell className="font-medium">{entry.description}</TableCell>
+                            <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                            <TableCell><Badge variant={entry.type === 'income' ? 'secondary' : 'destructive'} className="capitalize">{entry.type === 'income' ? 'Entrada' : 'Saída'}</Badge></TableCell>
+                            <TableCell>{SOURCE_MAP[entry.source]}</TableCell>
+                            <TableCell className={`text-right font-semibold ${entry.type === 'income' ? 'text-green-600' : 'text-destructive'}`}>{entry.type === 'income' ? '+' : '-'} {formatCurrency(entry.amount)}</TableCell>
+                            <TableCell className="text-right">
+                                <TooltipProvider>
+                                    <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Button size="icon" variant="ghost" disabled><Trash2 className="h-4 w-4" /></Button></span></TooltipTrigger>
+                                    <TooltipContent><p>Transferências não podem ser removidas individualmente.</p></TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </TableCell>
+                            </TableRow>
+                        )) : (
+                            <TableRow><TableCell colSpan={6} className="h-24 text-center">Nenhuma transferência encontrada.</TableCell></TableRow>
+                        )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+                <CardFooter>
+                    <DataTablePagination
+                        currentPage={transfersPagination.currentPage}
+                        totalPages={totalTransferPages}
+                        onPageChange={handleTransfersPageChange}
+                        itemsPerPage={transfersPagination.itemsPerPage}
+                        onItemsPerPageChange={handleTransfersItemsPerPageChange}
+                        totalItems={transferEntries.length}
+                        itemName="transferências"
+                    />
+                </CardFooter>
+              </Card>
             </TabsContent>
         </Tabs>
       </div>
@@ -1170,3 +1257,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
         </Dialog>
     );
 }
+
+    
