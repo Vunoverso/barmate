@@ -157,44 +157,45 @@ export default function ReportsClient() {
   }, [expectedCashInDrawer, secondaryCashBox, bankAccount]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
-    const combinedData = [...filteredSales, ...filteredEntries.filter(e => e.type === 'expense')];
-    
-    const monthly = combinedData.reduce((acc, item) => {
-        const monthKey = format(new Date(item.timestamp), "yyyy-MM");
-        const monthLabel = format(new Date(item.timestamp), "MMMM yyyy", { locale: ptBR });
+    const processEntries = (entries: FinancialEntry[], periodFormat: "yyyy-MM" | "yyyy-MM-dd", labelFormat: string, startOfWeek: boolean = false) => {
+        return entries.reduce((acc, item) => {
+            let key, label;
+            const date = new Date(item.timestamp);
+            
+            if (startOfWeek) {
+                const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1)); // Monday as start of week
+                const weekEnd = addDays(weekStart, 6);
+                key = format(weekStart, periodFormat);
+                label = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
+            } else {
+                key = format(date, periodFormat);
+                label = format(date, labelFormat, { locale: ptBR });
+            }
 
-        if (!acc[monthKey]) acc[monthKey] = { period: monthLabel, income: 0, expenses: 0 };
-        
-        if ('totalAmount' in item) acc[monthKey].income += item.totalAmount;
-        else if(item.type === 'expense') acc[monthKey].expenses += item.amount;
-        
-        return acc;
-    }, {} as Record<string, { period: string, income: number, expenses: number }>);
-    
-    const weekly = combinedData.reduce((acc, item) => {
-        const date = new Date(item.timestamp);
-        const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1)); // Monday as start of week
-        const weekEnd = addDays(weekStart, 6);
-        const weekKey = format(weekStart, "yyyy-MM-dd");
-        const weekLabel = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
+            if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
 
-        if (!acc[weekKey]) acc[weekKey] = { period: weekLabel, income: 0, expenses: 0 };
-        
-        if ('totalAmount' in item) acc[weekKey].income += item.totalAmount;
-        else if (item.type === 'expense') acc[weekKey].expenses += item.amount;
+            if (item.type === 'income') {
+                acc[key].income += item.amount;
+            } else if (item.type === 'expense') {
+                acc[key].expenses += item.amount;
+            }
 
-        return acc;
-    }, {} as Record<string, { period: string, income: number, expenses: number }>);
+            return acc;
+        }, {} as Record<string, { period: string, income: number, expenses: number }>);
+    };
+
+    const monthly = processEntries(filteredEntries, "yyyy-MM", "MMMM yyyy");
+    const weekly = processEntries(filteredEntries, "yyyy-MM-dd", "", true);
 
     const processSummary = (group: any) => Object.entries(group)
-      .map(([key, value]:[string, any]) => ({...value, key, balance: value.income - value.expenses}))
+      .map(([key, value]: [string, any]) => ({ ...value, key, balance: value.income - value.expenses }))
       .sort((a, b) => b.key.localeCompare(a.key));
-    
+      
     return {
       monthlySummary: processSummary(monthly),
       weeklySummary: processSummary(weekly)
     };
-  }, [filteredSales, filteredEntries]);
+  }, [filteredEntries]);
 
 
   const confirmDeleteSale = (sale: Sale) => setSaleToDelete(sale);
@@ -253,7 +254,7 @@ export default function ReportsClient() {
         amount: entry.amount,
         source: SOURCE_MAP[entry.source]
       })),
-       ...filteredEntries.filter(e => e.type === 'income').map(entry => ({
+       ...filteredEntries.filter(e => e.type === 'income' && !e.saleId).map(entry => ({
         timestamp: new Date(entry.timestamp),
         description: entry.description,
         type: 'Entrada',
@@ -526,4 +527,3 @@ export default function ReportsClient() {
     </div>
   );
 }
-
