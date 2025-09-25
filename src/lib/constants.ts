@@ -116,8 +116,8 @@ export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
 export const INITIAL_CLIENTS: Client[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
-export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { balance: 0, baseBalance: 0 };
-export const INITIAL_BANK_ACCOUNT: BankAccount = { balance: 0, baseBalance: 0 };
+export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { baseBalance: 0 };
+export const INITIAL_BANK_ACCOUNT: BankAccount = { baseBalance: 0 };
 export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 1.99, creditRate: 4.99, pixRate: 0.99 };
 
 // --- Data Migration ---
@@ -212,21 +212,15 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
   
-  const creditPaidAmount = newSale.items
+  const creditUsed = newSale.items
     .filter(item => item.price < 0)
     .reduce((sum, item) => sum + Math.abs(item.price * item.quantity), 0);
 
-  let remainingPayments = JSON.parse(JSON.stringify(newSale.payments));
-  let remainingCreditToApply = creditPaidAmount;
+  const netSaleValue = newSale.originalAmount - creditUsed;
 
-  for (const payment of remainingPayments) {
-      if (remainingCreditToApply <= 0) break;
-      const amountToDeduct = Math.min(payment.amount, remainingCreditToApply);
-      payment.amount -= amountToDeduct;
-      remainingCreditToApply -= amountToDeduct;
-  }
-  
-  remainingPayments.filter((p: Payment) => p.amount > 0).forEach((p: Payment) => {
+  newSale.payments.forEach((p: Payment) => {
+    if (p.amount <= 0) return;
+
     if (['debit', 'credit', 'pix'].includes(p.method)) {
       let feeRate = 0;
       if (p.method === 'debit') feeRate = fees.debitRate;
@@ -255,14 +249,17 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
         });
       }
     } else if (p.method === 'cash') {
-        newFinancialEntries.push({
-           description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
-           amount: p.amount,
-           type: 'income',
-           source: 'daily_cash',
-           saleId: newSale.id,
-           adjustmentId: null,
-        });
+        const netCash = p.amount;
+        if(netCash > 0) {
+          newFinancialEntries.push({
+             description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
+             amount: netCash,
+             type: 'income',
+             source: 'daily_cash',
+             saleId: newSale.id,
+             adjustmentId: null,
+          });
+        }
     }
   });
 
@@ -342,3 +339,5 @@ export const formatCurrency = (value: number) => {
 export function getFromSupabase() {
   return Promise.resolve({ data: [], error: null });
 }
+
+    

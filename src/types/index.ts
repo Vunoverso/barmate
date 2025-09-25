@@ -87,12 +87,10 @@ export interface CashRegisterStatus {
 }
 
 export interface SecondaryCashBox {
-  balance: number;
   baseBalance?: number;
 }
 
 export interface BankAccount {
-  balance: number;
   baseBalance?: number;
 }
 
@@ -117,3 +115,5 @@ export interface TransactionFees {
 
 // Helper for getting table row types
 type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
+
+    

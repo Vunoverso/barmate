@@ -332,10 +332,10 @@ export default function CashRegisterClient() {
 
   const handleEditBalance = (newBalance: number, source: 'secondary_cash' | 'bank_account') => {
       if (source === 'secondary_cash') {
-          saveSecondaryCashBox({ ...getSecondaryCashBox(), baseBalance: newBalance });
+          saveSecondaryCashBox({ baseBalance: newBalance });
           setIsEditCaixa02DialogOpen(false);
       } else if (source === 'bank_account') {
-          saveBankAccount({ ...getBankAccount(), baseBalance: newBalance });
+          saveBankAccount({ baseBalance: newBalance });
           setIsEditBankAccountDialogOpen(false);
       }
       toast({ title: "Saldo Atualizado", description: `O saldo base foi ajustado para ${formatCurrency(newBalance)}.` });
@@ -976,3 +976,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, currentBalance, onSave, title
     </Dialog>
   );
 }
+
+    
