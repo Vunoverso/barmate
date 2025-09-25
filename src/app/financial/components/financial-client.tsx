@@ -164,14 +164,19 @@ export default function FinancialClient() {
   const expectedCashInDrawer = useMemo(() => {
     if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
     
-    const openingTime = new Date(cashStatus.openingTime).getTime();
-
-    // This logic now mirrors the one in cash-register-client.tsx
-    return entries
-        .filter(e => e.source === 'daily_cash' && new Date(e.timestamp).getTime() >= openingTime)
-        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-
-  }, [cashStatus, sales, entries, visuallyRemovedEntries]);
+    const openingTime = new Date(cashStatus.openingTime);
+    const sessionSales = sales.filter(sale => new Date(sale.timestamp) >= openingTime);
+    
+    const openingBalance = cashStatus.openingBalance || 0;
+    const adjustments = cashStatus.adjustments || [];
+    
+    const totalIn = adjustments.filter(a => a.type === 'in').reduce((sum, a) => sum + a.amount, 0);
+    const totalOut = adjustments.filter(a => a.type === 'out').reduce((sum, a) => sum + a.amount, 0);
+    const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
+    
+    const expectedCash = (openingBalance + totalCashFromSales + (totalIn - openingBalance)) - totalOut;
+    return expectedCash;
+  }, [cashStatus, sales]);
 
 
   const totalGlobalBalance = useMemo(() => {
@@ -1113,8 +1118,11 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
     useEffect(() => {
         if (!isOpen) {
             setNewBalance('');
+        } else {
+            // Pre-fill with current balance when opening, to make small adjustments easier.
+            setNewBalance(balanceInfo.currentBalance.toFixed(2).replace('.', ','));
         }
-    }, [isOpen]);
+    }, [isOpen, balanceInfo.currentBalance]);
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -1148,7 +1156,3 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
         </Dialog>
     );
 }
-
-    
-
-    
