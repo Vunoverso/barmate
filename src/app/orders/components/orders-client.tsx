@@ -610,10 +610,10 @@ export default function OrdersClient() {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                              <span className="font-semibold truncate block max-w-full">{order.name}</span>
+                              <span className="font-semibold text-sm truncate block max-w-full">{order.name}</span>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
                           </div>
-                          <div className="text-xs text-muted-foreground flex flex-col items-start">
+                          <div className="text-[11px] text-muted-foreground flex flex-col items-start">
                             <span>{order.items.length} item(s)</span>
                              <span>{format(new Date(order.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
                           </div>
