@@ -309,6 +309,7 @@ export default function OrdersClient() {
     const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
           const newItems = [...order.items];
+          
           if (product.isCombo) {
              const newComboItem: OrderItem = {
                ...product,
@@ -325,7 +326,16 @@ export default function OrdersClient() {
               newItems.push({ ...product, quantity: 1 } as OrderItem);
             }
           }
-          return { ...order, items: newItems };
+          
+          // If the order was paid, adding a new item makes it 'open' again
+          const updatedOrder = { ...order, items: newItems };
+          if (updatedOrder.status === 'paid') {
+            const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            if (currentTotal > 0) { // If there's a new positive balance
+              delete updatedOrder.status; // Revert to 'open'
+            }
+          }
+          return updatedOrder;
         }
         return order;
       });
@@ -610,16 +620,16 @@ export default function OrdersClient() {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm truncate block max-w-full">{order.name}</span>
+                              <span className="font-semibold text-xs truncate block max-w-full">{order.name}</span>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
                           </div>
-                          <div className="text-[11px] text-muted-foreground flex flex-col items-start">
+                          <div className="text-[10px] text-muted-foreground flex flex-col items-start">
                             <span>{order.items.length} item(s)</span>
                              <span>{format(new Date(order.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
-                          <div className="font-semibold text-sm">{formatCurrency(total)}</div>
+                          <div className="font-semibold text-xs">{formatCurrency(total)}</div>
                         </div>
                       </div>
                     )})}
