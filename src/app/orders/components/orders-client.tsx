@@ -327,12 +327,11 @@ export default function OrdersClient() {
             }
           }
           
-          // If the order was paid, adding a new item makes it 'open' again
           const updatedOrder = { ...order, items: newItems };
           if (updatedOrder.status === 'paid') {
             const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-            if (currentTotal > 0) { // If there's a new positive balance
-              delete updatedOrder.status; // Revert to 'open'
+            if (currentTotal > 0) { 
+              delete updatedOrder.status; 
             }
           }
           return updatedOrder;
@@ -620,16 +619,16 @@ export default function OrdersClient() {
                       >
                         <div className="flex-1 min-w-0">
                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-xs truncate block max-w-full">{order.name}</span>
+                              <span className="font-semibold text-[0.7rem] truncate block max-w-full">{order.name}</span>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-4 text-[10px] px-1.5">Paga</Badge>}
                            </div>
-                           <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                           <div className="text-[0.65rem] text-muted-foreground flex items-center gap-1.5">
                               <span>{order.items.length} item(s)</span>
                               <span>{format(new Date(order.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
                            </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
-                           <div className="font-semibold text-xs">{formatCurrency(total)}</div>
+                           <div className="font-semibold text-[0.7rem]">{formatCurrency(total)}</div>
                         </div>
                       </div>
                     )})}
@@ -782,27 +781,29 @@ export default function OrdersClient() {
                         )
                       }
                       return (
-                        <li key={`${item.id}-${index}`} className="flex items-center gap-2 p-1 rounded-md border">
-                            <div className="flex-shrink-0"><IconComponent className="h-4 w-4 text-muted-foreground" /></div>
-                            <div className="flex-grow min-w-0">
-                                <p className="font-medium truncate text-[11px] leading-tight">{item.name}</p>
-                                <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
-                            </div>
-                            <div className="flex items-center gap-0.5 shrink-0">
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
-                                <MinusCircle className="h-3 w-3" />
-                                </Button>
-                                <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
-                                <PlusCircle className="h-3 w-3" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
-                                <Trash2 className="h-3 w-3" />
-                                </Button>
-                            </div>
-                            <div className="w-14 text-right shrink-0">
-                                <p className="font-semibold text-xs">{formatCurrency(item.price * item.quantity)}</p>
-                            </div>
+                        <li key={`${item.id}-${index}`} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
+                          <div className="flex-shrink-0">
+                            <IconComponent className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate text-xs leading-tight">{item.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                          </div>
+                          <div className="flex items-center gap-0 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
+                              <MinusCircle className="h-3 w-3" />
+                            </Button>
+                            <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
+                              <PlusCircle className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="w-[60px] text-right shrink-0">
+                            <p className="font-semibold text-xs">{formatCurrency(item.price * item.quantity)}</p>
+                          </div>
                         </li>
                       );
                     })}
@@ -1196,6 +1197,8 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
 
+
+    
 
     
 
