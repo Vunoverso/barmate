@@ -619,17 +619,17 @@ export default function OrdersClient() {
                         )}
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                           <div className="flex items-center gap-2">
                               <span className="font-semibold text-xs truncate block max-w-full">{order.name}</span>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-5 text-xs">Paga</Badge>}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground flex flex-col items-start">
-                            <span>{order.items.length} item(s)</span>
-                             <span>{format(new Date(order.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
-                          </div>
+                           </div>
+                           <div className="text-[10px] text-muted-foreground flex flex-col items-start">
+                              <span>{order.items.length} item(s)</span>
+                              <span>{format(new Date(order.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
+                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
-                          <div className="font-semibold text-xs">{formatCurrency(total)}</div>
+                           <div className="font-semibold text-xs">{formatCurrency(total)}</div>
                         </div>
                       </div>
                     )})}
@@ -754,27 +754,27 @@ export default function OrdersClient() {
                       if (item.isCombo) {
                         const remaining = (item.comboItems ?? 0) - (item.claimedQuantity ?? 0);
                         return (
-                           <li key={`${item.id}-${index}`} className="flex flex-col gap-2 p-1.5 rounded-md border bg-muted/30">
+                           <li key={`${item.id}-${index}`} className="flex flex-col gap-1 p-2 rounded-md border bg-muted/30">
                             <div className="flex items-center gap-2">
                               <div className="flex-shrink-0">
-                                <IconComponent className="h-6 w-6 text-muted-foreground" />
+                                <IconComponent className="h-5 w-5 text-muted-foreground" />
                               </div>
                               <div className="flex-grow min-w-0">
                                 <p className="font-medium truncate text-xs">{item.name}</p>
-                                <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                                <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
                               </div>
-                               <p className="font-semibold w-20 text-right text-sm shrink-0">{formatCurrency(item.price * item.quantity)}</p>
+                               <p className="font-semibold text-xs shrink-0">{formatCurrency(item.price * item.quantity)}</p>
                             </div>
-                            <div className="flex items-center justify-between pl-1 pr-2 pb-1">
-                                <Badge variant={remaining > 0 ? "secondary" : "default"}>
+                            <div className="flex items-center justify-between pl-1 pr-1">
+                                <Badge variant={remaining > 0 ? "secondary" : "default"} className="text-[10px] h-5">
                                   {remaining > 0 ? `${remaining} restante(s)` : 'Completo'}
                                 </Badge>
                                 <div className="flex items-center gap-1">
-                                    <Button size="sm" className="h-7" onClick={() => handleClaimComboItem(item.id)} disabled={remaining <= 0}>
+                                    <Button size="sm" className="h-6 px-2 text-xs" onClick={() => handleClaimComboItem(item.id)} disabled={remaining <= 0}>
                                         Liberar 1
                                     </Button>
-                                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)}>
-                                        <Trash2 className="h-4 w-4" />
+                                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                                        <Trash2 className="h-3 w-3" />
                                     </Button>
                                 </div>
                             </div>
@@ -784,25 +784,25 @@ export default function OrdersClient() {
                       return (
                         <li key={`${item.id}-${index}`} className="flex items-center gap-2 p-1.5 rounded-md border">
                           <div className="flex-shrink-0">
-                            <IconComponent className="h-6 w-6 text-muted-foreground" />
+                            <IconComponent className="h-5 w-5 text-muted-foreground" />
                           </div>
                           <div className="flex-grow min-w-0">
-                            <p className="font-medium truncate text-xs">{item.name}</p>
-                            <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                            <p className="font-medium truncate text-[11px] leading-tight">{item.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
-                              <MinusCircle className="h-4 w-4" />
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
+                              <MinusCircle className="h-3 w-3" />
                             </Button>
-                            <span className="w-5 text-center text-sm">{item.quantity}</span>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
-                              <PlusCircle className="h-4 w-4" />
+                            <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
+                              <PlusCircle className="h-3 w-3" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-7 w-7" onClick={() => removeFromOrder(item.id)}>
-                              <Trash2 className="h-4 w-4" />
+                            <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
-                          <p className="font-semibold w-16 text-right text-xs shrink-0">{formatCurrency(item.price * item.quantity)}</p>
+                          <p className="font-semibold w-14 text-right text-xs shrink-0">{formatCurrency(item.price * item.quantity)}</p>
                         </li>
                       );
                     })}
@@ -1195,3 +1195,6 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
 
     
 
+
+
+    
