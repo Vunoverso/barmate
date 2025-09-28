@@ -756,12 +756,14 @@ export default function OrdersClient() {
                         return (
                            <li key={`${item.id}-${index}`} className="flex flex-col gap-2 p-1.5 rounded-md border bg-muted/30">
                             <div className="flex items-center gap-2">
-                              <div className="flex-shrink-0"> <IconComponent className="h-6 w-6 text-muted-foreground" /> </div>
-                              <div className="flex-grow">
+                              <div className="flex-shrink-0">
+                                <IconComponent className="h-6 w-6 text-muted-foreground" />
+                              </div>
+                              <div className="flex-grow min-w-0">
                                 <p className="font-medium truncate text-xs">{item.name}</p>
                                 <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
                               </div>
-                               <p className="font-semibold w-20 text-right text-sm">{formatCurrency(item.price * item.quantity)}</p>
+                               <p className="font-semibold w-20 text-right text-sm shrink-0">{formatCurrency(item.price * item.quantity)}</p>
                             </div>
                             <div className="flex items-center justify-between pl-1 pr-2 pb-1">
                                 <Badge variant={remaining > 0 ? "secondary" : "default"}>
@@ -788,7 +790,7 @@ export default function OrdersClient() {
                             <p className="font-medium truncate text-xs">{item.name}</p>
                             <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
                           </div>
-                          <div className="flex items-center gap-0.5">
+                          <div className="flex items-center gap-0.5 shrink-0">
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
                               <MinusCircle className="h-4 w-4" />
                             </Button>
@@ -1192,3 +1194,4 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
