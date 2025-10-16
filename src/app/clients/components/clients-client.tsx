@@ -45,8 +45,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import { useForm, zodResolver } from '@mantine/form';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 const clientSchema = z.object({
   name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
@@ -79,8 +81,8 @@ export default function ClientsClient() {
   }, [fetchData]);
 
   const form = useForm<ClientFormData>({
-    validate: zodResolver(clientSchema),
-    initialValues: {
+    resolver: zodResolver(clientSchema),
+    defaultValues: {
       name: '',
       phone: '',
       notes: '',
@@ -89,15 +91,19 @@ export default function ClientsClient() {
 
   useEffect(() => {
     if (editingClient) {
-      form.setValues({
+      form.reset({
         name: editingClient.name,
         phone: editingClient.phone || '',
         notes: editingClient.notes || '',
       });
     } else {
-      form.reset();
+      form.reset({
+        name: '',
+        phone: '',
+        notes: '',
+      });
     }
-  }, [editingClient, isDialogOpen]);
+  }, [editingClient, isDialogOpen, form]);
 
   const handleSaveClient = (values: ClientFormData) => {
     if (editingClient) {
@@ -106,7 +112,7 @@ export default function ClientsClient() {
       saveClients(updatedClients);
       toast({ title: "Cliente Atualizado", description: `Os dados de ${values.name} foram atualizados.` });
     } else {
-      const newClient = { id: `client-${Date.now()}`, ...values };
+      const newClient: Client = { id: `client-${Date.now()}`, ...values };
       const updatedClients = [...clients, newClient];
       saveClients(updatedClients);
       toast({ title: "Cliente Adicionado", description: `${values.name} foi adicionado à sua lista de clientes.` });
@@ -219,25 +225,53 @@ export default function ClientsClient() {
               {editingClient ? 'Atualize os dados do cliente.' : 'Preencha os dados do novo cliente.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={form.onSubmit(handleSaveClient)} className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="name">Nome do Cliente</Label>
-              <Input id="name" placeholder="Ex: João da Silva" {...form.getInputProps('name')} />
-              {form.errors.name && <p className="text-sm font-medium text-destructive">{form.errors.name}</p>}
-            </div>
-            <div>
-              <Label htmlFor="phone">Telefone (Opcional)</Label>
-              <Input id="phone" placeholder="(99) 99999-9999" {...form.getInputProps('phone')} />
-            </div>
-            <div>
-              <Label htmlFor="notes">Observações (Opcional)</Label>
-              <Textarea id="notes" placeholder="Ex: Cliente prefere mesa perto da janela." {...form.getInputProps('notes')} />
-            </div>
-            <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-              <Button type="submit">Salvar</Button>
-            </DialogFooter>
-          </form>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSaveClient)} className="space-y-4 py-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome do Cliente</FormLabel>
+                    <FormControl>
+                      <Input id="name" placeholder="Ex: João da Silva" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input id="phone" placeholder="(99) 99999-9999" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações (Opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea id="notes" placeholder="Ex: Cliente prefere mesa perto da janela." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                <Button type="submit">Salvar</Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
       
