@@ -498,7 +498,7 @@ export default function OrdersClient() {
       const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? paidOrder : o);
       saveOpenOrders(newOpenOrders);
       toast({ title: "Comanda Paga!", description: `A comanda "${currentOrder.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
-      setIsPaymentDialogOpen(false);
+      // We don't close the payment dialog here, it will be handled by the receipt view
       return;
     }
 
@@ -529,7 +529,7 @@ export default function OrdersClient() {
     }
     saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
-    setIsPaymentDialogOpen(false);
+    // Do not close payment dialog here; it's handled by the parent component state or receipt view
   }, [currentOrderId, orderTotal, consumedTotal, toast]);
   
   const allowPartialPayment = true;
@@ -637,7 +637,7 @@ export default function OrdersClient() {
                       >
                         <div className="flex-1 min-w-0">
                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-[0.7rem] truncate block max-w-full">{order.name}</span>
+                              <span className="font-semibold text-xs truncate block max-w-full">{order.name}</span>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-4 text-[10px] px-1.5">Paga</Badge>}
                            </div>
                            <div className="text-[0.65rem] text-muted-foreground flex items-center gap-1.5">
@@ -646,7 +646,7 @@ export default function OrdersClient() {
                            </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
-                           <div className="font-semibold text-[0.7rem]">{formatCurrency(total)}</div>
+                           <div className="font-semibold text-xs">{formatCurrency(total)}</div>
                         </div>
                       </div>
                     )})}
@@ -890,6 +890,7 @@ export default function OrdersClient() {
         isOpen={isPaymentDialogOpen}
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
+        currentOrder={currentOrder}
         onSubmit={handlePayment}
         allowCredit={true}
         allowPartialPayment={allowPartialPayment}

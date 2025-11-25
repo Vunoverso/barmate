@@ -1,9 +1,9 @@
 
 "use client";
 
-import type { PaymentMethod, Payment } from '@/types';
-import { PAYMENT_METHODS, formatCurrency } from '@/lib/constants';
-import { useState, useEffect, useMemo } from 'react';
+import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
+import { PAYMENT_METHODS, formatCurrency, getProductCategories } from '@/lib/constants';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,16 +17,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, Banknote, HelpCircle } from "lucide-react";
+import { Terminal, Banknote, HelpCircle, Download } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import html2canvas from 'html2canvas';
+import { Receipt } from './receipt';
+import { useToast } from '@/hooks/use-toast';
 
 interface PaymentDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   totalAmount: number;
+  currentOrder: ActiveOrder | undefined;
   allowCredit?: boolean;
   allowPartialPayment?: boolean;
   onSubmit: (saleDetails: {
@@ -41,7 +45,7 @@ interface PaymentDialogProps {
 
 const parseLocaleFloat = (value: string) => parseFloat(value.replace(',', '.')) || 0;
 
-export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSubmit, allowCredit = false, allowPartialPayment = false }: PaymentDialogProps) {
+export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, currentOrder, onSubmit, allowCredit = false, allowPartialPayment = false }: PaymentDialogProps) {
   const [discount, setDiscount] = useState<string>('');
   const [cashAmount, setCashAmount] = useState<string>('');
   const [debitAmount, setDebitAmount] = useState<string>('');
@@ -50,6 +54,9 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
   const [cashTendered, setCashTendered] = useState<string>('');
   const [leaveChangeAsCredit, setLeaveChangeAsCredit] = useState(false);
   const [error, setError] = useState<string>('');
+  const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const numDiscount = parseLocaleFloat(discount);
   const numCashAmount = parseLocaleFloat(cashAmount);
@@ -98,6 +105,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       setCashTendered('');
       setLeaveChangeAsCredit(false);
       setError('');
+      setSaleCompleted(null);
     }
   }, [isOpen]);
 
@@ -149,6 +157,24 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
     if (numPixAmount > 0) payments.push({ method: 'pix', amount: numPixAmount });
 
     const finalCashTendered = numCashTendered > 0 ? numCashTendered : (numCashAmount > 0 ? numCashAmount : undefined);
+    
+    const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || 0;
+
+    const completedSale: Sale = {
+        id: currentOrder?.id || `sale-${Date.now()}`,
+        timestamp: new Date(),
+        items: currentOrder?.items || [],
+        payments,
+        originalAmount: consumedTotal,
+        totalAmount: amountToPay,
+        discountAmount: numDiscount,
+        cashTendered: finalCashTendered,
+        changeGiven: creditToLeave,
+        status: 'completed',
+        leaveChangeAsCredit: leaveChangeAsCredit && creditToLeave > 0,
+    };
+    
+    setSaleCompleted(completedSale);
 
     onSubmit({
       payments,
@@ -156,21 +182,49 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
       changeGiven: creditToLeave, 
       status: 'completed',
       leaveChangeAsCredit: leaveChangeAsCredit && creditToLeave > 0,
-      cashTendered: finalCashTendered, // Pass the total cash received
+      cashTendered: finalCashTendered,
     });
+  };
+
+  const handleDownloadReceipt = async () => {
+    if (!receiptRef.current) {
+        toast({ title: "Erro", description: "Não foi possível encontrar o recibo para baixar.", variant: "destructive" });
+        return;
+    };
+    try {
+        const canvas = await html2canvas(receiptRef.current, {
+            scale: 2, // Higher scale for better quality
+            backgroundColor: '#ffffff',
+        });
+        const image = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = image;
+        link.download = `recibo-${saleCompleted?.id.slice(-6) || 'venda'}.png`;
+        link.click();
+    } catch (err) {
+        console.error(err);
+        toast({ title: "Erro ao gerar imagem", description: "Não foi possível criar a imagem do recibo.", variant: "destructive" });
+    }
   };
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md grid grid-rows-[auto_1fr_auto] max-h-[90vh] p-0">
         <DialogHeader className="p-6 pb-4">
-          <DialogTitle>Processar Pagamento</DialogTitle>
+          <DialogTitle>{saleCompleted ? 'Venda Finalizada' : 'Processar Pagamento'}</DialogTitle>
           <DialogDescription>
-            Total Original da Comanda: <span className="font-bold">{formatCurrency(totalAmount)}</span>
+            {saleCompleted 
+             ? `Recibo para a comanda ${currentOrder?.name}.`
+             : `Total Original da Comanda: ${formatCurrency(totalAmount)}`}
           </DialogDescription>
         </DialogHeader>
-
+        
         <ScrollArea className="px-6">
+        {saleCompleted ? (
+            <div ref={receiptRef} className="bg-white p-2">
+                <Receipt sale={saleCompleted} orderName={currentOrder?.name} />
+            </div>
+        ) : (
          <TooltipProvider>
           <div className="space-y-4 pb-4">
             <div className="space-y-1">
@@ -272,17 +326,33 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, onSub
             )}
           </div>
          </TooltipProvider>
+        )}
         </ScrollArea>
 
         <DialogFooter className="p-6 pt-4 border-t">
-          <DialogClose asChild>
-            <Button variant="outline">Cancelar</Button>
-          </DialogClose>
-          <Button onClick={handleSubmit} disabled={isSubmitDisabled}>
-            Confirmar Pagamento
-          </Button>
+          {saleCompleted ? (
+            <>
+                <DialogClose asChild>
+                    <Button variant="outline">Fechar</Button>
+                </DialogClose>
+                <Button onClick={handleDownloadReceipt}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar Recibo
+                </Button>
+            </>
+          ) : (
+            <>
+                <DialogClose asChild>
+                    <Button variant="outline">Cancelar</Button>
+                </DialogClose>
+                <Button onClick={handleSubmit} disabled={isSubmitDisabled}>
+                    Confirmar Pagamento
+                </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
