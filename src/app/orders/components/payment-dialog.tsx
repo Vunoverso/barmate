@@ -57,6 +57,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const [submitted, setSubmitted] = useState(false);
+
 
   const numDiscount = parseLocaleFloat(discount);
   const numCashAmount = parseLocaleFloat(cashAmount);
@@ -106,6 +108,19 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
       setLeaveChangeAsCredit(false);
       setError('');
       setSaleCompleted(null);
+      setSubmitted(false);
+    } else {
+      // If dialog is closed and a payment was submitted, run the onSubmit callback
+      if (submitted && saleCompleted) {
+        onSubmit({
+          payments: saleCompleted.payments,
+          discountAmount: saleCompleted.discountAmount,
+          changeGiven: saleCompleted.changeGiven || 0,
+          status: 'completed',
+          leaveChangeAsCredit: saleCompleted.leaveChangeAsCredit || false,
+          cashTendered: saleCompleted.cashTendered || undefined,
+        });
+      }
     }
   }, [isOpen]);
 
@@ -138,7 +153,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay]);
 
 
-  const handleSubmit = () => {
+  const handleProcessPayment = () => {
     setError('');
 
     if (isSubmitDisabled) {
@@ -158,7 +173,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
     const finalCashTendered = numCashTendered > 0 ? numCashTendered : (numCashAmount > 0 ? numCashAmount : undefined);
     
-    const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || 0;
+    const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || totalAmount;
 
     const completedSale: Sale = {
         id: currentOrder?.id || `sale-${Date.now()}`,
@@ -169,21 +184,13 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         totalAmount: amountToPay,
         discountAmount: numDiscount,
         cashTendered: finalCashTendered,
-        changeGiven: creditToLeave,
+        changeGiven: creditToLeave > 0 ? creditToLeave : changeToReturn,
         status: 'completed',
         leaveChangeAsCredit: leaveChangeAsCredit && creditToLeave > 0,
     };
     
     setSaleCompleted(completedSale);
-
-    onSubmit({
-      payments,
-      discountAmount: numDiscount,
-      changeGiven: creditToLeave, 
-      status: 'completed',
-      leaveChangeAsCredit: leaveChangeAsCredit && creditToLeave > 0,
-      cashTendered: finalCashTendered,
-    });
+    setSubmitted(true); // Mark as submitted to trigger finalization on close
   };
 
   const handleDownloadReceipt = async () => {
@@ -260,7 +267,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
           <DialogTitle>{saleCompleted ? 'Venda Finalizada' : 'Processar Pagamento'}</DialogTitle>
           <DialogDescription>
             {saleCompleted 
-             ? `Recibo para a comanda ${currentOrder?.name}.`
+             ? `Recibo para ${currentOrder?.name || 'a venda'}.`
              : `Total Original da Comanda: ${formatCurrency(totalAmount)}`}
           </DialogDescription>
         </DialogHeader>
@@ -395,8 +402,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
                 <DialogClose asChild>
                     <Button variant="outline">Cancelar</Button>
                 </DialogClose>
-                <Button onClick={handleSubmit} disabled={isSubmitDisabled}>
-                    Confirmar Pagamento
+                <Button onClick={handleProcessPayment} disabled={isSubmitDisabled}>
+                    Realizar Pagamento
                 </Button>
             </>
           )}

@@ -137,6 +137,8 @@ export default function CounterSaleClient() {
     const finalTotal = orderTotal - details.discountAmount;
     
     addSale({
+      id: `countersale-${Date.now()}`,
+      name: 'Venda Balcão',
       items: currentOrderItems,
       originalAmount: orderTotal,
       discountAmount: details.discountAmount,
@@ -150,13 +152,31 @@ export default function CounterSaleClient() {
     
     setCurrentOrderItems([]); 
     localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    setIsPaymentDialogOpen(false);
+    // The toast is now shown from the PaymentDialog after closing
+    // setIsPaymentDialogOpen(false);
     toast({
       title: "Venda Balcão Concluída!",
       description: `Venda de ${formatCurrency(finalTotal)} registrada com sucesso.`,
       action: <CheckCircle className="text-green-500" />,
     });
   };
+  
+  const currentCounterOrder: Sale | undefined = useMemo(() => {
+    if (currentOrderItems.length === 0) return undefined;
+    return {
+        id: `countersale-${Date.now()}`,
+        name: 'Venda Balcão',
+        items: currentOrderItems,
+        totalAmount: orderTotal,
+        // Fill other required fields for the type, even if they are temporary
+        timestamp: new Date(),
+        payments: [],
+        originalAmount: orderTotal,
+        discountAmount: 0,
+        status: 'pending',
+    } as any;
+  }, [currentOrderItems, orderTotal]);
+
 
   if (isLoading) {
     return (
@@ -233,11 +253,11 @@ export default function CounterSaleClient() {
                         <div className="flex-shrink-0">
                           <IconComponent className="h-6 w-6 text-muted-foreground" />
                         </div>
-                        <div className="flex-grow">
+                        <div className="flex-grow min-w-0">
                           <p className="font-medium truncate text-xs">{item.name}</p>
                           <p className="text-[11px] text-muted-foreground">{formatCurrency(item.price)}</p>
                         </div>
-                        <div className="flex items-center gap-0.5">
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
                             <MinusCircle className="h-4 w-4" />
                           </Button>
@@ -249,7 +269,7 @@ export default function CounterSaleClient() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                        <p className="font-semibold w-20 text-right text-sm">{formatCurrency(item.price * item.quantity)}</p>
+                        <p className="font-semibold w-16 text-right text-sm flex-shrink-0">{formatCurrency(item.price * item.quantity)}</p>
                       </li>
                     );
                   })}
@@ -279,6 +299,7 @@ export default function CounterSaleClient() {
         isOpen={isPaymentDialogOpen}
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
+        currentOrder={currentCounterOrder}
         onSubmit={handlePayment as any}
         allowPartialPayment={false}
       />
