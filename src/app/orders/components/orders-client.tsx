@@ -444,8 +444,8 @@ export default function OrdersClient() {
   
   const handlePayment = useCallback((details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
     const allOrders = getOpenOrders();
-    const currentOrder = allOrders.find(o => o.id === currentOrderId);
-    if (!currentOrder) {
+    const currentOrderForPayment = allOrders.find(o => o.id === currentOrderId);
+    if (!currentOrderForPayment) {
       toast({ title: "Erro", description: "Nenhuma comanda selecionada para pagamento.", variant: "destructive"});
       return;
     }
@@ -464,7 +464,7 @@ export default function OrdersClient() {
             });
         }
         
-        const updatedOrder: ActiveOrder = { ...currentOrder, items: [...currentOrder.items, ...paymentItems] };
+        const updatedOrder: ActiveOrder = { ...currentOrderForPayment, items: [...currentOrderForPayment.items, ...paymentItems] };
         const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
         saveOpenOrders(newOpenOrders);
 
@@ -480,25 +480,25 @@ export default function OrdersClient() {
     
     // Full payment logic
     addSale({
-      items: currentOrder.items, originalAmount: consumedTotal, discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
+      items: currentOrderForPayment.items, originalAmount: consumedTotal, discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
     });
 
-    const hasUnclaimedCombos = currentOrder.items.some(item => 
+    const hasUnclaimedCombos = currentOrderForPayment.items.some(item => 
       item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1)
     );
 
     if (hasUnclaimedCombos) {
       const paidOrder: ActiveOrder = {
-        ...currentOrder,
-        items: [...currentOrder.items, {
+        ...currentOrderForPayment,
+        items: [...currentOrderForPayment.items, {
             id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -effectiveOrderTotal, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
         }],
         status: 'paid'
       };
       const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? paidOrder : o);
       saveOpenOrders(newOpenOrders);
-      toast({ title: "Comanda Paga!", description: `A comanda "${currentOrder.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
-      // We don't close the payment dialog here, it will be handled by the receipt view
+      toast({ title: "Comanda Paga!", description: `A comanda "${currentOrderForPayment.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
+      setIsPaymentDialogOpen(false);
       return;
     }
 
@@ -508,13 +508,13 @@ export default function OrdersClient() {
     
     if (details.leaveChangeAsCredit && details.changeGiven > 0) {
         const newCreditOrder: ActiveOrder = {
-            id: `order-credit-${Date.now()}`, name: `${currentOrder.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
+            id: `order-credit-${Date.now()}`, name: `${currentOrderForPayment.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
                 id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -details.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
             }], createdAt: new Date(),
         };
         nextOrdersState.push(newCreditOrder);
         nextSelectedOrderId = newCreditOrder.id;
-        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrder.name} com um crédito de ${formatCurrency(details.changeGiven)}.` });
+        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrderForPayment.name} com um crédito de ${formatCurrency(details.changeGiven)}.` });
     } else {
         if (nextOrdersState.length > 0) {
             nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
@@ -522,14 +522,14 @@ export default function OrdersClient() {
          if (!details.leaveChangeAsCredit) {
              toast({
                 title: "Venda Concluída!",
-                description: `Venda de ${formatCurrency(effectiveOrderTotal)} (${currentOrder.name}) registrada com sucesso.`,
+                description: `Venda de ${formatCurrency(effectiveOrderTotal)} (${currentOrderForPayment.name}) registrada com sucesso.`,
                 action: <CheckCircle className="text-green-500" />,
             });
          }
     }
     saveOpenOrders(nextOrdersState);
     setCurrentOrderId(nextSelectedOrderId);
-    // Do not close payment dialog here; it's handled by the parent component state or receipt view
+    setIsPaymentDialogOpen(false);
   }, [currentOrderId, orderTotal, consumedTotal, toast]);
   
   const allowPartialPayment = true;
@@ -1224,3 +1224,4 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+

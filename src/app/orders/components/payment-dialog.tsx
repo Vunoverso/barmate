@@ -97,20 +97,22 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   }, [calculatedCashChange, leaveChangeAsCredit]);
 
 
-  useEffect(() => {
-    if (isOpen) {
-      setDiscount('');
-      setCashAmount('');
-      setDebitAmount('');
-      setCreditAmount('');
-      setPixAmount('');
-      setCashTendered('');
-      setLeaveChangeAsCredit(false);
-      setError('');
-      setSaleCompleted(null);
-      setSubmitted(false);
-    } else {
-      // If dialog is closed and a payment was submitted, run the onSubmit callback
+  const resetState = () => {
+    setDiscount('');
+    setCashAmount('');
+    setDebitAmount('');
+    setCreditAmount('');
+    setPixAmount('');
+    setCashTendered('');
+    setLeaveChangeAsCredit(false);
+    setError('');
+    setSaleCompleted(null);
+    setSubmitted(false);
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      // If dialog is closing AND a payment has been submitted, finalize the transaction.
       if (submitted && saleCompleted) {
         onSubmit({
           payments: saleCompleted.payments,
@@ -121,8 +123,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
           cashTendered: saleCompleted.cashTendered || undefined,
         });
       }
+      // Always reset state when closing.
+      resetState();
     }
-  }, [isOpen]);
+    onOpenChange(open);
+  };
 
   const setPayFull = (method: PaymentMethod) => {
     const otherPaid = 
@@ -261,7 +266,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     };
   
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md grid grid-rows-[auto_1fr_auto] max-h-[90vh] p-0">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle>{saleCompleted ? 'Venda Finalizada' : 'Processar Pagamento'}</DialogTitle>

@@ -152,8 +152,7 @@ export default function CounterSaleClient() {
     
     setCurrentOrderItems([]); 
     localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    // The toast is now shown from the PaymentDialog after closing
-    // setIsPaymentDialogOpen(false);
+    setIsPaymentDialogOpen(false); // Close dialog after successful submission from it
     toast({
       title: "Venda Balcão Concluída!",
       description: `Venda de ${formatCurrency(finalTotal)} registrada com sucesso.`,
