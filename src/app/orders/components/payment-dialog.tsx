@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, Banknote, HelpCircle, Download } from "lucide-react";
+import { Terminal, Banknote, HelpCircle, Download, Printer } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -207,6 +207,52 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     }
   };
   
+    const handlePrintReceipt = () => {
+        const node = receiptRef.current;
+        if (!node) {
+            toast({ title: "Erro", description: "Não foi possível encontrar o recibo para imprimir.", variant: "destructive" });
+            return;
+        }
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write('<html><head><title>Recibo</title>');
+            // A simple stylesheet to somewhat mimic the component's style for printing
+            printWindow.document.write(`
+                <style>
+                    body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; }
+                    .receipt-container { max-width: 300px; margin: 0 auto; }
+                    table { width: 100%; border-collapse: collapse; }
+                    hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
+                    .text-center { text-align: center; }
+                    .font-bold { font-weight: bold; }
+                    .text-sm { font-size: 12px; }
+                    .text-xs { font-size: 10px; }
+                    .mb-2 { margin-bottom: 8px; }
+                    .w-full { width: 100%; }
+                    .text-left { text-align: left; }
+                    .text-right { text-align: right; }
+                    .align-top { vertical-align: top; }
+                    .uppercase { text-transform: uppercase; }
+                    .space-y-1 > * + * { margin-top: 4px; }
+                    .justify-between { display: flex; justify-content: space-between; }
+                    .capitalize { text-transform: capitalize; }
+                </style>
+            `);
+            printWindow.document.write('</head><body><div class="receipt-container">');
+            printWindow.document.write(node.innerHTML);
+            printWindow.document.write('</div></body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 250); // Timeout to ensure styles and content are loaded
+        } else {
+            toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
+        }
+    };
+  
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md grid grid-rows-[auto_1fr_auto] max-h-[90vh] p-0">
@@ -333,11 +379,15 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
           {saleCompleted ? (
             <>
                 <DialogClose asChild>
-                    <Button variant="outline">Fechar</Button>
+                    <Button variant="secondary">Fechar</Button>
                 </DialogClose>
+                <Button variant="outline" onClick={handlePrintReceipt}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Imprimir
+                </Button>
                 <Button onClick={handleDownloadReceipt}>
                     <Download className="mr-2 h-4 w-4" />
-                    Baixar Recibo
+                    Baixar
                 </Button>
             </>
           ) : (
@@ -355,4 +405,3 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
-
