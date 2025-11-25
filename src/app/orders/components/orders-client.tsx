@@ -55,6 +55,15 @@ const groupProductsByCategoryId = (products: Product[], categories: ProductCateg
   }, {} as Record<string, Product[]>);
 };
 
+const updateOrderNameBasedOnTotal = (order: ActiveOrder): ActiveOrder => {
+    const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    if (total >= 0) {
+        const newName = order.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '');
+        return { ...order, name: newName };
+    }
+    return order;
+};
+
 
 export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -308,7 +317,7 @@ export default function OrdersClient() {
     }
     const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
-          const newItems = [...order.items];
+          let newItems = [...order.items];
           
           if (product.isCombo) {
              const newComboItem: OrderItem = {
@@ -327,13 +336,17 @@ export default function OrdersClient() {
             }
           }
           
-          const updatedOrder = { ...order, items: newItems };
-          if (updatedOrder.status === 'paid') {
-            const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-            if (currentTotal > 0) { 
-              delete updatedOrder.status; 
-            }
+          let updatedOrder = { ...order, items: newItems };
+
+          // Clear 'paid' status if a new item is added and total becomes > 0
+          const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+          if (updatedOrder.status === 'paid' && currentTotal > 0) {
+            delete updatedOrder.status;
           }
+          
+          // Check if the order name needs to be cleaned up
+          updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
+
           return updatedOrder;
         }
         return order;
@@ -390,28 +403,33 @@ export default function OrdersClient() {
     if (!currentOrderId) return;
     const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
-          if (quantity <= 0) {
-            return { ...order, items: order.items.filter(item => item.id !== productId) };
-          }
-          return {
-            ...order,
-            items: order.items.map(item =>
-              item.id === productId ? { ...item, quantity } : item
-            ),
-          };
+            let updatedItems;
+            if (quantity <= 0) {
+                updatedItems = order.items.filter(item => item.id !== productId);
+            } else {
+                updatedItems = order.items.map(item =>
+                    item.id === productId ? { ...item, quantity } : item
+                );
+            }
+            let updatedOrder = { ...order, items: updatedItems };
+            updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
+            return updatedOrder;
         }
         return order;
-      });
+    });
     saveOpenOrders(updatedOrders);
   }, [currentOrderId]);
 
   const removeFromOrder = useCallback((productId: string) => {
     if (!currentOrderId) return;
-    const updatedOrders = getOpenOrders().map(order =>
-        order.id === currentOrderId
-          ? { ...order, items: order.items.filter(item => item.id !== productId) }
-          : order
-      );
+    const updatedOrders = getOpenOrders().map(order => {
+        if (order.id === currentOrderId) {
+            let updatedOrder = { ...order, items: order.items.filter(item => item.id !== productId) };
+            updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
+            return updatedOrder;
+        }
+        return order;
+    });
     saveOpenOrders(updatedOrders);
   }, [currentOrderId]);
 
@@ -1197,6 +1215,8 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
 
+
+    
 
     
 
