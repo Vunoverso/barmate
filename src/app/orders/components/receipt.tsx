@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Sale } from '@/types';
 import { formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
+import { useEffect, useState } from 'react';
 
 interface ReceiptProps {
   sale: Sale;
@@ -12,7 +13,16 @@ interface ReceiptProps {
 }
 
 export const Receipt = ({ sale, orderName }: ReceiptProps) => {
-  const barName = typeof window !== 'undefined' ? localStorage.getItem('barName') || 'BarMate' : 'BarMate';
+  const [barDetails, setBarDetails] = useState({ name: 'BarMate', cnpj: '', address: '' });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const name = localStorage.getItem('barName') || 'BarMate';
+      const cnpj = localStorage.getItem('barCnpj') || '';
+      const address = localStorage.getItem('barAddress') || '';
+      setBarDetails({ name, cnpj, address });
+    }
+  }, []);
 
   const consumedItems = sale.items.filter(item => item.price > 0);
   const creditItems = sale.items.filter(item => item.price < 0);
@@ -23,9 +33,9 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
   return (
     <div className="bg-white text-black font-mono p-4 max-w-sm w-full text-[10px] leading-tight">
       <div className="text-center mb-2">
-        <h2 className="font-bold text-sm">{barName}</h2>
-        <p>CNPJ: 00.000.000/0001-00</p>
-        <p>Rua Exemplo, 123 - Cidade/UF</p>
+        <h2 className="font-bold text-sm">{barDetails.name}</h2>
+        {barDetails.address && <p>{barDetails.address}</p>}
+        {barDetails.cnpj && <p>CNPJ: {barDetails.cnpj}</p>}
       </div>
 
       <hr className="border-dashed border-black my-2" />

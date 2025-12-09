@@ -76,7 +76,9 @@ export const DATA_KEYS = [
     'barmate_transactionFees_v2',
     'barmate_counterSaleOrderItems_v2',
     'barmate_closedCashSessions_v2',
-    'barName'
+    'barName',
+    'barCnpj',
+    'barAddress'
 ];
 const KEY_PRODUCT_CATEGORIES = 'barmate_productCategories_v2';
 const KEY_PRODUCTS = 'barmate_products_v2';

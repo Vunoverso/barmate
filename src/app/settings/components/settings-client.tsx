@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
+import { Textarea } from '@/components/ui/textarea';
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -178,7 +179,8 @@ function AddCategoryDialog({ isOpen, onOpenChange, onSave }: { isOpen: boolean; 
 export default function SettingsClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [barName, setBarName] = useState('');
-  const [initialBarName, setInitialBarName] = useState('');
+  const [barCnpj, setBarCnpj] = useState('');
+  const [barAddress, setBarAddress] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
   const [isImporting, setIsImporting] = useState(false);
@@ -189,9 +191,9 @@ export default function SettingsClient() {
   const { toast } = useToast();
 
   const loadData = useCallback(() => {
-    const storedName = localStorage.getItem('barName') || 'BarMate';
-    setBarName(storedName);
-    setInitialBarName(storedName);
+    setBarName(localStorage.getItem('barName') || 'BarMate');
+    setBarCnpj(localStorage.getItem('barCnpj') || '');
+    setBarAddress(localStorage.getItem('barAddress') || '');
     setTransactionFees(getTransactionFees());
     setProductCategories(getProductCategories());
   }, []);
@@ -205,22 +207,23 @@ export default function SettingsClient() {
     }
   }, [loadData]);
 
-  const handleSaveBarName = (e?: React.FormEvent) => {
+  const handleSaveCompanyDetails = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (barName.trim() === '') {
       toast({
         title: "Erro",
-        description: "O nome do bar não pode estar vazio.",
+        description: "O nome do estabelecimento não pode estar vazio.",
         variant: "destructive",
       });
       return;
     }
-    localStorage.setItem('barName', barName);
-    setInitialBarName(barName);
+    localStorage.setItem('barName', barName.trim());
+    localStorage.setItem('barCnpj', barCnpj.trim());
+    localStorage.setItem('barAddress', barAddress.trim());
     window.dispatchEvent(new Event('storage'));
     toast({
       title: "Sucesso!",
-      description: "Nome do bar atualizado.",
+      description: "Dados do estabelecimento atualizados.",
       action: <Save className="text-green-500" />,
     });
   };
@@ -234,8 +237,6 @@ export default function SettingsClient() {
         action: <Save className="text-green-500" />,
     });
   };
-
-  const isBarNameChanged = barName !== initialBarName;
 
   const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
   const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
@@ -288,8 +289,8 @@ export default function SettingsClient() {
             const data = localStorage.getItem(key);
             if (data !== null) {
                 try {
-                  // Ensure barName which is not JSON is handled
-                  if (key === 'barName') {
+                  // Handle non-JSON string values correctly
+                  if (key === 'barName' || key === 'barCnpj' || key === 'barAddress') {
                     backupData[key] = data;
                   } else {
                     backupData[key] = JSON.parse(data);
@@ -340,7 +341,7 @@ export default function SettingsClient() {
             
             Object.keys(data).forEach(key => {
                 if (DATA_KEYS.includes(key)) {
-                    if (key === 'barName' && typeof data[key] === 'string') {
+                    if (key === 'barName' || key === 'barCnpj' || key === 'barAddress') {
                       localStorage.setItem(key, data[key]);
                     } else {
                       localStorage.setItem(key, JSON.stringify(data[key]));
@@ -385,8 +386,8 @@ export default function SettingsClient() {
     return (
       <div className="space-y-8">
           <Card>
-            <CardHeader><CardTitle>Nome do Estabelecimento</CardTitle></CardHeader>
-            <CardContent><div className="h-10 w-1/2 bg-muted rounded-md animate-pulse"></div></CardContent>
+            <CardHeader><CardTitle>Dados do Estabelecimento</CardTitle></CardHeader>
+            <CardContent><div className="h-24 w-full bg-muted rounded-md animate-pulse"></div></CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Taxas de Transação</CardTitle></CardHeader>
@@ -409,24 +410,44 @@ export default function SettingsClient() {
     <>
       <div className="space-y-8">
         <Card>
-          <form onSubmit={handleSaveBarName}>
+          <form onSubmit={handleSaveCompanyDetails}>
             <CardHeader>
-              <CardTitle>Nome do Estabelecimento</CardTitle>
-              <CardDescription>Altere o nome do seu bar que será exibido no sistema.</CardDescription>
+              <CardTitle>Dados do Estabelecimento</CardTitle>
+              <CardDescription>Insira os dados da sua empresa que aparecerão nos recibos.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="barName">Nome do Bar</Label>
-                <Input
-                  id="barName"
-                  value={barName}
-                  onChange={(e) => setBarName(e.target.value)}
-                  placeholder="Digite o nome do bar"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="barName">Nome do Estabelecimento</Label>
+                  <Input
+                    id="barName"
+                    value={barName}
+                    onChange={(e) => setBarName(e.target.value)}
+                    placeholder="Digite o nome do bar"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="barCnpj">CNPJ</Label>
+                  <Input
+                    id="barCnpj"
+                    value={barCnpj}
+                    onChange={(e) => setBarCnpj(e.target.value)}
+                    placeholder="00.000.000/0001-00"
+                  />
+                </div>
               </div>
-              <Button type="submit" disabled={!isBarNameChanged || barName.trim() === ''}>
+              <div className="space-y-2">
+                  <Label htmlFor="barAddress">Endereço</Label>
+                  <Textarea
+                    id="barAddress"
+                    value={barAddress}
+                    onChange={(e) => setBarAddress(e.target.value)}
+                    placeholder="Rua Exemplo, 123 - Bairro, Cidade - UF, CEP"
+                  />
+              </div>
+              <Button type="submit">
                 <Save className="mr-2 h-4 w-4" />
-                Salvar Nome do Bar
+                Salvar Dados
               </Button>
             </CardContent>
           </form>
@@ -656,5 +677,3 @@ export default function SettingsClient() {
     </>
   );
 }
-
-    
