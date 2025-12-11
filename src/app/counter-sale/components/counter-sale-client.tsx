@@ -152,7 +152,7 @@ export default function CounterSaleClient() {
     
     setCurrentOrderItems([]); 
     localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    setIsPaymentDialogOpen(false); // Close dialog after successful submission from it
+    setIsPaymentDialogOpen(false); 
     toast({
       title: "Venda Balcão Concluída!",
       description: `Venda de ${formatCurrency(finalTotal)} registrada com sucesso.`,
@@ -167,7 +167,6 @@ export default function CounterSaleClient() {
         name: 'Venda Balcão',
         items: currentOrderItems,
         totalAmount: orderTotal,
-        // Fill other required fields for the type, even if they are temporary
         timestamp: new Date(),
         payments: [],
         originalAmount: orderTotal,
@@ -299,7 +298,7 @@ export default function CounterSaleClient() {
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
         currentOrder={currentCounterOrder}
-        onSubmit={handlePayment as any}
+        onSubmit={handlePayment}
         allowPartialPayment={false}
       />
     </div>

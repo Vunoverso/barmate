@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
@@ -73,18 +72,21 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
   const numCashTendered = parseLocaleFloat(cashTendered);
   const calculatedCashChange = useMemo(() => {
-    // If a specific cash tendered amount is entered, use it to calculate change against the cash portion of the payment
-    if (numCashTendered > 0 && numCashAmount > 0) {
-      return Math.max(0, numCashTendered - numCashAmount);
+    // If a specific cash tendered amount is entered, calculate change against the TOTAL amount to pay
+    if (numCashTendered > 0 && numCashTendered > remainingToPay) {
+      // Change is the difference between what was given and what was owed in total (after other payments)
+      const totalOwedAfterOtherPayments = amountToPay - (totalPaid - numCashAmount);
+      if (numCashTendered > totalOwedAfterOtherPayments) {
+        return numCashTendered - totalOwedAfterOtherPayments;
+      }
     }
-    // Otherwise, if there is overpayment in total, consider that as potential change/credit
+     // Legacy logic for overpayment across all methods
     if (totalPaid > amountToPay) {
-      // The change is the portion of the overpayment made in cash
       const overpayment = totalPaid - amountToPay;
       return Math.min(overpayment, numCashAmount);
     }
     return 0;
-  }, [numCashAmount, numCashTendered, totalPaid, amountToPay]);
+  }, [numCashAmount, numCashTendered, totalPaid, amountToPay, remainingToPay]);
   
   const changeToReturn = useMemo(() => {
     if (leaveChangeAsCredit) return 0;
@@ -112,7 +114,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      // If dialog is closing AND a payment has been submitted, finalize the transaction.
       if (submitted && saleCompleted) {
         onSubmit({
           payments: saleCompleted.payments,
@@ -123,7 +124,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
           cashTendered: saleCompleted.cashTendered || undefined,
         });
       }
-      // Always reset state when closing.
       resetState();
     }
     onOpenChange(open);
@@ -151,7 +151,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
       return true;
     }
     if (!allowPartialPayment && roundedRemaining !== 0) {
-        // Allow for small floating point inaccuracies by checking against a small epsilon
         return Math.abs(roundedRemaining) > 0.01;
     }
     return false;
@@ -195,7 +194,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     };
     
     setSaleCompleted(completedSale);
-    setSubmitted(true); // Mark as submitted to trigger finalization on close
+    setSubmitted(true);
   };
 
   const handleDownloadReceipt = async () => {
@@ -205,7 +204,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     };
     try {
         const canvas = await html2canvas(receiptRef.current, {
-            scale: 2, // Higher scale for better quality
+            scale: 2, 
             backgroundColor: '#ffffff',
         });
         const image = canvas.toDataURL('image/png');
@@ -229,7 +228,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         const printWindow = window.open('', '_blank');
         if (printWindow) {
             printWindow.document.write('<html><head><title>Recibo</title>');
-            // A simple stylesheet to somewhat mimic the component's style for printing
             printWindow.document.write(`
                 <style>
                     body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; }
@@ -259,7 +257,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             setTimeout(() => {
                 printWindow.print();
                 printWindow.close();
-            }, 250); // Timeout to ensure styles and content are loaded
+            }, 250); 
         } else {
             toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
         }
@@ -336,7 +334,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
               }
             </div>
             
-            {numCashAmount > 0 && (
+            {(numCashAmount > 0 || remainingToPay <= 0) && (
               <div className="space-y-3 p-3 bg-muted/50 rounded-md">
                   <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
                   <div className="space-y-1">
@@ -389,24 +387,22 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
         <DialogFooter className="p-6 pt-4 border-t">
           {saleCompleted ? (
-            <>
-                <DialogClose asChild>
-                    <Button variant="secondary">Fechar</Button>
-                </DialogClose>
-                <Button variant="outline" onClick={handlePrintReceipt}>
-                    <Printer className="mr-2 h-4 w-4" />
-                    Imprimir
-                </Button>
-                <Button onClick={handleDownloadReceipt}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Baixar
-                </Button>
-            </>
+            <div className="w-full flex justify-between">
+                <Button variant="secondary" onClick={() => handleOpenChange(false)}>Fechar</Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={handlePrintReceipt}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Imprimir
+                    </Button>
+                    <Button onClick={handleDownloadReceipt}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Baixar
+                    </Button>
+                </div>
+            </div>
           ) : (
             <>
-                <DialogClose asChild>
-                    <Button variant="outline">Cancelar</Button>
-                </DialogClose>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
                 <Button onClick={handleProcessPayment} disabled={isSubmitDisabled}>
                     Realizar Pagamento
                 </Button>
