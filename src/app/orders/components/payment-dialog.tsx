@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
@@ -51,7 +52,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [creditAmount, setCreditAmount] = useState<string>('');
   const [pixAmount, setPixAmount] = useState<string>('');
   const [cashTendered, setCashTendered] = useState<string>('');
-  const [leaveChangeAsCredit, setLeaveChangeAsCredit] = useState(false);
+  const [changeReturned, setChangeReturned] = useState('');
   const [error, setError] = useState<string>('');
   const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -71,32 +72,32 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const remainingToPay = useMemo(() => amountToPay - totalPaid, [amountToPay, totalPaid]);
 
   const numCashTendered = parseLocaleFloat(cashTendered);
-  const calculatedCashChange = useMemo(() => {
-    // If a specific cash tendered amount is entered, calculate change against the TOTAL amount to pay
-    if (numCashTendered > 0 && numCashTendered > remainingToPay) {
-      // Change is the difference between what was given and what was owed in total (after other payments)
-      const totalOwedAfterOtherPayments = amountToPay - (totalPaid - numCashAmount);
-      if (numCashTendered > totalOwedAfterOtherPayments) {
-        return numCashTendered - totalOwedAfterOtherPayments;
-      }
-    }
-     // Legacy logic for overpayment across all methods
-    if (totalPaid > amountToPay) {
-      const overpayment = totalPaid - amountToPay;
-      return Math.min(overpayment, numCashAmount);
-    }
-    return 0;
-  }, [numCashAmount, numCashTendered, totalPaid, amountToPay, remainingToPay]);
-  
-  const changeToReturn = useMemo(() => {
-    if (leaveChangeAsCredit) return 0;
-    return calculatedCashChange;
-  }, [calculatedCashChange, leaveChangeAsCredit]);
+  const numChangeReturned = parseLocaleFloat(changeReturned);
 
-  const creditToLeave = useMemo(() => {
-    if (!leaveChangeAsCredit) return 0;
-    return calculatedCashChange;
-  }, [calculatedCashChange, leaveChangeAsCredit]);
+  const { totalChange, creditToLeave } = useMemo(() => {
+    const totalOwedAfterOtherPayments = amountToPay - (totalPaid - numCashAmount);
+
+    if (numCashTendered > 0 && numCashTendered > totalOwedAfterOtherPayments) {
+        const calculatedTotalChange = numCashTendered - totalOwedAfterOtherPayments;
+        const calculatedCreditToLeave = calculatedTotalChange - numChangeReturned;
+        return {
+            totalChange: Math.max(0, calculatedTotalChange),
+            creditToLeave: Math.max(0, calculatedCreditToLeave)
+        };
+    }
+    // Handle overpayment case
+    if (totalPaid > amountToPay) {
+        const overpayment = totalPaid - amountToPay;
+        const totalChange = Math.min(overpayment, numCashAmount); // Only cash can generate change
+        const calculatedCreditToLeave = totalChange - numChangeReturned;
+        return {
+            totalChange: Math.max(0, totalChange),
+            creditToLeave: Math.max(0, calculatedCreditToLeave)
+        };
+    }
+
+    return { totalChange: 0, creditToLeave: 0 };
+  }, [amountToPay, totalPaid, numCashAmount, numCashTendered, numChangeReturned]);
 
 
   const resetState = () => {
@@ -106,7 +107,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     setCreditAmount('');
     setPixAmount('');
     setCashTendered('');
-    setLeaveChangeAsCredit(false);
+    setChangeReturned('');
     setError('');
     setSaleCompleted(null);
     setSubmitted(false);
@@ -178,6 +179,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     const finalCashTendered = numCashTendered > 0 ? numCashTendered : (numCashAmount > 0 ? numCashAmount : undefined);
     
     const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || totalAmount;
+    
+    const finalChangeGiven = Math.round(creditToLeave * 100) / 100;
 
     const completedSale: Sale = {
         id: currentOrder?.id || `sale-${Date.now()}`,
@@ -188,9 +191,9 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         totalAmount: amountToPay,
         discountAmount: numDiscount,
         cashTendered: finalCashTendered,
-        changeGiven: creditToLeave > 0 ? creditToLeave : changeToReturn,
+        changeGiven: finalChangeGiven,
         status: 'completed',
-        leaveChangeAsCredit: leaveChangeAsCredit && creditToLeave > 0,
+        leaveChangeAsCredit: finalChangeGiven > 0,
     };
     
     setSaleCompleted(completedSale);
@@ -339,34 +342,23 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
                   <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
                   <div className="space-y-1">
                       <Label htmlFor="cashTendered">Valor Entregue (Dinheiro)</Label>
-                      <Input id="cashTendered" type="text" placeholder="0,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="h-9"/>
+                      <Input id="cashTendered" type="text" placeholder="Ex: 50,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="h-9"/>
                   </div>
-                  {calculatedCashChange > 0 && (
+                  {totalChange > 0 && (
                      <div className="space-y-2">
                         <div className="flex justify-between items-center">
-                            <p className="text-sm font-medium">Troco Calculado:</p>
-                            <p className="text-green-600 font-bold">{formatCurrency(calculatedCashChange)}</p>
+                            <p className="text-sm font-medium">Troco Total Calculado:</p>
+                            <p className="font-bold">{formatCurrency(totalChange)}</p>
                         </div>
-                        {allowCredit && (
-                          <>
-                           <div className="items-top flex space-x-2">
-                            <Checkbox id="leaveCredit" checked={leaveChangeAsCredit} onCheckedChange={(checked) => setLeaveChangeAsCredit(checked as boolean)} />
-                            <div className="grid gap-1.5 leading-none">
-                              <label
-                                htmlFor="leaveCredit"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                              >
-                                Deixar troco como crédito
-                              </label>
-                              <p className="text-xs text-muted-foreground">
-                                Uma nova comanda será aberta com o valor do troco como crédito.
-                              </p>
-                            </div>
-                           </div>
-                           <div className="text-sm text-blue-600 text-center font-medium pt-1">
-                            {creditToLeave > 0 ? `Crédito a gerar: ${formatCurrency(creditToLeave)}` : `Troco a devolver: ${formatCurrency(changeToReturn)}`}
-                           </div>
-                          </>
+                        <div className="space-y-1">
+                           <Label htmlFor="changeReturned">Troco Devolvido ao Cliente</Label>
+                           <Input id="changeReturned" type="text" placeholder="Ex: 30,00" value={changeReturned} onChange={e => setChangeReturned(e.target.value)} className="h-9"/>
+                        </div>
+                        {creditToLeave > 0 && (
+                          <div className="flex justify-between items-center text-sm text-blue-600 font-medium pt-1">
+                              <span>Crédito a Gerar (Troco Restante):</span>
+                              <strong>{formatCurrency(creditToLeave)}</strong>
+                          </div>
                         )}
                      </div>
                   )}
