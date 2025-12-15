@@ -511,7 +511,7 @@ export default function OrdersClient() {
       return;
     }
 
-    addSale(sale);
+    addSale({ ...sale, name: currentOrderForPayment.name });
 
     const hasUnclaimedCombos = currentOrderForPayment.items.some(item => 
       item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1)
@@ -1363,6 +1363,7 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     
 
     
+
 
 
 

@@ -248,7 +248,7 @@ export const addSale = (sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
 
-  const saleName = (sale as any).name || `Venda #${newSale.id.slice(-6)}`;
+  const saleName = 'name' in sale ? sale.name : `Venda #${newSale.id.slice(-6)}`;
   
   newSale.payments.forEach((p: Payment) => {
     if (p.amount <= 0) return;

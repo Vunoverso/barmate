@@ -376,16 +376,23 @@ export default function ClientsClient() {
         />
       )}
       
-      <PaymentDialog
+       <PaymentDialog
         isOpen={isPaymentDialogOpen}
         onOpenChange={(open) => {
             if (!open) {
                 setIsPaymentDialogOpen(false);
+                 // Optionally refetch data if payment might have been completed
+                if(viewingDebtClient) fetchData();
+                setViewingDebtClient(null);
+            } else {
+                setIsPaymentDialogOpen(true);
             }
         }}
         totalAmount={viewingDebtClient?.debtAmount || 0}
         currentOrder={debtOrderForPayment}
-        onSubmit={handleSettleDebt}
+        onSubmit={(details: any) => { // Using 'any' as defined in original code for this part
+            handleSettleDebt(details);
+        }}
         allowCredit={false}
         allowPartialPayment={false}
       />
