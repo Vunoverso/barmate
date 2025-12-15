@@ -328,7 +328,7 @@ export default function FinancialClient() {
             if (item.type === 'income') acc[key].income += item.amount;
             else acc[key].expenses += item.amount;
             return acc;
-        }, {} as Record<string, { period: string, income: number, expenses: number }>);
+        }, {} as Record<string, { period: string, income: 0, expenses: 0 }>);
 
         const weekly = entriesToProcess.reduce((acc, item) => {
             const date = new Date(item.timestamp);
@@ -340,7 +340,7 @@ export default function FinancialClient() {
             if (item.type === 'income') acc[key].income += item.amount;
             else acc[key].expenses += item.amount;
             return acc;
-        }, {} as Record<string, { period: string, income: number, expenses: number }>);
+        }, {} as Record<string, { period: string, income: 0, expenses: 0 }>);
         
         const processSummary = (group: any) => Object.values(group)
             .map((value: any) => ({ ...value, balance: value.income - value.expenses }))
@@ -1268,3 +1268,5 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
         </Dialog>
     );
 }
+
+    
