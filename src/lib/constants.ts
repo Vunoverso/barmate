@@ -205,10 +205,11 @@ export const saveProducts = (products: Product[]) => saveToLocalStorage(KEY_PROD
 
 export const getSales = (): Sale[] => {
   const sales = getFromLocalStorage<Sale[]>(KEY_SALES, INITIAL_SALES);
-  // Data sanitization: ensure every sale has a `payments` array.
+  // Data sanitization: ensure every sale has `payments` and `items` arrays.
   return sales.map(sale => ({
     ...sale,
     payments: sale.payments || [],
+    items: sale.items || [],
   }));
 };
 export const saveSales = (sales: Sale[]) => saveToLocalStorage(KEY_SALES, sales);
