@@ -133,21 +133,13 @@ export default function CounterSaleClient() {
     return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
 
-  const handlePayment = (details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
-    const finalTotal = orderTotal - details.discountAmount;
-    
+  const handlePayment = (details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'>; leaveChangeAsCredit: boolean; isPartial: boolean; }) => {
+    const { sale } = details;
+
     addSale({
+      ...sale,
       id: `countersale-${Date.now()}`,
       name: 'Venda Balcão',
-      items: currentOrderItems,
-      originalAmount: orderTotal,
-      discountAmount: details.discountAmount,
-      totalAmount: finalTotal,
-      payments: details.payments,
-      changeGiven: details.changeGiven,
-      status: 'completed',
-      cashTendered: details.cashTendered,
-      leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
     });
     
     setCurrentOrderItems([]); 
@@ -155,7 +147,7 @@ export default function CounterSaleClient() {
     setIsPaymentDialogOpen(false); 
     toast({
       title: "Venda Balcão Concluída!",
-      description: `Venda de ${formatCurrency(finalTotal)} registrada com sucesso.`,
+      description: `Venda de ${formatCurrency(sale.totalAmount)} registrada com sucesso.`,
       action: <CheckCircle className="text-green-500" />,
     });
   };
