@@ -76,6 +76,7 @@ export const DATA_KEYS = [
     'barmate_transactionFees_v2',
     'barmate_counterSaleOrderItems_v2',
     'barmate_closedCashSessions_v2',
+    'barmate_archivedOrders_v2',
     'barName',
     'barCnpj',
     'barAddress'
@@ -89,6 +90,7 @@ const KEY_FINANCIAL_ENTRIES = 'barmate_financialEntries_v2';
 const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
 const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
 export const KEY_CLOSED_SESSIONS = 'barmate_closedCashSessions_v2';
+const KEY_ARCHIVED_ORDERS = 'barmate_archivedOrders_v2';
 const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
 const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
 const KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES = 'barmate_session_visuallyRemovedFinancialEntries';
@@ -144,6 +146,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 ];
 export const INITIAL_SALES: Sale[] = [];
 export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
+export const INITIAL_ARCHIVED_ORDERS: ActiveOrder[] = [];
 export const INITIAL_CLIENTS: Client[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
@@ -206,6 +209,10 @@ export const saveSales = (sales: Sale[]) => saveToLocalStorage(KEY_SALES, sales)
 export const getOpenOrders = (): ActiveOrder[] => getFromLocalStorage(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
 export const saveOpenOrders = (orders: ActiveOrder[]) => saveToLocalStorage(KEY_OPEN_ORDERS, orders);
 
+export const getArchivedOrders = (): ActiveOrder[] => getFromLocalStorage(KEY_ARCHIVED_ORDERS, INITIAL_ARCHIVED_ORDERS);
+export const saveArchivedOrders = (orders: ActiveOrder[]) => saveToLocalStorage(KEY_ARCHIVED_ORDERS, orders);
+
+
 export const getClients = (): Client[] => getFromLocalStorage(KEY_CLIENTS, INITIAL_CLIENTS);
 export const saveClients = (clients: Client[]) => saveToLocalStorage(KEY_CLIENTS, clients);
 
@@ -227,11 +234,11 @@ export const saveVisuallyRemovedAdjustments = (ids: string[]) => saveToSessionSt
 
 // --- Business Logic Functions ---
 
-export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Date }) => {
+export const addSale = (sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: string, timestamp?: Date })) => {
   const newSale: Sale = {
-    ...sale,
     id: `sale-${Date.now()}`,
-    timestamp: sale.timestamp || new Date(),
+    timestamp: new Date(),
+    ...sale,
   };
 
   const currentSales = getSales();
@@ -241,16 +248,7 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
   const fees = getTransactionFees();
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
 
-  const netConsumed = newSale.items
-    .filter(item => item.price > 0)
-    .reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-  const totalCreditUsed = newSale.items
-    .filter(item => item.price < 0)
-    .reduce((sum, item) => sum + Math.abs(item.price * item.quantity), 0);
-  
-  const totalPaid = newSale.payments.reduce((sum, p) => sum + p.amount, 0);
-  const totalOwed = netConsumed - totalCreditUsed;
+  const saleName = (sale as any).name || `Venda #${newSale.id.slice(-6)}`;
   
   newSale.payments.forEach((p: Payment) => {
     if (p.amount <= 0) return;
@@ -264,7 +262,7 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
       const feeAmount = p.amount * (feeRate / 100);
       
       newFinancialEntries.push({
-        description: `Venda #${newSale.id.slice(-6)} via ${p.method}`,
+        description: `${saleName} via ${p.method}`,
         amount: p.amount,
         type: 'income',
         source: 'bank_account',
@@ -274,7 +272,7 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
 
       if (feeAmount > 0) {
         newFinancialEntries.push({
-          description: `Taxa ${p.method} venda #${newSale.id.slice(-6)}`,
+          description: `Taxa ${p.method} ${saleName}`,
           amount: feeAmount,
           type: 'expense',
           source: 'bank_account',
@@ -286,7 +284,7 @@ export const addSale = (sale: Omit<Sale, 'id' | 'timestamp'> & { timestamp?: Dat
         const netCash = p.amount - (newSale.changeGiven || 0);
         if(netCash > 0) {
           newFinancialEntries.push({
-             description: `Venda #${newSale.id.slice(-6)} em dinheiro`,
+             description: `${saleName} em dinheiro`,
              amount: netCash,
              type: 'income',
              source: 'daily_cash',
@@ -336,7 +334,7 @@ export const clearFinancialData = () => {
         saveToLocalStorage(KEY_CLOSED_SESSIONS, []);
         saveToLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
         saveToLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-        window.dispatchEvent(new StorageEvent('storage'));
+        window.dispatchEvent(new Event('storage'));
     }
 };
 

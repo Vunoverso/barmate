@@ -2,7 +2,7 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
-import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients } from '@/lib/constants';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients, getArchivedOrders, saveArchivedOrders } from '@/lib/constants';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -245,17 +245,11 @@ export default function OrdersClient() {
     const handleArchiveOrder = useCallback(() => {
         if (!orderToArchive || !orderToArchive.clientId) return;
 
-        const debtAmount = orderToArchive.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        // Save the order to the archived list
+        const allArchivedOrders = getArchivedOrders();
+        saveArchivedOrders([...allArchivedOrders, orderToArchive]);
 
-        const allClients = getClients();
-        const updatedClients = allClients.map(c => {
-            if (c.id === orderToArchive.clientId) {
-                return { ...c, debtAmount: (c.debtAmount || 0) + debtAmount };
-            }
-            return c;
-        });
-        saveClients(updatedClients);
-
+        // Remove from open orders
         const oldOrders = getOpenOrders();
         const updatedOrders = oldOrders.filter(order => order.id !== orderToArchive.id);
 
@@ -508,7 +502,8 @@ export default function OrdersClient() {
     return { orderTotal: total, consumedTotal: consumed };
   }, [currentOrderItems]);
   
-  const handlePayment = useCallback((details: { payments: Payment[]; changeGiven: number; discountAmount: number; status: 'completed', leaveChangeAsCredit: boolean, cashTendered?: number; }) => {
+  const handlePayment = useCallback((details: { sale: Sale, leaveChangeAsCredit: boolean }) => {
+    const { sale } = details;
     const allOrders = getOpenOrders();
     const currentOrderForPayment = allOrders.find(o => o.id === currentOrderId);
     if (!currentOrderForPayment) {
@@ -516,38 +511,7 @@ export default function OrdersClient() {
       return;
     }
 
-    const totalPaid = details.payments.reduce((sum, p) => sum + p.amount, 0);
-    const effectiveOrderTotal = orderTotal - details.discountAmount;
-
-    if (allowPartialPayment && totalPaid < effectiveOrderTotal) { // Explicit check for partial payment
-        const paymentItems: OrderItem[] = details.payments.map(p => ({
-            id: `payment-${p.method}-${Date.now()}`, name: `Pagamento Parcial (${p.method})`, price: -p.amount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null
-        }));
-
-        if (details.discountAmount > 0) {
-            paymentItems.push({
-                id: `discount-${Date.now()}`, name: `Desconto Aplicado`, price: -details.discountAmount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null
-            });
-        }
-        
-        const updatedOrder: ActiveOrder = { ...currentOrderForPayment, items: [...currentOrderForPayment.items, ...paymentItems] };
-        const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
-        saveOpenOrders(newOpenOrders);
-
-        // For partial payments, we only log the payment itself as a "sale" of services
-        addSale({
-            items: paymentItems.map(pi => ({...pi, price: Math.abs(pi.price)})), originalAmount: totalPaid, discountAmount: 0, totalAmount: totalPaid, payments: details.payments, changeGiven: 0, status: 'completed', cashTendered: details.cashTendered
-        });
-        
-        toast({ title: "Pagamento Parcial Registrado", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
-        setIsPaymentDialogOpen(false);
-        return;
-    }
-    
-    // Full payment logic
-    addSale({
-      items: currentOrderForPayment.items, originalAmount: consumedTotal, discountAmount: details.discountAmount, totalAmount: effectiveOrderTotal, payments: details.payments, changeGiven: details.changeGiven, status: 'completed', cashTendered: details.cashTendered, leaveChangeAsCredit: details.leaveChangeAsCredit && details.changeGiven > 0,
-    });
+    addSale(sale);
 
     const hasUnclaimedCombos = currentOrderForPayment.items.some(item => 
       item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1)
@@ -557,7 +521,7 @@ export default function OrdersClient() {
       const paidOrder: ActiveOrder = {
         ...currentOrderForPayment,
         items: [...currentOrderForPayment.items, {
-            id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -effectiveOrderTotal, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+            id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -sale.totalAmount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
         }],
         status: 'paid'
       };
@@ -572,15 +536,15 @@ export default function OrdersClient() {
     let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
     let nextSelectedOrderId: string | null = null;
     
-    if (details.leaveChangeAsCredit && details.changeGiven > 0) {
+    if (details.leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
         const newCreditOrder: ActiveOrder = {
             id: `order-credit-${Date.now()}`, name: `${currentOrderForPayment.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
-                id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -details.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
-            }], createdAt: new Date(),
+                id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+            }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
         };
         nextOrdersState.push(newCreditOrder);
         nextSelectedOrderId = newCreditOrder.id;
-        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrderForPayment.name} com um crédito de ${formatCurrency(details.changeGiven)}.` });
+        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrderForPayment.name} com um crédito de ${formatCurrency(sale.changeGiven)}.` });
     } else {
         if (nextOrdersState.length > 0) {
             nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
@@ -588,7 +552,7 @@ export default function OrdersClient() {
          if (!details.leaveChangeAsCredit) {
              toast({
                 title: "Venda Concluída!",
-                description: `Venda de ${formatCurrency(effectiveOrderTotal)} (${currentOrderForPayment.name}) registrada com sucesso.`,
+                description: `Venda de ${formatCurrency(sale.totalAmount)} (${currentOrderForPayment.name}) registrada com sucesso.`,
                 action: <CheckCircle className="text-green-500" />,
             });
          }
@@ -1399,6 +1363,7 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     
 
     
+
 
 
 

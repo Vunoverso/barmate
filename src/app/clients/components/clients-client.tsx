@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { Client } from '@/types';
-import { getClients, saveClients, formatCurrency } from '@/lib/constants';
+import type { Client, ActiveOrder } from '@/types';
+import { getClients, saveClients, formatCurrency, getArchivedOrders, saveArchivedOrders, addSale } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -50,6 +50,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Badge } from '@/components/ui/badge';
+import PaymentDialog from '@/app/orders/components/payment-dialog';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const clientSchema = z.object({
   name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
@@ -66,12 +69,23 @@ export default function ClientsClient() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [viewingDebtClient, setViewingDebtClient] = useState<Client | null>(null);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const { toast } = useToast();
 
   const fetchData = useCallback(() => {
     setIsLoading(true);
-    setClients(getClients());
+    const allClients = getClients();
+    const allArchivedOrders = getArchivedOrders();
+    // Recalculate debt for all clients based on archived orders
+    const clientsWithDebt = allClients.map(client => {
+      const clientDebt = allArchivedOrders
+        .filter(order => order.clientId === client.id)
+        .reduce((sum, order) => sum + order.items.reduce((orderSum, item) => orderSum + item.price * item.quantity, 0), 0);
+      return { ...client, debtAmount: clientDebt };
+    });
+    setClients(clientsWithDebt);
     setIsLoading(false);
   }, []);
 
@@ -126,8 +140,41 @@ export default function ClientsClient() {
     if (!clientToDelete) return;
     const updatedClients = clients.filter(c => c.id !== clientToDelete.id);
     saveClients(updatedClients);
+    // Also remove their archived orders to clean up
+    const allArchivedOrders = getArchivedOrders();
+    const remainingArchivedOrders = allArchivedOrders.filter(order => order.clientId !== clientToDelete.id);
+    saveArchivedOrders(remainingArchivedOrders);
+
     toast({ title: "Cliente Removido", description: `${clientToDelete.name} foi removido da lista.`, variant: "destructive" });
     setClientToDelete(null);
+  };
+  
+  const handleSettleDebt = (details: any) => {
+    if (!viewingDebtClient) return;
+
+    const allArchived = getArchivedOrders();
+    const clientDebtOrders = allArchived.filter(order => order.clientId === viewingDebtClient.id);
+    const debtItems = clientDebtOrders.flatMap(o => o.items);
+    
+    addSale({
+      items: debtItems,
+      name: `Quitação de Dívida: ${viewingDebtClient.name}`,
+      originalAmount: viewingDebtClient.debtAmount || 0,
+      discountAmount: details.discountAmount,
+      totalAmount: (viewingDebtClient.debtAmount || 0) - details.discountAmount,
+      payments: details.payments,
+      changeGiven: details.changeGiven,
+      status: 'completed',
+    });
+    
+    // Remove archived orders for this client
+    const remainingArchived = allArchived.filter(order => order.clientId !== viewingDebtClient.id);
+    saveArchivedOrders(remainingArchived);
+    
+    toast({ title: "Dívida Quitada!", description: `O saldo devedor de ${viewingDebtClient.name} foi zerado.` });
+    setIsPaymentDialogOpen(false);
+    setViewingDebtClient(null);
+    fetchData(); // Refresh data
   };
 
   const filteredClients = useMemo(() => {
@@ -135,6 +182,21 @@ export default function ClientsClient() {
       client.name.toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a,b) => a.name.localeCompare(b.name));
   }, [clients, searchTerm]);
+  
+  const debtOrderForPayment = useMemo(() => {
+    if (!viewingDebtClient) return undefined;
+    const allArchivedOrders = getArchivedOrders();
+    const clientDebtOrders = allArchivedOrders.filter(o => o.clientId === viewingDebtClient.id);
+    
+    return {
+        id: `debt-payment-${viewingDebtClient.id}`,
+        name: `Dívida de ${viewingDebtClient.name}`,
+        items: clientDebtOrders.flatMap(o => o.items),
+        totalAmount: viewingDebtClient.debtAmount || 0,
+        createdAt: new Date(),
+    } as ActiveOrder
+  }, [viewingDebtClient]);
+
 
   if (isLoading) {
     return <p>Carregando clientes...</p>;
@@ -183,7 +245,9 @@ export default function ClientsClient() {
                   <TableCell>{client.phone || '-'}</TableCell>
                    <TableCell>
                     {(client.debtAmount ?? 0) > 0 ? (
-                      <Badge variant="destructive">{formatCurrency(client.debtAmount || 0)}</Badge>
+                      <Button variant="link" className="p-0 h-auto" onClick={() => setViewingDebtClient(client)}>
+                        <Badge variant="destructive">{formatCurrency(client.debtAmount || 0)}</Badge>
+                      </Button>
                     ) : (
                       formatCurrency(0)
                     )}
@@ -290,7 +354,7 @@ export default function ClientsClient() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
               <AlertDialogDescription>
-                Tem certeza que deseja remover o cliente "{clientToDelete.name}"? Esta ação não pode ser desfeita.
+                Tem certeza que deseja remover o cliente "{clientToDelete.name}"? Todas as dívidas arquivadas dele também serão removidas. Esta ação não pode ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -302,6 +366,92 @@ export default function ClientsClient() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {viewingDebtClient && (
+        <DebtDetailsDialog
+          client={viewingDebtClient}
+          isOpen={!!viewingDebtClient}
+          onOpenChange={() => setViewingDebtClient(null)}
+          onSettleDebt={() => setIsPaymentDialogOpen(true)}
+        />
+      )}
+      
+      <PaymentDialog
+        isOpen={isPaymentDialogOpen}
+        onOpenChange={(open) => {
+            if (!open) {
+                setIsPaymentDialogOpen(false);
+            }
+        }}
+        totalAmount={viewingDebtClient?.debtAmount || 0}
+        currentOrder={debtOrderForPayment}
+        onSubmit={handleSettleDebt}
+        allowCredit={false}
+        allowPartialPayment={false}
+      />
     </>
+  );
+}
+
+interface DebtDetailsDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  client: Client;
+  onSettleDebt: () => void;
+}
+
+function DebtDetailsDialog({ isOpen, onOpenChange, client, onSettleDebt }: DebtDetailsDialogProps) {
+  const archivedOrders = useMemo(() => {
+    return getArchivedOrders().filter(order => order.clientId === client.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [client.id]);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Extrato de Dívida: {client.name}</DialogTitle>
+          <DialogDescription>
+            Abaixo estão as comandas arquivadas que compõem o saldo devedor de <strong className="text-foreground">{formatCurrency(client.debtAmount || 0)}</strong>.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          {archivedOrders.length > 0 ? (
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+              {archivedOrders.map(order => (
+                <Card key={order.id}>
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-base flex justify-between">
+                      <span>Comanda: {order.name}</span>
+                      <span>{formatCurrency(order.items.reduce((sum, item) => sum + item.price * item.quantity, 0))}</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Arquivada em: {format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 text-xs">
+                    <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
+                      {order.items.filter(item => item.price > 0).map(item => (
+                        <li key={item.id}>
+                          {item.quantity}x {item.name} ({formatCurrency(item.price * item.quantity)})
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">Nenhuma comanda arquivada encontrada para este cliente.</p>
+          )}
+        </div>
+        <DialogFooter>
+          <DialogClose asChild><Button variant="outline">Fechar</Button></DialogClose>
+          <Button onClick={onSettleDebt} disabled={(client.debtAmount || 0) <= 0}>
+            Quitar Dívida Total ({formatCurrency(client.debtAmount || 0)})
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
