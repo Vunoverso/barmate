@@ -32,9 +32,10 @@ export default function CreateOrderDialog({ isOpen, onOpenChange, onSubmit, clie
   const { toast } = useToast();
 
   useEffect(() => {
+    // When the dialog opens, reset to the default state (custom name)
     if (isOpen) {
       setOrderName('');
-      setSelectedClientId('custom'); // Reset to custom
+      setSelectedClientId(null);
     }
   }, [isOpen]);
 
@@ -78,7 +79,7 @@ export default function CreateOrderDialog({ isOpen, onOpenChange, onSubmit, clie
           <div className="py-4 space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="client-select">Cliente</Label>
-                <Select onValueChange={handleClientChange} defaultValue="custom">
+                <Select onValueChange={handleClientChange} value={selectedClientId || 'custom'}>
                     <SelectTrigger id="client-select">
                         <SelectValue placeholder="Selecione um cliente..." />
                     </SelectTrigger>
