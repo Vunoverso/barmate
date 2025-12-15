@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -82,6 +82,8 @@ export default function OrdersClient() {
   const [orderToEdit, setOrderToEdit] = useState<ActiveOrder | null>(null);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
+  const [isAssociateClientDialogOpen, setIsAssociateClientDialogOpen] = useState(false);
+
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
@@ -357,6 +359,21 @@ export default function OrdersClient() {
 
     setIsCreditDialogOpen(false);
   }, [currentOrderId, toast]);
+
+    const handleAssociateClient = useCallback((orderId: string, clientId: string) => {
+        const client = clients.find(c => c.id === clientId);
+        if (!client) return;
+
+        const updatedOrders = openOrders.map(order => {
+            if (order.id === orderId) {
+                return { ...order, clientId: client.id, name: client.name };
+            }
+            return order;
+        });
+
+        saveOpenOrders(updatedOrders);
+        toast({ title: "Cliente Associado", description: `A comanda foi associada a ${client.name}.` });
+    }, [clients, openOrders, toast]);
 
 
   const addToOrder = useCallback((product: Product) => {
@@ -779,29 +796,32 @@ export default function OrdersClient() {
                       <span className="truncate">{currentOrder ? currentOrder.name : "Comanda"}</span>
                     </CardTitle>
                     <div className="text-sm text-muted-foreground pt-1 flex items-center gap-2">
-                       {currentOrder && (
+                       {currentOrder ? (
                         <>
                           <span>{currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'}</span>
                           <span className="text-xs">&bull;</span>
                           <span>{format(new Date(currentOrder.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
                         </>
-                       )}
-                       {!currentOrder && <span>Nenhum item na comanda.</span>}
+                       ) : ( <span>Nenhum item na comanda.</span> )}
                     </div>
                   </div>
-                   {currentOrder && (
-                    <div className="flex flex-col items-end shrink-0 ml-2">
-                        {orderTotal < 0 ? (
+                   <div className="flex flex-col items-end shrink-0 ml-2">
+                        {currentOrder && orderTotal < 0 ? (
                           <div className="text-right">
                            <Badge variant="secondary" className="bg-amber-400 dark:bg-amber-600 text-black dark:text-white text-base">Em Crédito: {formatCurrency(Math.abs(orderTotal))}</Badge>
                            <p className="text-xs text-muted-foreground mt-1">Consumo: {formatCurrency(consumedTotal)}</p>
                           </div>
                         ) : (
-                          <span className="text-primary font-bold text-xl">{formatCurrency(orderTotal)}</span>
+                          currentOrder && <span className="text-primary font-bold text-xl">{formatCurrency(orderTotal)}</span>
                         )}
                         {currentOrder?.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 mt-1">PAGA</Badge>}
+                        {currentOrder && !currentOrder.clientId && (
+                            <Button variant="outline" size="sm" className="mt-2" onClick={() => setIsAssociateClientDialogOpen(true)}>
+                                <UserPlus className="mr-2 h-4 w-4" />
+                                Associar Cliente
+                            </Button>
+                        )}
                     </div>
-                  )}
               </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
@@ -938,6 +958,16 @@ export default function OrdersClient() {
               onMerge={handleMergeOrders}
           />
        )}
+       
+      {currentOrder && (
+        <AssociateClientDialog
+          isOpen={isAssociateClientDialogOpen}
+          onOpenChange={setIsAssociateClientDialogOpen}
+          orderId={currentOrder.id}
+          clients={clients}
+          onAssociate={handleAssociateClient}
+        />
+      )}
 
         <AddCreditDialog
             isOpen={isCreditDialogOpen}
@@ -1290,6 +1320,72 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     );
 }
 
+interface AssociateClientDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  orderId: string;
+  clients: Client[];
+  onAssociate: (orderId: string, clientId: string) => void;
+}
+
+function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssociate }: AssociateClientDialogProps) {
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedClientId('');
+    }
+  }, [isOpen]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClientId) {
+      toast({ title: "Nenhum cliente selecionado", variant: "destructive" });
+      return;
+    }
+    onAssociate(orderId, selectedClientId);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Associar Cliente à Comanda</DialogTitle>
+            <DialogDescription>
+              Selecione um cliente cadastrado para vincular a esta comanda.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="client-associate-select">Cliente</Label>
+            <Select onValueChange={setSelectedClientId} value={selectedClientId}>
+              <SelectTrigger id="client-associate-select">
+                <SelectValue placeholder="Selecione um cliente..." />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.length > 0 ? (
+                  clients.map(client => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground">Nenhum cliente cadastrado.</div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <Button type="submit" disabled={!selectedClientId}>Confirmar Associação</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
     
 
     
@@ -1303,5 +1399,6 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
 
 
