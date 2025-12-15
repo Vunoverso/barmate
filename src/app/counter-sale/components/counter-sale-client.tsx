@@ -144,7 +144,7 @@ export default function CounterSaleClient() {
     
     setCurrentOrderItems([]); 
     localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    setIsPaymentDialogOpen(false); 
+    
     toast({
       title: "Venda Balcão Concluída!",
       description: `Venda de ${formatCurrency(sale.totalAmount)} registrada com sucesso.`,
