@@ -502,7 +502,7 @@ export default function OrdersClient() {
     return { orderTotal: total, consumedTotal: consumed };
   }, [currentOrderItems]);
   
-  const handlePayment = useCallback((details: { sale: Sale, leaveChangeAsCredit: boolean }) => {
+  const handlePayment = useCallback((details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, leaveChangeAsCredit: boolean }) => {
     const { sale } = details;
     const allOrders = getOpenOrders();
     const currentOrderForPayment = allOrders.find(o => o.id === currentOrderId);
@@ -945,7 +945,7 @@ export default function OrdersClient() {
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
         currentOrder={currentOrder}
-        onSubmit={handlePayment}
+        onSubmit={handlePayment as any}
         allowCredit={true}
         allowPartialPayment={allowPartialPayment}
       />
@@ -1363,6 +1363,7 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     
 
     
+
 
 
 

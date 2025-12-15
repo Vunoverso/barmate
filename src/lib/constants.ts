@@ -239,6 +239,7 @@ export const addSale = (sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
     id: `sale-${Date.now()}`,
     timestamp: new Date(),
     ...sale,
+    payments: 'payments' in sale ? sale.payments : [], // Ensure payments is an array
   };
 
   const currentSales = getSales();
@@ -250,7 +251,7 @@ export const addSale = (sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
 
   const saleName = 'name' in sale ? sale.name : `Venda #${newSale.id.slice(-6)}`;
   
-  newSale.payments.forEach((p: Payment) => {
+  (newSale.payments || []).forEach((p: Payment) => {
     if (p.amount <= 0) return;
 
     if (['debit', 'credit', 'pix'].includes(p.method)) {
