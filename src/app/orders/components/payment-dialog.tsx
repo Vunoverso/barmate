@@ -37,7 +37,6 @@ interface PaymentDialogProps {
     sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, 
     leaveChangeAsCredit: boolean,
     isPartial: boolean,
-    totalPaid: number,
   }) => void;
 }
 
@@ -161,44 +160,31 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     const finalChangeGiven = Math.round(creditToLeave * 100) / 100;
 
     const isPartialNow = allowPartialPayment && roundedRemaining > 0.01;
-
-    const completedSale: Sale = {
-        id: currentOrder?.id || `sale-${Date.now()}`,
-        timestamp: new Date(),
+    
+    const saleObject: Omit<Sale, 'id' | 'timestamp' | 'name'> = {
         items: currentOrder?.items || [],
         payments,
         originalAmount: isPartialNow ? totalPaid : consumedTotal,
         totalAmount: isPartialNow ? totalPaid : amountToPay,
-        discountAmount: isPartialNow ? 0 : numDiscount, // No discount on partial payments
+        discountAmount: isPartialNow ? 0 : numDiscount,
         cashTendered: finalCashTendered,
         changeGiven: isPartialNow ? 0 : finalChangeGiven,
         status: 'completed',
         leaveChangeAsCredit: isPartialNow ? false : finalChangeGiven > 0,
-    };
-    
-    // This is the main submission call
-     onSubmit({
-        sale: {
-            items: completedSale.items,
-            payments: completedSale.payments,
-            discountAmount: completedSale.discountAmount,
-            changeGiven: completedSale.changeGiven || 0,
-            status: 'completed',
-            originalAmount: completedSale.originalAmount,
-            totalAmount: completedSale.totalAmount,
-            cashTendered: completedSale.cashTendered,
-        },
-        leaveChangeAsCredit: completedSale.leaveChangeAsCredit || false,
+    }
+
+    onSubmit({
+        sale: saleObject,
+        leaveChangeAsCredit: saleObject.leaveChangeAsCredit || false,
         isPartial: isPartialNow,
-        totalPaid,
     });
 
-    if (isPartialNow) {
-        // If it's partial, we just close the dialog after submitting.
-        onOpenChange(false);
-    } else {
-        // If it's a full payment, we stay on the receipt screen.
-        setSaleCompleted(completedSale);
+    if (!isPartialNow) {
+        setSaleCompleted({
+            id: currentOrder?.id || `sale-${Date.now()}`,
+            timestamp: new Date(),
+            ...saleObject,
+        });
     }
   };
 
