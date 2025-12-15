@@ -1,4 +1,5 @@
 
+
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, type LucideIcon } from 'lucide-react';
 
@@ -202,7 +203,14 @@ export const saveProductCategories = (categories: ProductCategory[]) => saveToLo
 export const getProducts = (): Product[] => getFromLocalStorage(KEY_PRODUCTS, INITIAL_PRODUCTS);
 export const saveProducts = (products: Product[]) => saveToLocalStorage(KEY_PRODUCTS, products);
 
-export const getSales = (): Sale[] => getFromLocalStorage(KEY_SALES, INITIAL_SALES);
+export const getSales = (): Sale[] => {
+  const sales = getFromLocalStorage<Sale[]>(KEY_SALES, INITIAL_SALES);
+  // Data sanitization: ensure every sale has a `payments` array.
+  return sales.map(sale => ({
+    ...sale,
+    payments: sale.payments || [],
+  }));
+};
 export const saveSales = (sales: Sale[]) => saveToLocalStorage(KEY_SALES, sales);
 
 export const getOpenOrders = (): ActiveOrder[] => getFromLocalStorage(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);

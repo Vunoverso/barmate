@@ -354,17 +354,20 @@ export default function CashRegisterClient() {
     const totalSessionRevenue = sessionSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
 
     const cashRevenue = sessionSales.reduce((total, sale) => {
-        const cashPayment = sale.payments.find(p => p.method === 'cash')?.amount ?? 0;
+        const salePayments = sale.payments || [];
+        const cashPayment = salePayments.find(p => p.method === 'cash')?.amount ?? 0;
         return total + cashPayment;
     }, 0);
     
     const cardRevenue = sessionSales.reduce((total, sale) => {
-        const cardPaymentsAmount = sale.payments.filter(p => p.method === 'credit' || p.method === 'debit').reduce((sum, p) => sum + p.amount, 0);
+        const salePayments = sale.payments || [];
+        const cardPaymentsAmount = salePayments.filter(p => p.method === 'credit' || p.method === 'debit').reduce((sum, p) => sum + p.amount, 0);
         return total + cardPaymentsAmount;
     }, 0);
 
     const pixRevenue = sessionSales.reduce((total, sale) => {
-        const pixPayment = sale.payments.find(p => p.method === 'pix')?.amount || 0;
+        const salePayments = sale.payments || [];
+        const pixPayment = salePayments.find(p => p.method === 'pix')?.amount || 0;
         return total + pixPayment;
     }, 0);
     
@@ -376,7 +379,10 @@ export default function CashRegisterClient() {
     // Total 'out' adjustments
     const totalOut = adjustments.filter(a => a.type === 'out' && !visuallyRemovedAdjustments.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
     
-    const totalCashFromSales = sessionSales.reduce((sum, sale) => sum + (sale.payments.find(p => p.method === 'cash')?.amount || 0), 0);
+    const totalCashFromSales = sessionSales.reduce((sum, sale) => {
+        const salePayments = sale.payments || [];
+        return sum + (salePayments.find(p => p.method === 'cash')?.amount || 0);
+    }, 0);
     
     // Correct calculation for expected cash
     const expectedCash = (openingBalance + totalCashFromSales + totalIn) - totalOut;
