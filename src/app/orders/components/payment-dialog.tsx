@@ -182,28 +182,29 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || totalAmount;
     const finalChangeGiven = Math.round(creditToLeave * 100) / 100;
 
-    const isPartial = allowPartialPayment && roundedRemaining > 0;
-    setIsPartialPayment(isPartial);
+    const isPartialNow = allowPartialPayment && roundedRemaining > 0.01;
+    setIsPartialPayment(isPartialNow);
 
     const completedSale: Sale = {
         id: currentOrder?.id || `sale-${Date.now()}`,
         timestamp: new Date(),
         items: currentOrder?.items || [],
         payments,
-        originalAmount: isPartial ? totalPaid : consumedTotal,
-        totalAmount: isPartial ? totalPaid : amountToPay,
-        discountAmount: isPartial ? 0 : numDiscount, // No discount on partial payments
+        originalAmount: isPartialNow ? totalPaid : consumedTotal,
+        totalAmount: isPartialNow ? totalPaid : amountToPay,
+        discountAmount: isPartialNow ? 0 : numDiscount, // No discount on partial payments
         cashTendered: finalCashTendered,
-        changeGiven: isPartial ? 0 : finalChangeGiven,
+        changeGiven: isPartialNow ? 0 : finalChangeGiven,
         status: 'completed',
-        leaveChangeAsCredit: isPartial ? false : finalChangeGiven > 0,
+        leaveChangeAsCredit: isPartialNow ? false : finalChangeGiven > 0,
     };
     
     setSaleCompleted(completedSale);
     setSubmitted(true);
     
-    if (isPartial) {
-        // If partial, close dialog immediately and submit
+    // If it's partial, we can close immediately and let handleOpenChange submit.
+    // If it's a full payment, we stay on the receipt screen.
+    if (isPartialNow) {
         handleOpenChange(false);
     }
   };
