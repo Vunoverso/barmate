@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
@@ -381,7 +382,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         <DialogFooter className="p-6 pt-4 border-t">
           {saleCompleted ? (
             <div className="w-full flex justify-between">
-                <Button variant="secondary" onClick={() => onOpenChange(false)}>Fechar</Button>
+                <Button variant="secondary" onClick={() => handleOpenChange(false)}>Fechar</Button>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={handlePrintReceipt}>
                         <Printer className="mr-2 h-4 w-4" />
@@ -395,7 +396,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             </div>
           ) : (
             <>
-                <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
                 <Button onClick={handleProcessPayment} disabled={isSubmitDisabled}>
                     Realizar Pagamento
                 </Button>
@@ -406,3 +407,5 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
+
+    

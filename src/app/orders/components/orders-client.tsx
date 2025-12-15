@@ -591,7 +591,7 @@ export default function OrdersClient() {
         }
     }
     setIsPaymentDialogOpen(false);
-  }, [currentOrderId, orderTotal, consumedTotal, toast]);
+  }, [currentOrderId, toast]);
   
 
   const allowPartialPayment = true;
@@ -1382,23 +1382,5 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     </Dialog>
   );
 }
-    
 
     
-
-
-
-    
-
-    
-
-    
-
-    
-
-
-
-
-
-
-
