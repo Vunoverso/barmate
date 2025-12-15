@@ -33,13 +33,9 @@ interface PaymentDialogProps {
   currentOrder: ActiveOrder | undefined;
   allowCredit?: boolean;
   allowPartialPayment?: boolean;
-  onSubmit: (saleDetails: {
-    payments: Payment[];
-    changeGiven: number;
-    discountAmount: number;
-    status: 'completed';
-    leaveChangeAsCredit: boolean;
-    cashTendered?: number; // Added to track full cash amount
+  onSubmit: (details: { 
+    sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, 
+    leaveChangeAsCredit: boolean 
   }) => void;
 }
 
@@ -117,12 +113,17 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     if (!open) {
       if (submitted && saleCompleted) {
         onSubmit({
-          payments: saleCompleted.payments,
-          discountAmount: saleCompleted.discountAmount,
-          changeGiven: saleCompleted.changeGiven || 0,
-          status: 'completed',
+          sale: {
+              items: saleCompleted.items,
+              payments: saleCompleted.payments,
+              discountAmount: saleCompleted.discountAmount,
+              changeGiven: saleCompleted.changeGiven || 0,
+              status: 'completed',
+              originalAmount: saleCompleted.originalAmount,
+              totalAmount: saleCompleted.totalAmount,
+              cashTendered: saleCompleted.cashTendered,
+          },
           leaveChangeAsCredit: saleCompleted.leaveChangeAsCredit || false,
-          cashTendered: saleCompleted.cashTendered || undefined,
         });
       }
       resetState();

@@ -239,7 +239,7 @@ export const addSale = (sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
     id: `sale-${Date.now()}`,
     timestamp: new Date(),
     ...sale,
-    payments: 'payments' in sale ? sale.payments : [], // Ensure payments is an array
+    payments: 'payments' in sale ? (sale.payments || []) : [], // Ensure payments is an array
   };
 
   const currentSales = getSales();
