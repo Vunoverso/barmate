@@ -115,8 +115,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-       if (submitted) {
-         if (saleCompleted) {
+       if (submitted && saleCompleted) {
             onSubmit({
               sale: {
                   items: saleCompleted.items,
@@ -132,7 +131,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
               isPartial: isPartialPayment,
               totalPaid,
             });
-         }
        }
        resetState();
     }
@@ -157,7 +155,9 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const isSubmitDisabled = useMemo(() => {
     const roundedRemaining = Math.round(remainingToPay * 100) / 100;
     if (totalPaid <= 0 && amountToPay > 0) return true;
-    if (!allowPartialPayment && roundedRemaining !== 0) return Math.abs(roundedRemaining) > 0.01;
+    if (!allowPartialPayment && roundedRemaining !== 0 && Math.abs(roundedRemaining) > 0.01) {
+        return true;
+    }
     return false;
   }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay]);
 
