@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry } from '@/types';
-import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry } from '@/lib/constants';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
+import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients } from '@/lib/constants';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -69,6 +69,7 @@ export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -77,6 +78,7 @@ export default function OrdersClient() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
+  const [orderToArchive, setOrderToArchive] = useState<ActiveOrder | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<ActiveOrder | null>(null);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
@@ -89,10 +91,12 @@ export default function OrdersClient() {
     const fetchedProducts = getProducts();
     const fetchedCategories = getProductCategories();
     const fetchedOrders = getOpenOrders();
+    const fetchedClients = getClients();
 
     setProducts(fetchedProducts);
     setProductCategories(fetchedCategories);
     setOpenOrders(fetchedOrders);
+    setClients(fetchedClients);
 
     if (currentOrderId && !fetchedOrders.some(o => o.id === currentOrderId)) {
       setCurrentOrderId(fetchedOrders.length > 0 ? fetchedOrders[0].id : null);
@@ -166,11 +170,12 @@ export default function OrdersClient() {
     setIsCreateOrderDialogOpen(true);
   }, []);
 
-  const handleCreateNewOrder = useCallback((orderName: string) => {
+  const handleCreateNewOrder = useCallback((details: { name: string; clientId: string | null; }) => {
     const newOrderId = `order-${Date.now()}`;
     const newOrder: ActiveOrder = {
       id: newOrderId,
-      name: orderName,
+      name: details.name,
+      clientId: details.clientId,
       items: [],
       createdAt: new Date(),
     };
@@ -230,6 +235,50 @@ export default function OrdersClient() {
     }
     toast({ title: "Comanda Removida", description: `${orderName} foi removida.`, variant: "destructive" });
   }, [orderToDelete, currentOrderId, toast]);
+
+    const confirmArchiveOrder = useCallback((order: ActiveOrder) => {
+        setOrderToArchive(order);
+    }, []);
+
+    const handleArchiveOrder = useCallback(() => {
+        if (!orderToArchive || !orderToArchive.clientId) return;
+
+        const debtAmount = orderToArchive.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+        const allClients = getClients();
+        const updatedClients = allClients.map(c => {
+            if (c.id === orderToArchive.clientId) {
+                return { ...c, debtAmount: (c.debtAmount || 0) + debtAmount };
+            }
+            return c;
+        });
+        saveClients(updatedClients);
+
+        const oldOrders = getOpenOrders();
+        const updatedOrders = oldOrders.filter(order => order.id !== orderToArchive.id);
+
+        let nextSelectedId: string | null = null;
+        if (currentOrderId === orderToArchive.id) {
+            if (updatedOrders.length > 0) {
+                const deletedIndex = oldOrders.findIndex(o => o.id === orderToArchive.id);
+                nextSelectedId = updatedOrders[deletedIndex]?.id || updatedOrders[deletedIndex - 1]?.id || updatedOrders[0].id;
+            }
+        } else {
+          nextSelectedId = currentOrderId;
+        }
+
+        saveOpenOrders(updatedOrders);
+        setOrderToArchive(null);
+        if (currentOrderId === orderToArchive.id) {
+          setCurrentOrderId(nextSelectedId);
+        }
+
+        toast({
+            title: "Comanda Arquivada como Dívida",
+            description: `A comanda de ${orderToArchive.name} foi movida para o histórico de dívidas do cliente.`,
+        });
+
+    }, [orderToArchive, currentOrderId, toast]);
   
   const handleMergeOrders = useCallback((sourceOrderIds: string[]) => {
     if (!currentOrderId || sourceOrderIds.length === 0) return;
@@ -830,8 +879,8 @@ export default function OrdersClient() {
               </ScrollArea>
             </CardContent>
             <Separator />
-            <CardFooter className="flex flex-col gap-3 p-4">
-              <Button
+            <CardFooter className="flex flex-col gap-2 p-2">
+               <Button
                 size="lg"
                 className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
                 disabled={orderTotal === 0 || !currentOrderId || currentOrder?.status === 'paid'}
@@ -839,16 +888,26 @@ export default function OrdersClient() {
               >
                 Realizar Pagamento
               </Button>
-              <Button
-                size="lg"
-                variant="destructive"
-                className="w-full"
-                disabled={!currentOrderId}
-                onClick={() => currentOrder && confirmDeleteOrder(currentOrder)}
-              >
-                <XCircle className="mr-2 h-5 w-5" />
-                Cancelar Comanda
-              </Button>
+              <div className="grid grid-cols-2 gap-2 w-full">
+                <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={!currentOrderId || !currentOrder?.clientId || orderTotal <= 0}
+                    onClick={() => currentOrder && confirmArchiveOrder(currentOrder)}
+                >
+                    <Archive className="mr-2 h-4 w-4" />
+                    Arquivar Dívida
+                </Button>
+                <Button
+                    variant="destructive"
+                    className="w-full"
+                    disabled={!currentOrderId}
+                    onClick={() => currentOrder && confirmDeleteOrder(currentOrder)}
+                >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancelar Comanda
+                </Button>
+              </div>
             </CardFooter>
           </Card>
         </div>
@@ -858,6 +917,7 @@ export default function OrdersClient() {
         isOpen={isCreateOrderDialogOpen}
         onOpenChange={setIsCreateOrderDialogOpen}
         onSubmit={handleCreateNewOrder}
+        clients={clients}
       />
       
       {orderToEdit && (
@@ -917,6 +977,25 @@ export default function OrdersClient() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+        {orderToArchive && (
+            <AlertDialog open={!!orderToArchive} onOpenChange={() => setOrderToArchive(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Arquivar Comanda como Dívida?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Tem certeza que deseja arquivar a comanda "{orderToArchive.name}"? O valor de <strong className="text-foreground">{formatCurrency(orderTotal)}</strong> será adicionado à dívida do cliente e a comanda será removida das comandas em aberto.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleArchiveOrder}>
+                            Sim, Arquivar Dívida
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        )}
     </TooltipProvider>
   );
 }
@@ -1224,4 +1303,5 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
     
 
     
+
 

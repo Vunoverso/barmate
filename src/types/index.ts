@@ -16,6 +16,7 @@ export interface Client {
   name: string;
   phone: string | null;
   notes: string | null;
+  debtAmount?: number;
 }
 
 export interface Product {
@@ -65,6 +66,8 @@ export interface ActiveOrder {
   createdAt: Date;
   items: OrderItem[];
   status?: 'open' | 'paid';
+  clientId?: string | null;
+  clientName?: string | null;
   user_id?: string;
 }
 

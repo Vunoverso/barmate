@@ -2,7 +2,7 @@
 "use client";
 
 import type { Client } from '@/types';
-import { getClients, saveClients } from '@/lib/constants';
+import { getClients, saveClients, formatCurrency } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -49,6 +49,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Badge } from '@/components/ui/badge';
 
 const clientSchema = z.object({
   name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
@@ -112,7 +113,7 @@ export default function ClientsClient() {
       saveClients(updatedClients);
       toast({ title: "Cliente Atualizado", description: `Os dados de ${values.name} foram atualizados.` });
     } else {
-      const newClient: Client = { id: `client-${Date.now()}`, ...values };
+      const newClient: Client = { id: `client-${Date.now()}`, debtAmount: 0, ...values };
       const updatedClients = [...clients, newClient];
       saveClients(updatedClients);
       toast({ title: "Cliente Adicionado", description: `${values.name} foi adicionado à sua lista de clientes.` });
@@ -170,6 +171,7 @@ export default function ClientsClient() {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Telefone</TableHead>
+                <TableHead>Saldo Devedor</TableHead>
                 <TableHead>Observações</TableHead>
                 <TableHead><span className="sr-only">Ações</span></TableHead>
               </TableRow>
@@ -179,6 +181,13 @@ export default function ClientsClient() {
                 <TableRow key={client.id}>
                   <TableCell className="font-medium">{client.name}</TableCell>
                   <TableCell>{client.phone || '-'}</TableCell>
+                   <TableCell>
+                    {(client.debtAmount ?? 0) > 0 ? (
+                      <Badge variant="destructive">{formatCurrency(client.debtAmount || 0)}</Badge>
+                    ) : (
+                      formatCurrency(0)
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground truncate max-w-xs">{client.notes || '-'}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -202,7 +211,7 @@ export default function ClientsClient() {
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">
+                  <TableCell colSpan={5} className="h-24 text-center">
                     Nenhum cliente encontrado.
                   </TableCell>
                 </TableRow>

@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import type { Client } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,29 +16,52 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Users } from 'lucide-react';
 
 interface CreateOrderDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onSubmit: (name: string) => void;
+  onSubmit: (details: { name: string; clientId: string | null; }) => void;
+  clients: Client[];
 }
 
-export default function CreateOrderDialog({ isOpen, onOpenChange, onSubmit }: CreateOrderDialogProps) {
+export default function CreateOrderDialog({ isOpen, onOpenChange, onSubmit, clients }: CreateOrderDialogProps) {
   const [orderName, setOrderName] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      setOrderName('');
+      setSelectedClientId('custom'); // Reset to custom
+    }
+  }, [isOpen]);
+
+  const handleClientChange = (value: string) => {
+    if (value === 'custom') {
+      setSelectedClientId(null);
+      setOrderName('');
+    } else {
+      const client = clients.find(c => c.id === value);
+      if (client) {
+        setSelectedClientId(client.id);
+        setOrderName(client.name);
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (orderName.trim() === '') {
       toast({
         title: 'Nome Inválido',
-        description: 'Por favor, insira um nome para a comanda (ex: Mesa 5, Cliente Ana).',
+        description: 'Por favor, insira um nome para a comanda ou selecione um cliente.',
         variant: 'destructive',
       });
       return;
     }
-    onSubmit(orderName.trim());
-    setOrderName(''); // Reset for next time
+    onSubmit({ name: orderName.trim(), clientId: selectedClientId });
     onOpenChange(false);
   };
 
@@ -48,22 +72,41 @@ export default function CreateOrderDialog({ isOpen, onOpenChange, onSubmit }: Cr
           <DialogHeader>
             <DialogTitle>Abrir Nova Comanda</DialogTitle>
             <DialogDescription>
-              Digite um identificador para a nova comanda (ex: número da mesa, nome do cliente).
+              Selecione um cliente existente ou digite um nome personalizado para a comanda.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-2">
-            <Label htmlFor="orderName">Nome da Comanda</Label>
-            <Input
-              id="orderName"
-              value={orderName}
-              onChange={(e) => setOrderName(e.target.value)}
-              placeholder="Ex: Mesa 12, João Silva"
-              autoFocus
-            />
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="client-select">Cliente</Label>
+                <Select onValueChange={handleClientChange} defaultValue="custom">
+                    <SelectTrigger id="client-select">
+                        <SelectValue placeholder="Selecione um cliente..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="custom">Nome Avulso (Ex: Mesa 5)</SelectItem>
+                        {clients.map(client => (
+                            <SelectItem key={client.id} value={client.id}>
+                                {client.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="orderName">Nome da Comanda</Label>
+              <Input
+                id="orderName"
+                value={orderName}
+                onChange={(e) => setOrderName(e.target.value)}
+                placeholder={selectedClientId ? "" : "Ex: Mesa 12, João Silva"}
+                disabled={!!selectedClientId}
+                autoFocus={!selectedClientId}
+              />
+            </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" onClick={() => setOrderName('')}>Cancelar</Button>
+              <Button type="button" variant="outline">Cancelar</Button>
             </DialogClose>
             <Button type="submit">Confirmar e Abrir</Button>
           </DialogFooter>
