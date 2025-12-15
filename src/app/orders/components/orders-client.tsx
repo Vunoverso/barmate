@@ -502,8 +502,13 @@ export default function OrdersClient() {
     return { orderTotal: total, consumedTotal: consumed };
   }, [currentOrderItems]);
   
-  const handlePayment = useCallback((details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, leaveChangeAsCredit: boolean }) => {
-    const { sale } = details;
+  const handlePayment = useCallback((details: { 
+    sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, 
+    leaveChangeAsCredit: boolean,
+    isPartial: boolean,
+    totalPaid: number
+  }) => {
+    const { sale, isPartial, totalPaid } = details;
     const allOrders = getOpenOrders();
     const currentOrderForPayment = allOrders.find(o => o.id === currentOrderId);
     if (!currentOrderForPayment) {
@@ -511,57 +516,84 @@ export default function OrdersClient() {
       return;
     }
 
+    // Always add payment entries to financial records
     addSale({ ...sale, name: currentOrderForPayment.name });
-
-    const hasUnclaimedCombos = currentOrderForPayment.items.some(item => 
-      item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1)
-    );
-
-    if (hasUnclaimedCombos) {
-      const paidOrder: ActiveOrder = {
-        ...currentOrderForPayment,
-        items: [...currentOrderForPayment.items, {
-            id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -sale.totalAmount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
-        }],
-        status: 'paid'
-      };
-      const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? paidOrder : o);
-      saveOpenOrders(newOpenOrders);
-      toast({ title: "Comanda Paga!", description: `A comanda "${currentOrderForPayment.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
-      setIsPaymentDialogOpen(false);
-      return;
-    }
-
-    const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
-    let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
-    let nextSelectedOrderId: string | null = null;
     
-    if (details.leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
-        const newCreditOrder: ActiveOrder = {
-            id: `order-credit-${Date.now()}`, name: `${currentOrderForPayment.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
-                id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
-            }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
+    // --- Logic for Partial vs Full Payment ---
+    if (isPartial) {
+        // Add a negative item to the order to represent the payment
+        const paymentItem: OrderItem = {
+            id: `payment-${Date.now()}`,
+            name: `Pagamento Parcial (${sale.payments.map(p => p.method).join(', ')})`,
+            price: -totalPaid,
+            quantity: 1,
+            categoryId: 'cat_outros',
+            isCombo: false,
+            comboItems: null
         };
-        nextOrdersState.push(newCreditOrder);
-        nextSelectedOrderId = newCreditOrder.id;
-        toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrderForPayment.name} com um crédito de ${formatCurrency(sale.changeGiven)}.` });
+        
+        const updatedOrder: ActiveOrder = {
+            ...currentOrderForPayment,
+            items: [...currentOrderForPayment.items, paymentItem]
+        };
+        
+        const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
+        saveOpenOrders(newOpenOrders);
+        toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
+
     } else {
-        if (nextOrdersState.length > 0) {
-            nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
+        // --- Full Payment Logic ---
+        const hasUnclaimedCombos = currentOrderForPayment.items.some(item => 
+          item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1)
+        );
+
+        if (hasUnclaimedCombos) {
+          const paidOrder: ActiveOrder = {
+            ...currentOrderForPayment,
+            items: [...currentOrderForPayment.items, {
+                id: `payment-full-${Date.now()}`, name: 'Pagamento Integral', price: -sale.totalAmount, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+            }],
+            status: 'paid'
+          };
+          const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? paidOrder : o);
+          saveOpenOrders(newOpenOrders);
+          toast({ title: "Comanda Paga!", description: `A comanda "${currentOrderForPayment.name}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
+
+        } else {
+            // Close the order
+            const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
+            let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
+            let nextSelectedOrderId: string | null = null;
+            
+            if (details.leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
+                const newCreditOrder: ActiveOrder = {
+                    id: `order-credit-${Date.now()}`, name: `${currentOrderForPayment.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
+                        id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+                    }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
+                };
+                nextOrdersState.push(newCreditOrder);
+                nextSelectedOrderId = newCreditOrder.id;
+                toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${currentOrderForPayment.name} com um crédito de ${formatCurrency(sale.changeGiven)}.` });
+            } else {
+                if (nextOrdersState.length > 0) {
+                    nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
+                }
+                 if (!details.leaveChangeAsCredit) {
+                     toast({
+                        title: "Venda Concluída!",
+                        description: `Venda de ${formatCurrency(sale.totalAmount)} (${currentOrderForPayment.name}) registrada com sucesso.`,
+                        action: <CheckCircle className="text-green-500" />,
+                    });
+                 }
+            }
+            saveOpenOrders(nextOrdersState);
+            setCurrentOrderId(nextSelectedOrderId);
         }
-         if (!details.leaveChangeAsCredit) {
-             toast({
-                title: "Venda Concluída!",
-                description: `Venda de ${formatCurrency(sale.totalAmount)} (${currentOrderForPayment.name}) registrada com sucesso.`,
-                action: <CheckCircle className="text-green-500" />,
-            });
-         }
     }
-    saveOpenOrders(nextOrdersState);
-    setCurrentOrderId(nextSelectedOrderId);
     setIsPaymentDialogOpen(false);
   }, [currentOrderId, orderTotal, consumedTotal, toast]);
   
+
   const allowPartialPayment = true;
 
   if (isLoading) {
@@ -945,7 +977,7 @@ export default function OrdersClient() {
         onOpenChange={setIsPaymentDialogOpen}
         totalAmount={orderTotal}
         currentOrder={currentOrder}
-        onSubmit={handlePayment as any}
+        onSubmit={handlePayment}
         allowCredit={true}
         allowPartialPayment={allowPartialPayment}
       />
@@ -1363,6 +1395,7 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     
 
     
+
 
 
 

@@ -35,7 +35,9 @@ interface PaymentDialogProps {
   allowPartialPayment?: boolean;
   onSubmit: (details: { 
     sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, 
-    leaveChangeAsCredit: boolean 
+    leaveChangeAsCredit: boolean,
+    isPartial: boolean,
+    totalPaid: number,
   }) => void;
 }
 
@@ -51,6 +53,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [changeReturned, setChangeReturned] = useState('');
   const [error, setError] = useState<string>('');
   const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
+  const [isPartialPayment, setIsPartialPayment] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
@@ -107,26 +110,31 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     setError('');
     setSaleCompleted(null);
     setSubmitted(false);
+    setIsPartialPayment(false);
   };
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      if (submitted && saleCompleted) {
-        onSubmit({
-          sale: {
-              items: saleCompleted.items,
-              payments: saleCompleted.payments,
-              discountAmount: saleCompleted.discountAmount,
-              changeGiven: saleCompleted.changeGiven || 0,
-              status: 'completed',
-              originalAmount: saleCompleted.originalAmount,
-              totalAmount: saleCompleted.totalAmount,
-              cashTendered: saleCompleted.cashTendered,
-          },
-          leaveChangeAsCredit: saleCompleted.leaveChangeAsCredit || false,
-        });
-      }
-      resetState();
+       if (submitted) {
+         if (saleCompleted) {
+            onSubmit({
+              sale: {
+                  items: saleCompleted.items,
+                  payments: saleCompleted.payments,
+                  discountAmount: saleCompleted.discountAmount,
+                  changeGiven: saleCompleted.changeGiven || 0,
+                  status: 'completed',
+                  originalAmount: saleCompleted.originalAmount,
+                  totalAmount: saleCompleted.totalAmount,
+                  cashTendered: saleCompleted.cashTendered,
+              },
+              leaveChangeAsCredit: saleCompleted.leaveChangeAsCredit || false,
+              isPartial: isPartialPayment,
+              totalPaid,
+            });
+         }
+       }
+       resetState();
     }
     onOpenChange(open);
   };
@@ -148,26 +156,19 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
   const isSubmitDisabled = useMemo(() => {
     const roundedRemaining = Math.round(remainingToPay * 100) / 100;
-
-    if (totalPaid <= 0 && amountToPay > 0) {
-      return true;
-    }
-    if (!allowPartialPayment && roundedRemaining !== 0) {
-        return Math.abs(roundedRemaining) > 0.01;
-    }
+    if (totalPaid <= 0 && amountToPay > 0) return true;
+    if (!allowPartialPayment && roundedRemaining !== 0) return Math.abs(roundedRemaining) > 0.01;
     return false;
   }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay]);
 
 
   const handleProcessPayment = () => {
     setError('');
+    const roundedRemaining = Math.round(remainingToPay * 100) / 100;
 
     if (isSubmitDisabled) {
-      if (totalPaid <= 0 && amountToPay > 0) {
-        setError('Nenhum valor de pagamento foi inserido.');
-      } else if (!allowPartialPayment && Math.abs(remainingToPay) > 0.01) {
-        setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
-      }
+      if (totalPaid <= 0 && amountToPay > 0) setError('Nenhum valor de pagamento foi inserido.');
+      else if (!allowPartialPayment && roundedRemaining !== 0) setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
       return;
     }
 
@@ -178,27 +179,33 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     if (numPixAmount > 0) payments.push({ method: 'pix', amount: numPixAmount });
 
     const finalCashTendered = numCashTendered > 0 ? numCashTendered : (numCashAmount > 0 ? numCashAmount : undefined);
-    
     const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || totalAmount;
-    
     const finalChangeGiven = Math.round(creditToLeave * 100) / 100;
+
+    const isPartial = allowPartialPayment && roundedRemaining > 0;
+    setIsPartialPayment(isPartial);
 
     const completedSale: Sale = {
         id: currentOrder?.id || `sale-${Date.now()}`,
         timestamp: new Date(),
         items: currentOrder?.items || [],
         payments,
-        originalAmount: consumedTotal,
-        totalAmount: amountToPay,
-        discountAmount: numDiscount,
+        originalAmount: isPartial ? totalPaid : consumedTotal,
+        totalAmount: isPartial ? totalPaid : amountToPay,
+        discountAmount: isPartial ? 0 : numDiscount, // No discount on partial payments
         cashTendered: finalCashTendered,
-        changeGiven: finalChangeGiven,
+        changeGiven: isPartial ? 0 : finalChangeGiven,
         status: 'completed',
-        leaveChangeAsCredit: finalChangeGiven > 0,
+        leaveChangeAsCredit: isPartial ? false : finalChangeGiven > 0,
     };
     
     setSaleCompleted(completedSale);
     setSubmitted(true);
+    
+    if (isPartial) {
+        // If partial, close dialog immediately and submit
+        handleOpenChange(false);
+    }
   };
 
   const handleDownloadReceipt = async () => {
