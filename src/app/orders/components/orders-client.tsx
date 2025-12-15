@@ -540,6 +540,7 @@ export default function OrdersClient() {
         const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
         saveOpenOrders(newOpenOrders);
         toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
+        setIsPaymentDialogOpen(false);
 
     } else {
         // --- Full Payment Logic ---
@@ -590,7 +591,10 @@ export default function OrdersClient() {
             setCurrentOrderId(nextSelectedOrderId);
         }
     }
-    setIsPaymentDialogOpen(false);
+    // Do not close the dialog here for full payments to show the receipt
+    if (isPartial) {
+      setIsPaymentDialogOpen(false);
+    }
   }, [currentOrderId, toast]);
   
 
@@ -1382,5 +1386,7 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     </Dialog>
   );
 }
+
+    
 
     
