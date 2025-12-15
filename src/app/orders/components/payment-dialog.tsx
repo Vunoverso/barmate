@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
@@ -53,11 +52,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [changeReturned, setChangeReturned] = useState('');
   const [error, setError] = useState<string>('');
   const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
-  const [isPartialPayment, setIsPartialPayment] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const [submitted, setSubmitted] = useState(false);
-
 
   const numDiscount = parseLocaleFloat(discount);
   const numCashAmount = parseLocaleFloat(cashAmount);
@@ -109,29 +105,10 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     setChangeReturned('');
     setError('');
     setSaleCompleted(null);
-    setSubmitted(false);
-    setIsPartialPayment(false);
   };
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-       if (submitted && saleCompleted) {
-            onSubmit({
-              sale: {
-                  items: saleCompleted.items,
-                  payments: saleCompleted.payments,
-                  discountAmount: saleCompleted.discountAmount,
-                  changeGiven: saleCompleted.changeGiven || 0,
-                  status: 'completed',
-                  originalAmount: saleCompleted.originalAmount,
-                  totalAmount: saleCompleted.totalAmount,
-                  cashTendered: saleCompleted.cashTendered,
-              },
-              leaveChangeAsCredit: saleCompleted.leaveChangeAsCredit || false,
-              isPartial: isPartialPayment,
-              totalPaid,
-            });
-       }
        resetState();
     }
     onOpenChange(open);
@@ -183,7 +160,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     const finalChangeGiven = Math.round(creditToLeave * 100) / 100;
 
     const isPartialNow = allowPartialPayment && roundedRemaining > 0.01;
-    setIsPartialPayment(isPartialNow);
 
     const completedSale: Sale = {
         id: currentOrder?.id || `sale-${Date.now()}`,
@@ -199,13 +175,29 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         leaveChangeAsCredit: isPartialNow ? false : finalChangeGiven > 0,
     };
     
-    setSaleCompleted(completedSale);
-    setSubmitted(true);
-    
-    // If it's partial, we can close immediately and let handleOpenChange submit.
-    // If it's a full payment, we stay on the receipt screen.
+    // This is the main submission call
+     onSubmit({
+        sale: {
+            items: completedSale.items,
+            payments: completedSale.payments,
+            discountAmount: completedSale.discountAmount,
+            changeGiven: completedSale.changeGiven || 0,
+            status: 'completed',
+            originalAmount: completedSale.originalAmount,
+            totalAmount: completedSale.totalAmount,
+            cashTendered: completedSale.cashTendered,
+        },
+        leaveChangeAsCredit: completedSale.leaveChangeAsCredit || false,
+        isPartial: isPartialNow,
+        totalPaid,
+    });
+
     if (isPartialNow) {
-        handleOpenChange(false);
+        // If it's partial, we just close the dialog after submitting.
+        onOpenChange(false);
+    } else {
+        // If it's a full payment, we stay on the receipt screen.
+        setSaleCompleted(completedSale);
     }
   };
 
@@ -389,7 +381,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         <DialogFooter className="p-6 pt-4 border-t">
           {saleCompleted ? (
             <div className="w-full flex justify-between">
-                <Button variant="secondary" onClick={() => handleOpenChange(false)}>Fechar</Button>
+                <Button variant="secondary" onClick={() => onOpenChange(false)}>Fechar</Button>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={handlePrintReceipt}>
                         <Printer className="mr-2 h-4 w-4" />
@@ -403,7 +395,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             </div>
           ) : (
             <>
-                <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
                 <Button onClick={handleProcessPayment} disabled={isSubmitDisabled}>
                     Realizar Pagamento
                 </Button>
