@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
@@ -507,7 +506,7 @@ export default function OrdersClient() {
     leaveChangeAsCredit: boolean,
     isPartial: boolean
   }) => {
-    const { sale, isPartial } = details;
+    const { sale, isPartial, leaveChangeAsCredit } = details;
     const allOrders = getOpenOrders();
     const currentOrderForPayment = allOrders.find(o => o.id === currentOrderId);
     if (!currentOrderForPayment) {
@@ -517,7 +516,7 @@ export default function OrdersClient() {
 
     const saleName = currentOrderForPayment.name || 'Venda';
     
-    // Always register the financial transaction
+    // Always register the financial transaction for any payment
     addSale({ ...sale, name: saleName });
     
     if (isPartial) {
@@ -535,10 +534,11 @@ export default function OrdersClient() {
         const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
         saveOpenOrders(newOpenOrders);
         toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
-        setIsPaymentDialogOpen(false);
     } else {
         const hasUnclaimedCombos = currentOrderForPayment.items.some(item => item.isCombo && (item.claimedQuantity ?? 0) < (item.comboItems ?? 1));
+        
         if (hasUnclaimedCombos) {
+            // Full payment but combos remain, keep order open but mark as paid
             const paidOrder: ActiveOrder = {
                 ...currentOrderForPayment,
                 items: [...currentOrderForPayment.items, {
@@ -548,13 +548,14 @@ export default function OrdersClient() {
             };
             const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? paidOrder : o);
             saveOpenOrders(newOpenOrders);
-            toast({ title: "Comanda Paga!", description: `A comanda "${saleName}" foi paga e permanecerá aberta para a entrega dos itens restantes do combo.` });
+            toast({ title: "Comanda Paga!", description: `A comanda "${saleName}" foi paga e permanecerá aberta para a entrega dos itens restantes.` });
         } else {
+            // Full payment, no combos or all claimed, close the order
             const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
             let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
             let nextSelectedOrderId: string | null = null;
             
-            if (details.leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
+            if (leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
                 const newCreditOrder: ActiveOrder = {
                     id: `order-credit-${Date.now()}`, name: `${saleName.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
                         id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
@@ -567,13 +568,13 @@ export default function OrdersClient() {
                 if (nextOrdersState.length > 0) {
                     nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
                 }
-                 if (!details.leaveChangeAsCredit) {
+                if (!leaveChangeAsCredit) {
                      toast({
                         title: "Venda Concluída!",
                         description: `Venda de ${formatCurrency(sale.totalAmount)} (${saleName}) registrada com sucesso.`,
                         action: <CheckCircle className="text-green-500" />,
                     });
-                 }
+                }
             }
             saveOpenOrders(nextOrdersState);
             setCurrentOrderId(nextSelectedOrderId);
@@ -962,7 +963,13 @@ export default function OrdersClient() {
 
       <PaymentDialog
         isOpen={isPaymentDialogOpen}
-        onOpenChange={setIsPaymentDialogOpen}
+        onOpenChange={(open) => {
+            if (!open && !currentOrder) { // If dialog is closed and there's no current order, reset payment dialog state fully
+                setIsPaymentDialogOpen(false);
+            } else {
+                setIsPaymentDialogOpen(open);
+            }
+        }}
         totalAmount={orderTotal}
         currentOrder={currentOrder}
         onSubmit={handlePayment}

@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
@@ -49,7 +48,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [creditAmount, setCreditAmount] = useState<string>('');
   const [pixAmount, setPixAmount] = useState<string>('');
   const [cashTendered, setCashTendered] = useState<string>('');
-  const [changeReturned, setChangeReturned] = useState('');
+  const [leaveChangeAsCredit, setLeaveChangeAsCredit] = useState(false);
   const [error, setError] = useState<string>('');
   const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -67,32 +66,23 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const remainingToPay = useMemo(() => amountToPay - totalPaid, [amountToPay, totalPaid]);
 
   const numCashTendered = parseLocaleFloat(cashTendered);
-  const numChangeReturned = parseLocaleFloat(changeReturned);
+  
+  const totalChange = useMemo(() => {
+    let calculatedChange = 0;
+    const overpayment = totalPaid - amountToPay;
 
-  const { totalChange, creditToLeave } = useMemo(() => {
-    const totalOwedAfterOtherPayments = amountToPay - (totalPaid - numCashAmount);
-
-    if (numCashTendered > 0 && numCashTendered > totalOwedAfterOtherPayments) {
-        const calculatedTotalChange = numCashTendered - totalOwedAfterOtherPayments;
-        const calculatedCreditToLeave = calculatedTotalChange - numChangeReturned;
-        return {
-            totalChange: Math.max(0, calculatedTotalChange),
-            creditToLeave: Math.max(0, calculatedCreditToLeave)
-        };
+    if (numCashTendered > 0) {
+        // If cash tendered is provided, change is based on that relative to the cash portion due.
+        const cashDue = amountToPay - (numDebitAmount + numCreditAmount + numPixAmount);
+        if (numCashTendered > cashDue) {
+            calculatedChange = numCashTendered - cashDue;
+        }
+    } else if (overpayment > 0) {
+        // If no cash tendered, change can only come from overpayment in cash.
+        calculatedChange = Math.min(overpayment, numCashAmount);
     }
-    // Handle overpayment case
-    if (totalPaid > amountToPay) {
-        const overpayment = totalPaid - amountToPay;
-        const totalChange = Math.min(overpayment, numCashAmount); // Only cash can generate change
-        const calculatedCreditToLeave = totalChange - numChangeReturned;
-        return {
-            totalChange: Math.max(0, totalChange),
-            creditToLeave: Math.max(0, calculatedCreditToLeave)
-        };
-    }
-
-    return { totalChange: 0, creditToLeave: 0 };
-  }, [amountToPay, totalPaid, numCashAmount, numCashTendered, numChangeReturned]);
+    return Math.max(0, calculatedChange);
+  }, [amountToPay, totalPaid, numCashAmount, numDebitAmount, numCreditAmount, numPixAmount, numCashTendered]);
 
 
   const resetState = () => {
@@ -102,7 +92,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     setCreditAmount('');
     setPixAmount('');
     setCashTendered('');
-    setChangeReturned('');
+    setLeaveChangeAsCredit(false);
     setError('');
     setSaleCompleted(null);
   };
@@ -157,7 +147,9 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
     const finalCashTendered = numCashTendered > 0 ? numCashTendered : (numCashAmount > 0 ? numCashAmount : undefined);
     const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || totalAmount;
-    const finalChangeGiven = Math.round(creditToLeave * 100) / 100;
+    
+    // Change to be credited is the total change if the checkbox is checked, otherwise it's 0.
+    const changeToCredit = leaveChangeAsCredit ? totalChange : 0;
 
     const isPartialNow = allowPartialPayment && roundedRemaining > 0.01;
     
@@ -168,23 +160,21 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         totalAmount: isPartialNow ? totalPaid : amountToPay,
         discountAmount: isPartialNow ? 0 : numDiscount,
         cashTendered: finalCashTendered,
-        changeGiven: isPartialNow ? 0 : finalChangeGiven,
+        changeGiven: changeToCredit, // This now correctly represents the credit amount
         status: 'completed',
-        leaveChangeAsCredit: isPartialNow ? false : finalChangeGiven > 0,
+        leaveChangeAsCredit: leaveChangeAsCredit, // This is now directly from the checkbox
     }
-
-    onSubmit({
-        sale: saleObject,
-        leaveChangeAsCredit: saleObject.leaveChangeAsCredit || false,
-        isPartial: isPartialNow,
-    });
-
-    if (!isPartialNow) {
+    
+    if (isPartialNow) {
+        onSubmit({ sale: saleObject, leaveChangeAsCredit: false, isPartial: true });
+        onOpenChange(false);
+    } else {
         setSaleCompleted({
             id: currentOrder?.id || `sale-${Date.now()}`,
             timestamp: new Date(),
             ...saleObject,
         });
+         onSubmit({ sale: saleObject, leaveChangeAsCredit, isPartial: false });
     }
   };
 
@@ -325,7 +315,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
               }
             </div>
             
-            {(numCashAmount > 0 || remainingToPay <= 0) && (
+            {(numCashAmount > 0) && (
               <div className="space-y-3 p-3 bg-muted/50 rounded-md">
                   <p className="text-sm font-medium">Detalhes do Pagamento em Dinheiro</p>
                   <div className="space-y-1">
@@ -333,21 +323,25 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
                       <Input id="cashTendered" type="text" placeholder="Ex: 50,00" value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="h-9"/>
                   </div>
                   {totalChange > 0 && (
-                     <div className="space-y-2">
+                     <div className="space-y-2 pt-2">
                         <div className="flex justify-between items-center">
                             <p className="text-sm font-medium">Troco Total Calculado:</p>
                             <p className="font-bold">{formatCurrency(totalChange)}</p>
                         </div>
-                        <div className="space-y-1">
-                           <Label htmlFor="changeReturned">Troco Devolvido ao Cliente</Label>
-                           <Input id="changeReturned" type="text" placeholder="Ex: 30,00" value={changeReturned} onChange={e => setChangeReturned(e.target.value)} className="h-9"/>
+                        <div className="items-top flex space-x-2 pt-2">
+                            <Checkbox id="leaveChangeAsCredit" checked={leaveChangeAsCredit} onCheckedChange={(checked) => setLeaveChangeAsCredit(Boolean(checked))} />
+                            <div className="grid gap-1.5 leading-none">
+                                <label
+                                htmlFor="leaveChangeAsCredit"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                Gerar nova comanda com o troco de {formatCurrency(totalChange)}?
+                                </label>
+                                <p className="text-xs text-muted-foreground">
+                                Se não marcado, o troco é considerado devolvido em dinheiro.
+                                </p>
+                            </div>
                         </div>
-                        {creditToLeave > 0 && (
-                          <div className="flex justify-between items-center text-sm text-blue-600 font-medium pt-1">
-                              <span>Crédito a Gerar (Troco Restante):</span>
-                              <strong>{formatCurrency(creditToLeave)}</strong>
-                          </div>
-                        )}
                      </div>
                   )}
               </div>
@@ -393,5 +387,3 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
-
-    
