@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
@@ -501,7 +502,7 @@ export default function OrdersClient() {
     return { orderTotal: total, consumedTotal: consumed };
   }, [currentOrderItems]);
   
-  const handlePayment = useCallback((details: { 
+ const handlePayment = useCallback((details: { 
     sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, 
     leaveChangeAsCredit: boolean,
     isPartial: boolean
@@ -592,6 +593,87 @@ export default function OrdersClient() {
       </div>
     );
   }
+
+  const renderOrderItems = () => {
+    const elements: React.ReactNode[] = [];
+    currentOrderItems.forEach((item, index) => {
+        const isMarker = item.id.startsWith('payment-') || item.id.startsWith('credit-');
+        const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
+
+        // Render the item itself
+        if (item.isCombo) {
+            const remaining = (item.comboItems ?? 0) - (item.claimedQuantity ?? 0);
+            elements.push(
+                <li key={`${item.id}-${index}`} className="flex flex-col gap-1 p-2 rounded-md border bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0">
+                      <IconComponent className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <p className="font-medium truncate text-xs">{item.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                    </div>
+                     <p className="font-semibold text-xs shrink-0">{formatCurrency(item.price * item.quantity)}</p>
+                  </div>
+                  <div className="flex items-center justify-between pl-1 pr-1">
+                      <Badge variant={remaining > 0 ? "secondary" : "default"} className="text-[10px] h-5">
+                        {remaining > 0 ? `${remaining} restante(s)` : 'Completo'}
+                      </Badge>
+                      <div className="flex items-center gap-1">
+                          <Button size="sm" className="h-6 px-2 text-xs" onClick={() => handleClaimComboItem(item.id)} disabled={remaining <= 0}>
+                              Liberar 1
+                          </Button>
+                          <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                              <Trash2 className="h-3 w-3" />
+                          </Button>
+                      </div>
+                  </div>
+                </li>
+            );
+        } else {
+            elements.push(
+                <li key={`${item.id}-${index}`} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
+                  <div className="flex-shrink-0">
+                    <IconComponent className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate text-xs leading-tight">{item.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                  </div>
+                  <div className="flex items-center gap-0 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
+                      <MinusCircle className="h-3 w-3" />
+                    </Button>
+                    <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
+                      <PlusCircle className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="w-[60px] text-right shrink-0">
+                    <p className="font-semibold text-xs">{formatCurrency(item.price * item.quantity)}</p>
+                  </div>
+                </li>
+            );
+        }
+        
+        // If it's a marker, add a separator after it
+        if (isMarker) {
+            elements.push(
+                <li key={`sep-${item.id}-${index}`} aria-hidden="true" className="!my-3">
+                    <div className="flex items-center">
+                        <div className="flex-grow border-t border-dashed"></div>
+                        <span className="flex-shrink mx-2 text-[10px] text-muted-foreground uppercase">Novos Itens</span>
+                        <div className="flex-grow border-t border-dashed"></div>
+                    </div>
+                </li>
+            );
+        }
+    });
+    return elements;
+};
 
   return (
     <TooltipProvider>
@@ -820,65 +902,7 @@ export default function OrdersClient() {
                   <p className="text-muted-foreground text-center py-10">Nenhum item nesta comanda.</p>
                 ) : (
                   <ul className="space-y-2">
-                  {currentOrderItems.map((item, index) => {
-                      const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
-                      if (item.isCombo) {
-                        const remaining = (item.comboItems ?? 0) - (item.claimedQuantity ?? 0);
-                        return (
-                           <li key={`${item.id}-${index}`} className="flex flex-col gap-1 p-2 rounded-md border bg-muted/30">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-shrink-0">
-                                <IconComponent className="h-5 w-5 text-muted-foreground" />
-                              </div>
-                              <div className="flex-grow min-w-0">
-                                <p className="font-medium truncate text-xs">{item.name}</p>
-                                <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
-                              </div>
-                               <p className="font-semibold text-xs shrink-0">{formatCurrency(item.price * item.quantity)}</p>
-                            </div>
-                            <div className="flex items-center justify-between pl-1 pr-1">
-                                <Badge variant={remaining > 0 ? "secondary" : "default"} className="text-[10px] h-5">
-                                  {remaining > 0 ? `${remaining} restante(s)` : 'Completo'}
-                                </Badge>
-                                <div className="flex items-center gap-1">
-                                    <Button size="sm" className="h-6 px-2 text-xs" onClick={() => handleClaimComboItem(item.id)} disabled={remaining <= 0}>
-                                        Liberar 1
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
-                                        <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                            </div>
-                          </li>
-                        )
-                      }
-                      return (
-                        <li key={`${item.id}-${index}`} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
-                          <div className="flex-shrink-0">
-                            <IconComponent className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate text-xs leading-tight">{item.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
-                          </div>
-                          <div className="flex items-center gap-0 shrink-0">
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
-                              <MinusCircle className="h-3 w-3" />
-                            </Button>
-                            <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
-                              <PlusCircle className="h-3 w-3" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <div className="w-[60px] text-right shrink-0">
-                            <p className="font-semibold text-xs">{formatCurrency(item.price * item.quantity)}</p>
-                          </div>
-                        </li>
-                      );
-                    })}
+                    {renderOrderItems()}
                   </ul>
                 )}
               </ScrollArea>
@@ -964,10 +988,8 @@ export default function OrdersClient() {
       <PaymentDialog
         isOpen={isPaymentDialogOpen}
         onOpenChange={(open) => {
-            if (!open && !currentOrder) { // If dialog is closed and there's no current order, reset payment dialog state fully
+            if (!open) {
                 setIsPaymentDialogOpen(false);
-            } else {
-                setIsPaymentDialogOpen(open);
             }
         }}
         totalAmount={orderTotal}
@@ -1381,3 +1403,4 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     
 
     
+
