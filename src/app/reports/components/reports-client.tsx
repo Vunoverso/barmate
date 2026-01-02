@@ -56,6 +56,19 @@ const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
   bank_account: 'Conta Bancária',
 };
 
+const isTransferEntry = (entry: FinancialEntry, allEntries: FinancialEntry[]): boolean => {
+    if (entry.isCorrection) return false;
+    if (entry.adjustmentId) {
+        const pair = allEntries.find(e => 
+            e.adjustmentId === entry.adjustmentId && 
+            e.id !== entry.id && 
+            e.type !== entry.type
+        );
+        return !!pair;
+    }
+    return false;
+};
+
 
 export default function ReportsClient() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -126,12 +139,29 @@ export default function ReportsClient() {
   const filteredEntries = useMemo(() => {
     return (filterByDate(financialEntries) as FinancialEntry[]).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [financialEntries, dateRange]);
+  
+  const { operationalEntries, transferEntries } = useMemo(() => {
+    const operational: FinancialEntry[] = [];
+    const transfers: FinancialEntry[] = [];
+    
+    const allEntries = getFinancialEntries(); // Use all entries to find pairs
+
+    filteredEntries.forEach(entry => {
+        if (isTransferEntry(entry, allEntries)) {
+            transfers.push(entry);
+        } else {
+            operational.push(entry);
+        }
+    });
+    
+    return { operationalEntries: operational, transferEntries: transfers };
+  }, [filteredEntries]);
 
 
   const { totalRevenue, otherIncome, totalExpenses, netBalance } = useMemo(() => {
     const salesRevenue = filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-    const incomeEntries = filteredEntries.filter(e => e.type === 'income' && !e.saleId);
-    const expensesEntries = filteredEntries.filter(e => e.type === 'expense');
+    const incomeEntries = operationalEntries.filter(e => e.type === 'income' && !e.saleId);
+    const expensesEntries = operationalEntries.filter(e => e.type === 'expense');
 
     const otherIncomeTotal = incomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
     const totalExpensesTotal = expensesEntries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -139,7 +169,7 @@ export default function ReportsClient() {
     const netBalanceCalc = salesRevenue + otherIncomeTotal - totalExpensesTotal;
 
     return { totalRevenue: salesRevenue, otherIncome: otherIncomeTotal, totalExpenses: totalExpensesTotal, netBalance: netBalanceCalc };
-  }, [filteredSales, filteredEntries]);
+  }, [filteredSales, operationalEntries]);
 
 
   const secondaryCashBoxBalance = useMemo(() => 
@@ -173,56 +203,46 @@ export default function ReportsClient() {
   }, [expectedCashInDrawer, secondaryCashBoxBalance, bankAccountBalance]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
-    const processEntries = (entries: FinancialEntry[], periodFormat: "yyyy-MM" | "yyyy-MM-dd", labelFormat: string, startOfWeek: boolean = false) => {
-        const salesEntries = entries.filter(e => e.saleId && e.type === 'income');
-        const otherIncomes = entries.filter(e => !e.saleId && e.type === 'income');
-        const allExpenses = entries.filter(e => e.type === 'expense');
+    const processSummaryData = (salesData: Sale[], operationalData: FinancialEntry[]) => {
+      const incomeFromSales = salesData.map(s => ({ timestamp: s.timestamp, amount: s.totalAmount, type: 'income' }));
+      const otherIncomes = operationalData.filter(e => e.type === 'income' && !e.saleId);
+      const allExpenses = operationalData.filter(e => e.type === 'expense');
 
-        const combined = [...salesEntries, ...otherIncomes, ...allExpenses];
+      const combined = [...incomeFromSales, ...otherIncomes, ...allExpenses];
 
-        const grouped = combined.reduce((acc, item) => {
-            let key, label;
-            const date = new Date(item.timestamp);
-            
-            if (startOfWeek) {
-                const day = date.getDay();
-                const diff = date.getDate() - day + (day === 0 ? -6 : 1); 
-                const weekStart = new Date(date.setDate(diff));
-                weekStart.setHours(0,0,0,0);
-                const weekEnd = addDays(weekStart, 6);
-                key = format(weekStart, periodFormat);
-                label = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
-            } else {
-                key = format(date, periodFormat);
-                label = format(date, labelFormat, { locale: ptBR });
-            }
+      const monthly = combined.reduce((acc, item) => {
+          const key = format(new Date(item.timestamp), "yyyy-MM");
+          const label = format(new Date(item.timestamp), "MMMM yyyy", { locale: ptBR });
+          if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
+          if (item.type === 'income') acc[key].income += item.amount;
+          else acc[key].expenses += item.amount;
+          return acc;
+      }, {} as Record<string, { period: string, income: number, expenses: number }>);
 
-            if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
-            
-            if (item.type === 'income') {
-                acc[key].income += item.amount;
-            } else if (item.type === 'expense') {
-                acc[key].expenses += item.amount;
-            }
-
-            return acc;
-        }, {} as Record<string, { period: string, income: number, expenses: number }>);
-        
-        return Object.values(grouped).sort((a,b) => new Date(b.period.slice(0,10)).getTime() - new Date(a.period.slice(0,10)).getTime());
-    };
-
-    const monthly = processEntries(filteredEntries, "yyyy-MM", "MMMM yyyy");
-    const weekly = processEntries(filteredEntries, "yyyy-MM-dd", "", true);
-
-    const processSummary = (group: any) => Object.entries(group)
-      .map(([key, value]: [string, any]) => ({ ...value, key, balance: value.income - value.expenses }))
-      .sort((a, b) => b.key.localeCompare(a.key));
+      const weekly = combined.reduce((acc, item) => {
+          const date = new Date(item.timestamp);
+          const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1));
+          weekStart.setHours(0,0,0,0);
+          const weekEnd = addDays(weekStart, 6);
+          const key = format(weekStart, "yyyy-MM-dd");
+          const label = `${format(weekStart, 'dd/MM/yy')} - ${format(weekEnd, 'dd/MM/yy')}`;
+          if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
+          if (item.type === 'income') acc[key].income += item.amount;
+          else acc[key].expenses += item.amount;
+          return acc;
+      }, {} as Record<string, { period: string, income: number, expenses: number }>);
       
-    return {
-      monthlySummary: processSummary(monthly),
-      weeklySummary: processSummary(weekly)
+      const processGroup = (group: any) => Object.entries(group)
+        .map(([key, value]: [string, any]) => ({ ...value, key, balance: value.income - value.expenses }))
+        .sort((a, b) => b.key.localeCompare(a.key));
+
+      return {
+          monthlySummary: processGroup(monthly),
+          weeklySummary: processGroup(weekly)
+      };
     };
-  }, [filteredEntries]);
+    return processSummaryData(filteredSales, operationalEntries);
+  }, [filteredSales, operationalEntries]);
 
 
   const confirmDeleteSale = (sale: Sale) => setSaleToDelete(sale);
@@ -274,14 +294,14 @@ export default function ReportsClient() {
           source: paymentMethods
         };
       }),
-      ...filteredEntries.filter(e => e.type === 'expense').map(entry => ({
+      ...operationalEntries.filter(e => e.type === 'expense').map(entry => ({
         timestamp: new Date(entry.timestamp),
         description: entry.description,
         type: 'Despesa',
         amount: entry.amount,
         source: SOURCE_MAP[entry.source]
       })),
-       ...filteredEntries.filter(e => e.type === 'income' && !e.saleId).map(entry => ({
+       ...operationalEntries.filter(e => e.type === 'income' && !e.saleId).map(entry => ({
         timestamp: new Date(entry.timestamp),
         description: entry.description,
         type: 'Entrada',
@@ -557,3 +577,6 @@ export default function ReportsClient() {
   );
 }
 
+
+
+    

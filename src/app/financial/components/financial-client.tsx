@@ -97,15 +97,17 @@ const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
 };
 
 // Helper function to identify transfer entries
-const isTransferEntry = (entry: FinancialEntry): boolean => {
+const isTransferEntry = (entry: FinancialEntry, allEntries: FinancialEntry[]): boolean => {
     if (entry.isCorrection) return false;
     // Sangrias or Suprimentos that are transfers between internal accounts
     if (entry.adjustmentId) {
-        const desc = entry.description.toLowerCase();
-        if (desc.includes('transferência') || desc.includes('abertura') || desc.includes('fechamento') || desc.includes('sangria') || desc.includes('suprimento')) {
-            // Check if there is a corresponding opposite entry for the same adjustmentId
-            return true;
-        }
+        // A real transfer will have a corresponding opposite entry (income vs expense) for the same adjustmentId
+        const pair = allEntries.find(e => 
+            e.adjustmentId === entry.adjustmentId && 
+            e.id !== entry.id && 
+            e.type !== entry.type
+        );
+        return !!pair;
     }
     return false;
 };
@@ -194,7 +196,7 @@ export default function FinancialClient() {
       }, 0);
     
     return openingBalance + balanceFromMovements;
-  }, [cashStatus, entries]);
+  }, [entries]);
 
 
   const totalGlobalBalance = useMemo(() => {
@@ -235,21 +237,9 @@ export default function FinancialClient() {
   const { operationalEntries, transferEntries } = useMemo(() => {
     const operational: FinancialEntry[] = [];
     const transfers: FinancialEntry[] = [];
-    const adjustmentIds = new Set<string>();
-
-    // First pass: identify all adjustment IDs that are part of a transfer
+    
     filteredEntries.forEach(entry => {
-        if (entry.adjustmentId) {
-            const pair = filteredEntries.find(e => e.adjustmentId === entry.adjustmentId && e.id !== entry.id && e.type !== entry.type);
-            if (pair) {
-                adjustmentIds.add(entry.adjustmentId);
-            }
-        }
-    });
-
-    // Second pass: categorize entries
-    filteredEntries.forEach(entry => {
-        if (entry.adjustmentId && adjustmentIds.has(entry.adjustmentId)) {
+        if (isTransferEntry(entry, filteredEntries)) {
             transfers.push(entry);
         } else {
             operational.push(entry);
@@ -320,8 +310,11 @@ export default function FinancialClient() {
   const netBalance = useMemo(() => salesRevenue + otherIncome - totalExpenses, [salesRevenue, otherIncome, totalExpenses]);
 
   const { monthlySummary, weeklySummary } = useMemo(() => {
-    const processEntries = (entriesToProcess: FinancialEntry[]) => {
-        const monthly = entriesToProcess.reduce((acc, item) => {
+    const processEntries = (entriesToProcess: FinancialEntry[], salesToProcess: Sale[]) => {
+        const incomeFromSales = salesToProcess.map(s => ({ timestamp: s.timestamp, amount: s.totalAmount, type: 'income' }));
+        const combinedOperational = [...entriesToProcess.filter(e => !e.saleId), ...incomeFromSales];
+
+        const monthly = combinedOperational.reduce((acc, item) => {
             const key = format(new Date(item.timestamp), "yyyy-MM");
             const label = format(new Date(item.timestamp), "MMMM yyyy", { locale: ptBR });
             if (!acc[key]) acc[key] = { period: label, income: 0, expenses: 0 };
@@ -330,7 +323,7 @@ export default function FinancialClient() {
             return acc;
         }, {} as Record<string, { period: string, income: 0, expenses: 0 }>);
 
-        const weekly = entriesToProcess.reduce((acc, item) => {
+        const weekly = combinedOperational.reduce((acc, item) => {
             const date = new Date(item.timestamp);
             const weekStart = addDays(date, -date.getDay() + (date.getDay() === 0 ? -6 : 1)); // Monday start
             const weekEnd = addDays(weekStart, 6);
@@ -342,17 +335,17 @@ export default function FinancialClient() {
             return acc;
         }, {} as Record<string, { period: string, income: 0, expenses: 0 }>);
         
-        const processSummary = (group: any) => Object.values(group)
-            .map((value: any) => ({ ...value, balance: value.income - value.expenses }))
-            .sort((a,b) => new Date(b.period.split(' - ')[0].split('/').reverse().join('-')).getTime() - new Date(a.period.split(' - ')[0].split('/').reverse().join('-')).getTime());
+        const processSummary = (group: any) => Object.entries(group)
+          .map(([key, value]: [string, any]) => ({ ...value, key, balance: value.income - value.expenses }))
+          .sort((a, b) => b.key.localeCompare(a.key));
 
         return {
             monthlySummary: processSummary(monthly),
             weeklySummary: processSummary(weekly)
         };
     };
-    return processEntries(operationalEntries);
-  }, [operationalEntries]);
+    return processEntries(operationalEntries, filteredSales);
+  }, [operationalEntries, filteredSales]);
 
   // Pagination Handlers
   const handleSalesPageChange = (page: number) => setSalesPagination(prev => ({ ...prev, currentPage: page }));
@@ -970,7 +963,7 @@ export default function FinancialClient() {
                             <TableHead>Descrição</TableHead>
                             <TableHead>Data</TableHead>
                             <TableHead>Tipo</TableHead>
-                            <TableHead>Origem</TableHead>
+                            <TableHead>Origem/Destino</TableHead>
                             <TableHead>Valor</TableHead>
                             <TableHead><span className="sr-only">Ações</span></TableHead>
                         </TableRow></TableHeader>
@@ -1268,5 +1261,7 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
         </Dialog>
     );
 }
+
+    
 
     
