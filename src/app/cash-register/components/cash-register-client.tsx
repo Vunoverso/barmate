@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
@@ -51,6 +49,14 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
+type AccountType = 'daily_cash' | 'secondary_cash' | 'bank_account';
+
+const ACCOUNT_NAMES: Record<AccountType, string> = {
+    daily_cash: 'Caixa Diário',
+    secondary_cash: 'Caixa 02',
+    bank_account: 'Conta Bancária'
+};
+
 export default function CashRegisterClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed', adjustments: [] });
@@ -94,17 +100,31 @@ export default function CashRegisterClient() {
 
 
   // Calculated balances
-  const secondaryCashBoxBalance = useMemo(() => {
-    return allFinancialEntries
-      .filter(e => e.source === 'secondary_cash')
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-  }, [allFinancialEntries]);
+    const dailyCashBalance = useMemo(() => {
+        if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+        
+        return allFinancialEntries
+            .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= new Date(cashStatus.openingTime!))
+            .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    }, [allFinancialEntries, cashStatus]);
+
+    const secondaryCashBoxBalance = useMemo(() => {
+        return allFinancialEntries
+        .filter(e => e.source === 'secondary_cash')
+        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    }, [allFinancialEntries]);
   
-  const bankAccountBalance = useMemo(() => {
-    return allFinancialEntries
-      .filter(e => e.source === 'bank_account')
-      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-  }, [allFinancialEntries]);
+    const bankAccountBalance = useMemo(() => {
+        return allFinancialEntries
+        .filter(e => e.source === 'bank_account')
+        .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+    }, [allFinancialEntries]);
+
+    const balances: Record<AccountType, number> = {
+        daily_cash: dailyCashBalance,
+        secondary_cash: secondaryCashBoxBalance,
+        bank_account: bankAccountBalance
+    };
 
 
   const handleOpenCashRegister = (openingBalance: number) => {
@@ -274,42 +294,35 @@ export default function CashRegisterClient() {
     setAdjustmentToDelete(null);
   };
 
-  const handleTransfer = (details: { amount: number; destination: 'daily_cash' | 'bank_account' }) => {
-    const { amount, destination } = details;
-    const currentCashStatus = getCashRegisterStatus();
+  const handleTransfer = (details: { amount: number; source: AccountType; destination: AccountType }) => {
+    const { amount, source, destination } = details;
+    const transferId = `transfer-${Date.now()}`;
 
-    if (secondaryCashBoxBalance < amount) {
-        toast({ title: "Saldo Insuficiente", description: "O Caixa 02 não possui saldo suficiente para esta transferência.", variant: "destructive" });
-        return;
+    addFinancialEntry([
+        { description: `Transferência para ${ACCOUNT_NAMES[destination]}`, amount: amount, type: 'expense', source: source, saleId: null, adjustmentId: transferId },
+        { description: `Transferência de ${ACCOUNT_NAMES[source]}`, amount: amount, type: 'income', source: destination, saleId: null, adjustmentId: transferId }
+    ]);
+    
+    // If the transfer involves the daily cash, it needs to be an adjustment
+    if (source === 'daily_cash' || destination === 'daily_cash') {
+        const currentCashStatus = getCashRegisterStatus();
+        if (currentCashStatus.status === 'open') {
+            const isToDaily = destination === 'daily_cash';
+            const adjustment: CashAdjustment = {
+                id: transferId,
+                amount: amount,
+                type: isToDaily ? 'in' : 'out',
+                description: isToDaily ? `Transferência de ${ACCOUNT_NAMES[source]}` : `Transferência para ${ACCOUNT_NAMES[destination]}`,
+                timestamp: new Date().toISOString(),
+                source: isToDaily ? source : undefined,
+                destination: !isToDaily ? destination : undefined,
+            };
+            const newAdjustments = [...(currentCashStatus.adjustments || []), adjustment];
+            saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
+        }
     }
 
-    if (destination === 'daily_cash') {
-      if (currentCashStatus.status !== 'open') {
-        toast({ title: "Caixa Fechado", description: "Não é possível transferir para o caixa diário pois ele está fechado.", variant: "destructive" });
-        return;
-      }
-      const transferAdjustment: CashAdjustment = {
-          id: `adj-transfer-${Date.now()}`, amount, type: 'in', description: `Transferência do Caixa 02`, timestamp: new Date().toISOString(), source: 'secondary_cash'
-      };
-
-      addFinancialEntry([
-        { description: 'Transferência para Caixa Diário', amount: amount, type: 'expense', source: 'secondary_cash', saleId: null, adjustmentId: transferAdjustment.id },
-        { description: 'Recebimento de Transferência do Caixa 02', amount: amount, type: 'income', source: 'daily_cash', saleId: null, adjustmentId: transferAdjustment.id }
-      ]);
-
-      const newAdjustments = [...(currentCashStatus.adjustments || []), transferAdjustment];
-      saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
-
-      toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para o Caixa Diário.` });
-
-    } else if (destination === 'bank_account') {
-        addFinancialEntry([
-            { description: 'Transferência para Conta Bancária', amount: amount, type: 'expense', source: 'secondary_cash', saleId: null, adjustmentId: null },
-            { description: 'Recebimento de Transferência do Caixa 02', amount: amount, type: 'income', source: 'bank_account', saleId: null, adjustmentId: null }
-        ]);
-        toast({ title: "Transferência Realizada", description: `${formatCurrency(amount)} movido do Caixa 02 para a Conta Bancária.` });
-    }
-
+    toast({ title: "Transferência Realizada!", description: `${formatCurrency(amount)} movido de ${ACCOUNT_NAMES[source]} para ${ACCOUNT_NAMES[destination]}.` });
     setIsTransferDialogOpen(false);
   }
 
@@ -578,6 +591,17 @@ export default function CashRegisterClient() {
                     </Button>
                  </CardContent>
             </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Operações entre Contas</CardTitle>
+                    <CardDescription>Mova dinheiro entre Caixa Diário, Caixa 02 e Conta Bancária.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button className="w-full" onClick={() => setIsTransferDialogOpen(true)}>
+                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Realizar Transferência
+                    </Button>
+                </CardContent>
+            </Card>
              <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between">
@@ -590,9 +614,6 @@ export default function CashRegisterClient() {
                         <p className="text-sm text-muted-foreground">Saldo Atual</p>
                         <p className="text-3xl font-bold">{formatCurrency(secondaryCashBoxBalance)}</p>
                     </div>
-                    <Button className="w-full" onClick={() => setIsTransferDialogOpen(true)} disabled={secondaryCashBoxBalance <= 0}>
-                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Realizar Transferência
-                    </Button>
                 </CardContent>
              </Card>
              <Card>
@@ -651,8 +672,9 @@ export default function CashRegisterClient() {
       <TransferDialog
         isOpen={isTransferDialogOpen}
         onOpenChange={setIsTransferDialogOpen}
-        maxAmount={secondaryCashBoxBalance}
+        balances={balances}
         onTransfer={handleTransfer}
+        cashStatus={cashStatus.status}
       />
     </>
   );
@@ -819,32 +841,57 @@ function CashAdjustmentDialog({ isOpen, onOpenChange, type, onSave, adjustmentTo
   );
 }
 
-function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: { 
-  isOpen: boolean, onOpenChange: (open: boolean) => void, maxAmount: number, onTransfer: (details: { amount: number, destination: 'daily_cash' | 'bank_account' }) => void 
+function TransferDialog({ isOpen, onOpenChange, balances, onTransfer, cashStatus }: { 
+  isOpen: boolean, 
+  onOpenChange: (open: boolean) => void, 
+  balances: Record<AccountType, number>,
+  onTransfer: (details: { amount: number; source: AccountType; destination: AccountType }) => void,
+  cashStatus: 'open' | 'closed'
 }) {
   const [amount, setAmount] = useState('');
-  const [destination, setDestination] = useState<'daily_cash' | 'bank_account'>('daily_cash');
+  const [source, setSource] = useState<AccountType | ''>('');
+  const [destination, setDestination] = useState<AccountType | ''>('');
   const { toast } = useToast();
+
+  const availableAccounts = useMemo(() => {
+      const all: { id: AccountType, name: string }[] = [
+          { id: 'secondary_cash', name: ACCOUNT_NAMES.secondary_cash },
+          { id: 'bank_account', name: ACCOUNT_NAMES.bank_account },
+      ];
+      if (cashStatus === 'open') {
+          all.unshift({ id: 'daily_cash', name: ACCOUNT_NAMES.daily_cash });
+      }
+      return all;
+  }, [cashStatus]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(',', '.'));
+    
+    if (!source || !destination) {
+        toast({ title: "Seleção Incompleta", description: "Selecione as contas de origem e destino.", variant: "destructive" });
+        return;
+    }
+    if (source === destination) {
+        toast({ title: "Seleção Inválida", description: "A conta de origem não pode ser igual à de destino.", variant: "destructive" });
+        return;
+    }
     if (isNaN(value) || value <= 0) {
       toast({ title: "Valor Inválido", description: "Insira um valor positivo.", variant: "destructive" });
       return;
     }
-    if (value > maxAmount) {
-      toast({ title: "Saldo Insuficiente", description: `O valor máximo para transferência é ${formatCurrency(maxAmount)}.`, variant: "destructive" });
+    if (value > balances[source]) {
+      toast({ title: "Saldo Insuficiente", description: `A conta de origem (${ACCOUNT_NAMES[source]}) não tem saldo suficiente.`, variant: "destructive" });
       return;
     }
-    onTransfer({ amount: value, destination });
-    onOpenChange(false);
+    onTransfer({ amount: value, source, destination });
   };
   
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setAmount('');
-      setDestination('daily_cash');
+      setSource('');
+      setDestination('');
     }
     onOpenChange(open);
   };
@@ -853,17 +900,38 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
-          <DialogHeader><DialogTitle>Transferência do Caixa 02</DialogTitle><DialogDescription>Mova dinheiro do Caixa 02 para outro local. Saldo disponível: <strong>{formatCurrency(maxAmount)}</strong></DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Transferência entre Contas</DialogTitle>
+            <DialogDescription>Mova valores entre os seus caixas e conta bancária.</DialogDescription>
+          </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="transfer-destination">Destino</Label>
-              <Select value={destination} onValueChange={(value) => setDestination(value as any)}>
-                <SelectTrigger id="transfer-destination">
-                  <SelectValue placeholder="Selecione um destino..." />
+              <Label htmlFor="transfer-source">Origem</Label>
+              <Select onValueChange={(value) => setSource(value as AccountType)} value={source}>
+                <SelectTrigger id="transfer-source">
+                  <SelectValue placeholder="Selecione a conta de origem..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="daily_cash">Caixa Diário (Principal)</SelectItem>
-                  <SelectItem value="bank_account">Conta Bancária</SelectItem>
+                  {availableAccounts.map(account => (
+                      <SelectItem key={account.id} value={account.id} disabled={balances[account.id] <= 0}>
+                        {account.name} ({formatCurrency(balances[account.id])})
+                      </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="transfer-destination">Destino</Label>
+              <Select onValueChange={(value) => setDestination(value as AccountType)} value={destination} disabled={!source}>
+                <SelectTrigger id="transfer-destination">
+                  <SelectValue placeholder="Selecione a conta de destino..." />
+                </SelectTrigger>
+                <SelectContent>
+                   {availableAccounts.filter(acc => acc.id !== source).map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -881,13 +949,3 @@ function TransferDialog({ isOpen, onOpenChange, maxAmount, onTransfer }: {
     </Dialog>
   );
 }
-
-    
-
-    
-
-    
-
-    
-
-    
