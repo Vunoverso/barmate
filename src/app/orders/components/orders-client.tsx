@@ -320,6 +320,7 @@ export default function OrdersClient() {
     
     const creditItem: OrderItem = {
         id: `credit-${Date.now()}`,
+        lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: `Crédito: ${description}`,
         price: -amount, // Negative price for credit
         quantity: 1,
@@ -383,7 +384,8 @@ export default function OrdersClient() {
             newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newItems[existingItemIndex].quantity + 1 };
           } else {
              const newItem: OrderItem = { 
-                ...product, 
+                ...product,
+                lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 quantity: 1,
                 ...(product.isCombo && { claimedQuantity: 0 })
             };
@@ -407,16 +409,16 @@ export default function OrdersClient() {
     saveOpenOrders(updatedOrders);
   }, [currentOrderId, toast]);
 
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
+  const updateQuantity = useCallback((lineItemId: string, quantity: number) => {
     if (!currentOrderId) return;
     const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
             let updatedItems;
             if (quantity <= 0) {
-                updatedItems = order.items.filter(item => item.id !== productId);
+                updatedItems = order.items.filter(item => item.lineItemId !== lineItemId);
             } else {
                 updatedItems = order.items.map(item =>
-                    item.id === productId ? { ...item, quantity } : item
+                    item.lineItemId === lineItemId ? { ...item, quantity } : item
                 );
             }
             let updatedOrder = { ...order, items: updatedItems };
@@ -428,11 +430,11 @@ export default function OrdersClient() {
     saveOpenOrders(updatedOrders);
   }, [currentOrderId]);
 
-  const removeFromOrder = useCallback((productId: string) => {
+  const removeFromOrder = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
     const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
-            let updatedOrder = { ...order, items: order.items.filter(item => item.id !== productId) };
+            let updatedOrder = { ...order, items: order.items.filter(item => item.lineItemId !== lineItemId) };
             updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
             return updatedOrder;
         }
@@ -441,12 +443,12 @@ export default function OrdersClient() {
     saveOpenOrders(updatedOrders);
   }, [currentOrderId]);
 
-  const handleClaimItem = useCallback((comboItemId: string) => {
+  const handleClaimItem = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
     const updatedOrders = getOpenOrders().map(order => {
       if (order.id === currentOrderId) {
         const items = order.items.map(item => {
-          if (item.id === comboItemId && item.isCombo) {
+          if (item.lineItemId === lineItemId && item.isCombo) {
             const claimed = item.claimedQuantity || 0;
             const totalItems = (item.comboItems || 1) * item.quantity;
             if (claimed < totalItems) {
@@ -492,6 +494,7 @@ export default function OrdersClient() {
         const totalPaid = sale.payments.reduce((acc, p) => acc + p.amount, 0);
         const paymentItem: OrderItem = {
             id: `payment-${Date.now()}`,
+            lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             name: `Pagamento Parcial (${sale.payments.map(p => p.method).join(', ')})`,
             price: -totalPaid,
             quantity: 1,
@@ -528,7 +531,9 @@ export default function OrdersClient() {
             if (leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
                 const newCreditOrder: ActiveOrder = {
                     id: `order-credit-${Date.now()}`, name: `${saleName.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
-                        id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+                        id: `credit-${Date.now()}`,
+                        lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
                     }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
                 };
                 nextOrdersState.push(newCreditOrder);
@@ -568,13 +573,14 @@ export default function OrdersClient() {
     currentOrderItems.forEach((item, index) => {
         const isMarker = item.id.startsWith('payment-') || item.id.startsWith('credit-');
         const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
+        const uniqueKey = item.lineItemId || `${item.id}-${index}`;
 
         if (item.isCombo) {
           const totalComboItems = (item.comboItems || 1) * item.quantity;
           const claimed = item.claimedQuantity || 0;
           const remaining = totalComboItems - claimed;
           elements.push(
-            <li key={`${item.id}-${index}`} className="flex flex-col gap-1.5 p-1.5 rounded-md border bg-muted/30">
+            <li key={uniqueKey} className="flex flex-col gap-1.5 p-1.5 rounded-md border bg-muted/30">
               <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2">
                 <div className="flex-shrink-0">
                   <IconComponent className="h-4 w-4 text-muted-foreground" />
@@ -587,14 +593,14 @@ export default function OrdersClient() {
                   <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)} x {item.quantity}</p>
                 </div>
                 <div className="flex items-center gap-0 shrink-0">
-                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => item.lineItemId && updateQuantity(item.lineItemId, item.quantity - 1)}>
                     <MinusCircle className="h-3 w-3" />
                   </Button>
                   <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => item.lineItemId && updateQuantity(item.lineItemId, item.quantity + 1)}>
                     <PlusCircle className="h-3 w-3" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                  <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => item.lineItemId && removeFromOrder(item.lineItemId)}>
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
@@ -606,7 +612,7 @@ export default function OrdersClient() {
                 <div className="text-xs text-muted-foreground">
                   Liberados: <span className="font-semibold text-foreground">{claimed} de {totalComboItems}</span>
                 </div>
-                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => handleClaimItem(item.id)} disabled={remaining <= 0}>
+                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => item.lineItemId && handleClaimItem(item.lineItemId)} disabled={remaining <= 0}>
                   Liberar 1
                 </Button>
               </div>
@@ -615,7 +621,7 @@ export default function OrdersClient() {
         } else {
             // Render the item itself (unified logic for non-combos)
             elements.push(
-                <li key={`${item.id}-${index}`} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
+                <li key={uniqueKey} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
                   <div className="flex-shrink-0">
                     <IconComponent className="h-4 w-4 text-muted-foreground" />
                   </div>
@@ -626,14 +632,14 @@ export default function OrdersClient() {
                     <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
                   </div>
                   <div className="flex items-center gap-0 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => item.lineItemId && updateQuantity(item.lineItemId, item.quantity - 1)} disabled={item.price < 0}>
                       <MinusCircle className="h-3 w-3" />
                     </Button>
                     <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => item.lineItemId && updateQuantity(item.lineItemId, item.quantity + 1)} disabled={item.price < 0}>
                       <PlusCircle className="h-3 w-3" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => item.lineItemId && removeFromOrder(item.lineItemId)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>

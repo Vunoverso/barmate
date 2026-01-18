@@ -30,6 +30,7 @@ export interface Product {
 }
 
 export interface OrderItem extends Product {
+  lineItemId?: string;
   quantity: number;
   categoryName?: string; 
   categoryIconName?: string;
