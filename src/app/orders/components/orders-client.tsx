@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
@@ -379,22 +378,25 @@ export default function OrdersClient() {
         if (order.id === currentOrderId) {
           let newItems = [...order.items];
           
-          const existingItemIndex = newItems.findIndex(item => item.id === product.id);
+          const existingItemIndex = newItems.findIndex(item => item.id === product.id && !item.isCombo);
           if (existingItemIndex > -1) {
             newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newItems[existingItemIndex].quantity + 1 };
           } else {
-            newItems.push({ ...product, quantity: 1 } as OrderItem);
+             const newItem: OrderItem = { 
+                ...product, 
+                quantity: 1,
+                ...(product.isCombo && { claimedQuantity: 0 })
+            };
+            newItems.push(newItem);
           }
           
           let updatedOrder = { ...order, items: newItems };
 
-          // Clear 'paid' status if a new item is added and total becomes > 0
           const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
           if (updatedOrder.status === 'paid' && currentTotal > 0) {
             delete updatedOrder.status;
           }
           
-          // Check if the order name needs to be cleaned up
           updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
 
           return updatedOrder;
@@ -439,6 +441,27 @@ export default function OrdersClient() {
     saveOpenOrders(updatedOrders);
   }, [currentOrderId]);
 
+  const handleClaimItem = useCallback((comboItemId: string) => {
+    if (!currentOrderId) return;
+    const updatedOrders = getOpenOrders().map(order => {
+      if (order.id === currentOrderId) {
+        const items = order.items.map(item => {
+          if (item.id === comboItemId && item.isCombo) {
+            const claimed = item.claimedQuantity || 0;
+            const totalItems = (item.comboItems || 1) * item.quantity;
+            if (claimed < totalItems) {
+              return { ...item, claimedQuantity: claimed + 1 };
+            }
+          }
+          return item;
+        });
+        return { ...order, items };
+      }
+      return order;
+    });
+    saveOpenOrders(updatedOrders);
+  }, [currentOrderId]);
+
   const { orderTotal, consumedTotal } = useMemo(() => {
     if (!currentOrderItems) return { orderTotal: 0, consumedTotal: 0 };
     const total = currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -463,7 +486,6 @@ export default function OrdersClient() {
 
     const saleName = currentOrderForPayment.name || 'Venda';
     
-    // Always register the financial transaction for any payment
     addSale({ ...sale, name: saleName });
     
     if (isPartial) {
@@ -482,34 +504,51 @@ export default function OrdersClient() {
         saveOpenOrders(newOpenOrders);
         toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
     } else {
-        // Full payment, always close the order
-        const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
-        let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
-        let nextSelectedOrderId: string | null = null;
-        
-        if (leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
-            const newCreditOrder: ActiveOrder = {
-                id: `order-credit-${Date.now()}`, name: `${saleName.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
-                    id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
-                }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
-            };
-            nextOrdersState.push(newCreditOrder);
-            nextSelectedOrderId = newCreditOrder.id;
-            toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${saleName} com um crédito de ${formatCurrency(sale.changeGiven)}.` });
+        // Full payment logic
+        const hasUnclaimedCombos = currentOrderForPayment.items.some(item => {
+            if (!item.isCombo) return false;
+            const totalComboItems = (item.comboItems || 1) * item.quantity;
+            const claimed = item.claimedQuantity || 0;
+            return claimed < totalComboItems;
+        });
+
+        if (hasUnclaimedCombos) {
+            // Keep order open, mark as paid
+            const updatedOrder: ActiveOrder = { ...currentOrderForPayment, status: 'paid', items: sale.items };
+            const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
+            saveOpenOrders(newOpenOrders);
+            toast({ title: "Comanda Paga!", description: `A comanda foi paga, mas permanece aberta para liberação dos itens do combo.` });
+
         } else {
-            if (nextOrdersState.length > 0) {
-                nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
+            // Full payment, close the order
+            const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
+            let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
+            let nextSelectedOrderId: string | null = null;
+            
+            if (leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
+                const newCreditOrder: ActiveOrder = {
+                    id: `order-credit-${Date.now()}`, name: `${saleName.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
+                        id: `credit-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+                    }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
+                };
+                nextOrdersState.push(newCreditOrder);
+                nextSelectedOrderId = newCreditOrder.id;
+                toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${saleName} com um crédito de ${formatCurrency(sale.changeGiven)}.` });
+            } else {
+                if (nextOrdersState.length > 0) {
+                    nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
+                }
+                if (!leaveChangeAsCredit) {
+                     toast({
+                        title: "Venda Concluída!",
+                        description: `Venda de ${formatCurrency(sale.totalAmount)} (${saleName}) registrada com sucesso.`,
+                        action: <CheckCircle className="text-green-500" />,
+                    });
+                }
             }
-            if (!leaveChangeAsCredit) {
-                 toast({
-                    title: "Venda Concluída!",
-                    description: `Venda de ${formatCurrency(sale.totalAmount)} (${saleName}) registrada com sucesso.`,
-                    action: <CheckCircle className="text-green-500" />,
-                });
-            }
+            saveOpenOrders(nextOrdersState);
+            setCurrentOrderId(nextSelectedOrderId);
         }
-        saveOpenOrders(nextOrdersState);
-        setCurrentOrderId(nextSelectedOrderId);
     }
   }, [currentOrderId, toast]);
   
@@ -530,36 +569,80 @@ export default function OrdersClient() {
         const isMarker = item.id.startsWith('payment-') || item.id.startsWith('credit-');
         const IconComponent = item.categoryIconName ? (LUCIDE_ICON_MAP[item.categoryIconName] || Package) : Package;
 
-        // Render the item itself (unified logic)
-        elements.push(
-            <li key={`${item.id}-${index}`} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
-              <div className="flex-shrink-0">
-                <IconComponent className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-medium truncate text-xs leading-tight flex items-center gap-2">
+        if (item.isCombo) {
+          const totalComboItems = (item.comboItems || 1) * item.quantity;
+          const claimed = item.claimedQuantity || 0;
+          const remaining = totalComboItems - claimed;
+          elements.push(
+            <li key={`${item.id}-${index}`} className="flex flex-col gap-1.5 p-1.5 rounded-md border bg-muted/30">
+              <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2">
+                <div className="flex-shrink-0">
+                  <IconComponent className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium truncate text-xs leading-tight flex items-center gap-2">
                     {item.name}
-                    {item.isCombo && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Combo</Badge>}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Combo</Badge>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)} x {item.quantity}</p>
+                </div>
+                <div className="flex items-center gap-0 shrink-0">
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                    <MinusCircle className="h-3 w-3" />
+                  </Button>
+                  <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                    <PlusCircle className="h-3 w-3" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="w-[60px] text-right shrink-0">
+                  <p className="font-semibold text-xs">{formatCurrency(item.price * item.quantity)}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-0 shrink-0">
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
-                  <MinusCircle className="h-3 w-3" />
+              <div className="flex items-center justify-between pl-6">
+                <div className="text-xs text-muted-foreground">
+                  Liberados: <span className="font-semibold text-foreground">{claimed} de {totalComboItems}</span>
+                </div>
+                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => handleClaimItem(item.id)} disabled={remaining <= 0}>
+                  Liberar 1
                 </Button>
-                <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
-                  <PlusCircle className="h-3 w-3" />
-                </Button>
-                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-              <div className="w-[60px] text-right shrink-0">
-                <p className="font-semibold text-xs">{formatCurrency(item.price * item.quantity)}</p>
               </div>
             </li>
-        );
+          );
+        } else {
+            // Render the item itself (unified logic for non-combos)
+            elements.push(
+                <li key={`${item.id}-${index}`} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
+                  <div className="flex-shrink-0">
+                    <IconComponent className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate text-xs leading-tight flex items-center gap-2">
+                        {item.name}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                  </div>
+                  <div className="flex items-center gap-0 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.price < 0}>
+                      <MinusCircle className="h-3 w-3" />
+                    </Button>
+                    <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.price < 0}>
+                      <PlusCircle className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive/80 h-6 w-6" onClick={() => removeFromOrder(item.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="w-[60px] text-right shrink-0">
+                    <p className="font-semibold text-xs">{formatCurrency(item.price * item.quantity)}</p>
+                  </div>
+                </li>
+            );
+        }
         
         // If it's a marker, add a separator after it
         if (isMarker) {
@@ -1301,5 +1384,3 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     </Dialog>
   );
 }
-
-    
