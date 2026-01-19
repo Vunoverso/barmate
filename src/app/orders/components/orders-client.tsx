@@ -381,44 +381,23 @@ export default function OrdersClient() {
         return order;
       }
 
-      // This is the currently selected order, let's update it.
-      let newItems: OrderItem[];
+      // To ensure all buttons work reliably, we will no longer group items automatically.
+      // Every click on a product will add it as a new, unique line item.
+      const newItem: OrderItem = {
+        ...product,
+        lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        quantity: 1,
+      };
 
+      // Add combo-specific properties if it's a combo
       if (product.isCombo) {
-        // Always add combos as a new line
-        const newItem: OrderItem = { 
-          ...product,
-          lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          quantity: 1,
-          claimedQuantity: 0
-        };
-        newItems = [...order.items, newItem];
-      } else {
-        // For regular items, try to group them
-        const existingItemIndex = order.items.findIndex(item => item.id === product.id && !item.isCombo);
-        
-        if (existingItemIndex > -1) {
-          // Increment quantity of existing item
-          newItems = order.items.map((item, index) => {
-            if (index === existingItemIndex) {
-              return { ...item, quantity: item.quantity + 1 };
-            }
-            return item;
-          });
-        } else {
-          // Add as a new item
-          const newItem: OrderItem = { 
-            ...product,
-            lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            quantity: 1
-          };
-          newItems = [...order.items, newItem];
-        }
+        newItem.claimedQuantity = 0;
       }
+      
+      const newItems = [...order.items, newItem];
       
       let updatedOrder: ActiveOrder = { ...order, items: newItems };
       
-      // Post-update logic (status, name)
       const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       if (updatedOrder.status === 'paid' && currentTotal > 0) {
         delete updatedOrder.status;
