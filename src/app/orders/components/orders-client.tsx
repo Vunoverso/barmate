@@ -377,23 +377,35 @@ export default function OrdersClient() {
     }
     const updatedOrders = getOpenOrders().map(order => {
         if (order.id === currentOrderId) {
-          let newItems = [...order.items];
-          
-          const existingItemIndex = newItems.findIndex(item => item.id === product.id && !item.isCombo);
-          if (existingItemIndex > -1) {
-            newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newItems[existingItemIndex].quantity + 1 };
-          } else {
-             const newItem: OrderItem = { 
+          const newItems = [...order.items];
+          let updatedOrder;
+
+          // Combos are always added as a new line. Regular products are grouped.
+          if (product.isCombo) {
+            const newItem: OrderItem = { 
                 ...product,
                 lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 quantity: 1,
-                ...(product.isCombo && { claimedQuantity: 0 })
+                claimedQuantity: 0
             };
             newItems.push(newItem);
+            updatedOrder = { ...order, items: newItems };
+          } else {
+              const existingItemIndex = newItems.findIndex(item => item.id === product.id && !item.isCombo);
+              if (existingItemIndex > -1) {
+                  newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newItems[existingItemIndex].quantity + 1 };
+                  updatedOrder = { ...order, items: newItems };
+              } else {
+                  const newItem: OrderItem = { 
+                      ...product,
+                      lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                      quantity: 1
+                  };
+                  newItems.push(newItem);
+                  updatedOrder = { ...order, items: newItems };
+              }
           }
           
-          let updatedOrder = { ...order, items: newItems };
-
           const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
           if (updatedOrder.status === 'paid' && currentTotal > 0) {
             delete updatedOrder.status;
