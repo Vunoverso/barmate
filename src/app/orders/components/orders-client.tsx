@@ -375,50 +375,61 @@ export default function OrdersClient() {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
       return;
     }
+    
     const updatedOrders = getOpenOrders().map(order => {
-        if (order.id === currentOrderId) {
-          const newItems = [...order.items];
-          let updatedOrder;
-
-          // Combos are always added as a new line. Regular products are grouped.
-          if (product.isCombo) {
-            const newItem: OrderItem = { 
-                ...product,
-                lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                quantity: 1,
-                claimedQuantity: 0
-            };
-            newItems.push(newItem);
-            updatedOrder = { ...order, items: newItems };
-          } else {
-              const existingItemIndex = newItems.findIndex(item => item.id === product.id && !item.isCombo);
-              if (existingItemIndex > -1) {
-                  newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newItems[existingItemIndex].quantity + 1 };
-                  updatedOrder = { ...order, items: newItems };
-              } else {
-                  const newItem: OrderItem = { 
-                      ...product,
-                      lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                      quantity: 1
-                  };
-                  newItems.push(newItem);
-                  updatedOrder = { ...order, items: newItems };
-              }
-          }
-          
-          const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-          if (updatedOrder.status === 'paid' && currentTotal > 0) {
-            delete updatedOrder.status;
-          }
-          
-          updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
-
-          return updatedOrder;
-        }
+      if (order.id !== currentOrderId) {
         return order;
-      });
+      }
+
+      // This is the currently selected order, let's update it.
+      let newItems: OrderItem[];
+
+      if (product.isCombo) {
+        // Always add combos as a new line
+        const newItem: OrderItem = { 
+          ...product,
+          lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          quantity: 1,
+          claimedQuantity: 0
+        };
+        newItems = [...order.items, newItem];
+      } else {
+        // For regular items, try to group them
+        const existingItemIndex = order.items.findIndex(item => item.id === product.id && !item.isCombo);
+        
+        if (existingItemIndex > -1) {
+          // Increment quantity of existing item
+          newItems = order.items.map((item, index) => {
+            if (index === existingItemIndex) {
+              return { ...item, quantity: item.quantity + 1 };
+            }
+            return item;
+          });
+        } else {
+          // Add as a new item
+          const newItem: OrderItem = { 
+            ...product,
+            lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            quantity: 1
+          };
+          newItems = [...order.items, newItem];
+        }
+      }
+      
+      let updatedOrder: ActiveOrder = { ...order, items: newItems };
+      
+      // Post-update logic (status, name)
+      const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      if (updatedOrder.status === 'paid' && currentTotal > 0) {
+        delete updatedOrder.status;
+      }
+      updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
+
+      return updatedOrder;
+    });
     
     saveOpenOrders(updatedOrders);
+
   }, [currentOrderId, toast]);
 
   const updateQuantity = useCallback((lineItemId: string, quantity: number) => {
