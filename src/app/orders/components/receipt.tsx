@@ -58,8 +58,8 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
           </tr>
         </thead>
         <tbody>
-          {consumedItems.map((item) => (
-            <tr key={item.id}>
+          {consumedItems.map((item, index) => (
+            <tr key={item.lineItemId || `${item.id}-${index}`}>
               <td className="text-left uppercase align-top">{item.name}</td>
               <td className="text-right align-top">{item.quantity}</td>
               <td className="text-right align-top">{formatCurrency(item.price)}</td>
