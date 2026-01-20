@@ -2,7 +2,7 @@
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
 import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients, getArchivedOrders, saveArchivedOrders } from '@/lib/constants';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { OrderStatement } from './order-statement';
 
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   if (!categories.length) return {};
@@ -82,6 +83,9 @@ export default function OrdersClient() {
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isAssociateClientDialogOpen, setIsAssociateClientDialogOpen] = useState(false);
+  const [orderToPrint, setOrderToPrint] = useState<ActiveOrder | null>(null);
+  const statementRef = useRef<HTMLDivElement>(null);
+
 
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -246,7 +250,7 @@ export default function OrdersClient() {
 
         // Save the order to the archived list
         const allArchivedOrders = getArchivedOrders();
-        saveArchivedOrders([...allArchivedOrders, orderToArchive]);
+        saveOpenOrders([...allArchivedOrders, orderToArchive]);
 
         // Remove from open orders
         const oldOrders = getOpenOrders();
@@ -369,7 +373,6 @@ export default function OrdersClient() {
         toast({ title: "Cliente Associado", description: `A comanda foi associada a ${client.name}.` });
     }, [clients, openOrders, toast]);
 
-
   const addToOrder = useCallback((product: Product) => {
     if (!currentOrderId) {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
@@ -380,16 +383,13 @@ export default function OrdersClient() {
       if (order.id !== currentOrderId) {
         return order;
       }
-
-      // To ensure all buttons work reliably, we will no longer group items automatically.
-      // Every click on a product will add it as a new, unique line item.
+      
       const newItem: OrderItem = {
         ...product,
         lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         quantity: 1,
       };
 
-      // Add combo-specific properties if it's a combo
       if (product.isCombo) {
         newItem.claimedQuantity = 0;
       }
@@ -562,6 +562,58 @@ export default function OrdersClient() {
 
   const allowPartialPayment = true;
 
+  const handlePrintOrder = useCallback(() => {
+    if (currentOrder) {
+        setOrderToPrint(currentOrder);
+    }
+  }, [currentOrder]);
+
+  const handleActualPrint = useCallback(() => {
+    const node = statementRef.current;
+    if (!node) {
+        toast({ title: "Erro", description: "Não foi possível encontrar a comanda para imprimir.", variant: "destructive" });
+        return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+        printWindow.document.write('<html><head><title>Comanda</title>');
+        printWindow.document.write(`
+            <style>
+                body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; }
+                .statement-container { max-width: 300px; margin: 0 auto; }
+                table { width: 100%; border-collapse: collapse; }
+                hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
+                .text-center { text-align: center; }
+                .font-bold { font-weight: bold; }
+                .text-sm { font-size: 12px; }
+                .text-xs { font-size: 10px; }
+                .mb-2 { margin-bottom: 8px; }
+                .w-full { width: 100%; }
+                .text-left { text-align: left; }
+                .text-right { text-align: right; }
+                .align-top { vertical-align: top; }
+                .uppercase { text-transform: uppercase; }
+                .space-y-1 > * + * { margin-top: 4px; }
+                .justify-between { display: flex; justify-content: space-between; }
+                .capitalize { text-transform: capitalize; }
+            </style>
+        `);
+        printWindow.document.write('</head><body><div class="statement-container">');
+        printWindow.document.write(node.innerHTML);
+        printWindow.document.write('</div></body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250); 
+    } else {
+        toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
+    }
+  }, [toast]);
+
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -677,6 +729,14 @@ export default function OrdersClient() {
               <CardTitle className="flex items-center justify-between">
                 Comandas Abertas
                  <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                       <Button size="icon" variant="outline" className="h-8 w-8" onClick={handlePrintOrder} disabled={!currentOrder || currentOrder.items.length === 0}>
+                            <Printer className="h-4 w-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Imprimir Comanda</p></TooltipContent>
+                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setIsMergeDialogOpen(true)} disabled={!currentOrderId || openOrders.length < 2}>
@@ -1032,6 +1092,27 @@ export default function OrdersClient() {
                 </AlertDialogContent>
             </AlertDialog>
         )}
+      <Dialog open={!!orderToPrint} onOpenChange={(open) => { if (!open) setOrderToPrint(null) }}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Imprimir Comanda: {orderToPrint?.name}</DialogTitle>
+                  <DialogDescription>
+                      Pré-visualização da comanda para impressão ou envio.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                  <div ref={statementRef} className="bg-white p-2">
+                      {orderToPrint && <OrderStatement order={orderToPrint} />}
+                  </div>
+              </div>
+              <DialogFooter>
+                  <Button variant="outline" onClick={() => setOrderToPrint(null)}>Fechar</Button>
+                  <Button onClick={handleActualPrint}>
+                      <Printer className="mr-2 h-4 w-4" /> Imprimir
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
