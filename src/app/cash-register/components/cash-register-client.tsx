@@ -183,33 +183,28 @@ export default function CashRegisterClient() {
 
     if (idToUpdate && editingAdjustment) { // Editing existing adjustment
         const allEntries = getFinancialEntries();
-        // Update the original entry directly without creating estorno
+        
         const newEntries = allEntries.map(entry => {
-            if (entry.adjustmentId === idToUpdate) {
-                 const updatedEntry = {
-                    ...entry,
-                    amount: details.amount,
-                    description: `${editingAdjustment.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${details.description}`,
-                };
-                 // If the adjustment was a transfer out, update the corresponding income entry too
-                if (editingAdjustment.type === 'out' && editingAdjustment.destination) {
-                    const correspondingIncomeEntry = allEntries.find(e => e.adjustmentId === idToUpdate && e.type === 'income');
-                    if (correspondingIncomeEntry) {
-                        return allEntries.map(e => {
-                            if (e.id === correspondingIncomeEntry.id) {
-                                return { ...e, amount: details.amount, description: `Entrada de Sangria: ${details.description}`};
-                            }
-                            if (e.id === entry.id) {
-                                return updatedEntry;
-                            }
-                            return e;
-                        }).flat();
-                    }
-                }
-                return updatedEntry;
+            // If it's not part of the adjustment we are editing, do nothing.
+            if (entry.adjustmentId !== idToUpdate) {
+                return entry;
             }
-            return entry;
-        }).flat();
+
+            // It is part of the adjustment. Update its amount.
+            const updatedEntry = { ...entry, amount: details.amount };
+
+            // Now, update the description based on which part of the transfer it is.
+            if (entry.source === 'daily_cash') {
+                // This is the primary adjustment entry on the daily cash.
+                 updatedEntry.description = `${editingAdjustment.type === 'in' ? 'Entrada/Suprimento' : 'Saída/Despesa'}: ${details.description}`;
+            } else if (editingAdjustment.destination && entry.source === editingAdjustment.destination) {
+                // This is the other side of the transfer (the income entry at the destination).
+                 updatedEntry.description = `Entrada de Sangria: ${details.description}`;
+            }
+            
+            return updatedEntry;
+        });
+        
         saveFinancialEntries(newEntries);
 
         const updatedAdjustment: CashAdjustment = { ...editingAdjustment, amount: details.amount, description: details.description };
