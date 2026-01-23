@@ -640,11 +640,11 @@ export default function OrdersClient() {
                   <IconComponent className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium truncate text-xs leading-tight flex items-center gap-2">
+                  <div className="font-medium truncate text-xs leading-tight flex items-center gap-2">
                     {item.name}
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Combo</Badge>
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)} x {item.quantity}</p>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">{formatCurrency(item.price)} x {item.quantity}</div>
                 </div>
                 <div className="flex items-center gap-0 shrink-0">
                   <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => item.lineItemId && updateQuantity(item.lineItemId, item.quantity - 1)}>
@@ -680,10 +680,10 @@ export default function OrdersClient() {
                     <IconComponent className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-medium truncate text-xs leading-tight flex items-center gap-2">
+                    <div className="font-medium truncate text-xs leading-tight flex items-center gap-2">
                         {item.name}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</div>
                   </div>
                   <div className="flex items-center gap-0 shrink-0">
                     <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => item.lineItemId && updateQuantity(item.lineItemId, item.quantity - 1)} disabled={item.price < 0}>
