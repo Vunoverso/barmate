@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
@@ -375,40 +376,36 @@ export default function OrdersClient() {
 
   const addToOrder = useCallback((product: Product) => {
     if (!currentOrderId) {
-      toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
-      return;
+        toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
+        return;
     }
     
-    const updatedOrders = getOpenOrders().map(order => {
-      if (order.id !== currentOrderId) {
-        return order;
-      }
-      
-      const newItem: OrderItem = {
-        ...product,
-        lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        quantity: 1,
-      };
+    setOpenOrders(prevOrders => prevOrders.map(order => {
+        if (order.id !== currentOrderId) {
+            return order;
+        }
 
-      if (product.isCombo) {
-        newItem.claimedQuantity = 0;
-      }
-      
-      const newItems = [...order.items, newItem];
-      
-      let updatedOrder: ActiveOrder = { ...order, items: newItems };
-      
-      const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      if (updatedOrder.status === 'paid' && currentTotal > 0) {
-        delete updatedOrder.status;
-      }
-      updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
+        const newItem: OrderItem = {
+            ...product,
+            lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            quantity: 1,
+        };
 
-      return updatedOrder;
-    });
-    
-    saveOpenOrders(updatedOrders);
+        if (product.isCombo) {
+            newItem.claimedQuantity = 0;
+        }
 
+        const updatedItems = [...order.items, newItem];
+        let updatedOrder = { ...order, items: updatedItems };
+
+        const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        if (updatedOrder.status === 'paid' && currentTotal > 0) {
+            delete updatedOrder.status;
+        }
+        updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
+
+        return updatedOrder;
+    }));
   }, [currentOrderId, toast]);
 
   const updateQuantity = useCallback((lineItemId: string, quantity: number) => {
@@ -447,24 +444,55 @@ export default function OrdersClient() {
 
   const handleClaimItem = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
-    const updatedOrders = getOpenOrders().map(order => {
-      if (order.id === currentOrderId) {
-        const items = order.items.map(item => {
-          if (item.lineItemId === lineItemId && item.isCombo) {
+    
+    const allOrders = getOpenOrders();
+    const orderToModifyIndex = allOrders.findIndex(o => o.id === currentOrderId);
+    if (orderToModifyIndex === -1) return;
+
+    const orderToModify = { ...allOrders[orderToModifyIndex] };
+    
+    // Create new items array with the updated claim
+    const newItems = orderToModify.items.map(item => {
+        if (item.lineItemId === lineItemId && item.isCombo) {
             const claimed = item.claimedQuantity || 0;
             const totalItems = (item.comboItems || 1) * item.quantity;
             if (claimed < totalItems) {
-              return { ...item, claimedQuantity: claimed + 1 };
+                return { ...item, claimedQuantity: claimed + 1 };
             }
-          }
-          return item;
-        });
-        return { ...order, items };
-      }
-      return order;
+        }
+        return item;
     });
-    saveOpenOrders(updatedOrders);
-  }, [currentOrderId]);
+    
+    const updatedOrder = { ...orderToModify, items: newItems };
+    
+    // Check if this action completes the order
+    const isNowComplete = updatedOrder.status === 'paid' && !newItems.some(item => {
+        if (!item.isCombo) return false;
+        const totalComboItems = (item.comboItems || 1) * item.quantity;
+        const claimed = item.claimedQuantity || 0;
+        return claimed < totalComboItems;
+    });
+    
+    if (isNowComplete) {
+        // Close the order by removing it
+        const finalOrders = allOrders.filter(o => o.id !== currentOrderId);
+        
+        let nextSelectedId: string | null = null;
+        if (finalOrders.length > 0) {
+            const deletedIndex = orderToModifyIndex;
+            nextSelectedId = finalOrders[deletedIndex]?.id || finalOrders[deletedIndex - 1]?.id || finalOrders[0].id;
+        }
+        
+        saveOpenOrders(finalOrders);
+        setCurrentOrderId(nextSelectedId);
+        toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${updatedOrder.name}" foram liberados e a comanda foi fechada.`});
+        
+    } else {
+        // Just update the order
+        const updatedOrdersList = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
+        saveOpenOrders(updatedOrdersList);
+    }
+  }, [currentOrderId, toast]);
 
   const { orderTotal, consumedTotal } = useMemo(() => {
     if (!currentOrderItems) return { orderTotal: 0, consumedTotal: 0 };
@@ -1164,10 +1192,10 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
               <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-grow">
-              <h3 className="font-medium text-xs sm:text-sm flex items-center gap-2 truncate">
+              <div className="font-medium text-xs sm:text-sm flex items-center gap-2 truncate">
                 {product.name}
                 {product.isCombo && <Badge variant="secondary" className="text-xs px-1.5 py-0">Combo</Badge>}
-              </h3>
+              </div>
               <p className="text-xs text-muted-foreground">{categoryName}</p>
             </div>
             <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
