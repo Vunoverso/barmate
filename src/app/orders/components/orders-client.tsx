@@ -380,22 +380,44 @@ export default function OrdersClient() {
         return;
     }
     
-    setOpenOrders(prevOrders => prevOrders.map(order => {
+    const allOrders = getOpenOrders();
+    const updatedOrders = allOrders.map(order => {
         if (order.id !== currentOrderId) {
             return order;
         }
 
-        const newItem: OrderItem = {
-            ...product,
-            lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            quantity: 1,
-        };
+        let updatedItems;
 
+        // If it's a combo, always add as a new line.
+        // If it's a normal product, try to group it.
         if (product.isCombo) {
-            newItem.claimedQuantity = 0;
+            const newItem: OrderItem = {
+                ...product,
+                lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                quantity: 1,
+                claimedQuantity: 0,
+            };
+            updatedItems = [...order.items, newItem];
+        } else {
+            const existingItem = order.items.find(item => item.id === product.id && !item.isCombo);
+            if (existingItem && existingItem.lineItemId) {
+                // Item exists, just increase quantity
+                updatedItems = order.items.map(item =>
+                    item.lineItemId === existingItem.lineItemId
+                        ? { ...item, quantity: item.quantity + 1 }
+                        : item
+                );
+            } else {
+                // Item does not exist, add as new line
+                const newItem: OrderItem = {
+                    ...product,
+                    lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    quantity: 1,
+                };
+                updatedItems = [...order.items, newItem];
+            }
         }
-
-        const updatedItems = [...order.items, newItem];
+        
         let updatedOrder = { ...order, items: updatedItems };
 
         const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -405,7 +427,9 @@ export default function OrdersClient() {
         updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
 
         return updatedOrder;
-    }));
+    });
+
+    saveOpenOrders(updatedOrders);
   }, [currentOrderId, toast]);
 
   const updateQuantity = useCallback((lineItemId: string, quantity: number) => {
@@ -445,53 +469,52 @@ export default function OrdersClient() {
   const handleClaimItem = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
     
+    let orderClosed = false;
     const allOrders = getOpenOrders();
-    const orderToModifyIndex = allOrders.findIndex(o => o.id === currentOrderId);
-    if (orderToModifyIndex === -1) return;
+    let updatedOrdersList = allOrders.map(order => {
+        if (order.id === currentOrderId) {
+            const newItems = order.items.map(item => {
+                if (item.lineItemId === lineItemId && item.isCombo) {
+                    const claimed = item.claimedQuantity || 0;
+                    const totalItems = (item.comboItems || 1) * item.quantity;
+                    if (claimed < totalItems) {
+                        return { ...item, claimedQuantity: claimed + 1 };
+                    }
+                }
+                return item;
+            });
+            
+            const updatedOrder = { ...order, items: newItems };
+            
+            const isNowComplete = updatedOrder.status === 'paid' && !newItems.some(item => {
+                if (!item.isCombo) return false;
+                const totalComboItems = (item.comboItems || 1) * item.quantity;
+                const claimed = item.claimedQuantity || 0;
+                return claimed < totalComboItems;
+            });
 
-    const orderToModify = { ...allOrders[orderToModifyIndex] };
-    
-    // Create new items array with the updated claim
-    const newItems = orderToModify.items.map(item => {
-        if (item.lineItemId === lineItemId && item.isCombo) {
-            const claimed = item.claimedQuantity || 0;
-            const totalItems = (item.comboItems || 1) * item.quantity;
-            if (claimed < totalItems) {
-                return { ...item, claimedQuantity: claimed + 1 };
+            if (isNowComplete) {
+                orderClosed = true;
+                toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${updatedOrder.name}" foram liberados e a comanda foi fechada.`});
+                return null; // This order will be filtered out
             }
+            
+            return updatedOrder;
         }
-        return item;
-    });
-    
-    const updatedOrder = { ...orderToModify, items: newItems };
-    
-    // Check if this action completes the order
-    const isNowComplete = updatedOrder.status === 'paid' && !newItems.some(item => {
-        if (!item.isCombo) return false;
-        const totalComboItems = (item.comboItems || 1) * item.quantity;
-        const claimed = item.claimedQuantity || 0;
-        return claimed < totalComboItems;
-    });
-    
-    if (isNowComplete) {
-        // Close the order by removing it
-        const finalOrders = allOrders.filter(o => o.id !== currentOrderId);
-        
+        return order;
+    }).filter(Boolean) as ActiveOrder[];
+
+    if (orderClosed) {
+        const deletedIndex = allOrders.findIndex(o => o.id === currentOrderId);
         let nextSelectedId: string | null = null;
-        if (finalOrders.length > 0) {
-            const deletedIndex = orderToModifyIndex;
-            nextSelectedId = finalOrders[deletedIndex]?.id || finalOrders[deletedIndex - 1]?.id || finalOrders[0].id;
+        if (updatedOrdersList.length > 0) {
+            nextSelectedId = updatedOrdersList[deletedIndex]?.id || updatedOrdersList[deletedIndex - 1]?.id || updatedOrdersList[0].id;
         }
-        
-        saveOpenOrders(finalOrders);
         setCurrentOrderId(nextSelectedId);
-        toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${updatedOrder.name}" foram liberados e a comanda foi fechada.`});
-        
-    } else {
-        // Just update the order
-        const updatedOrdersList = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
-        saveOpenOrders(updatedOrdersList);
     }
+    
+    saveOpenOrders(updatedOrdersList);
+
   }, [currentOrderId, toast]);
 
   const { orderTotal, consumedTotal } = useMemo(() => {
@@ -1501,3 +1524,5 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     </Dialog>
   );
 }
+
+    
