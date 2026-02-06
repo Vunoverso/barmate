@@ -31,9 +31,9 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
 
 
   return (
-    <div className="printable-content bg-white text-black font-mono w-full text-[10px] leading-tight p-2">
+    <div className="printable-content bg-white text-black font-mono w-full text-sm leading-tight p-2">
       <div className="text-center mb-2">
-        <h2 className="font-bold text-sm">{barDetails.name}</h2>
+        <h2 className="font-bold text-base">{barDetails.name}</h2>
         {barDetails.address && <p>{barDetails.address}</p>}
         {barDetails.cnpj && <p>CNPJ: {barDetails.cnpj}</p>}
       </div>
@@ -51,10 +51,10 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
       <table className="w-full">
         <thead>
           <tr className="border-b border-dotted border-black">
-            <th className="text-left">ITEM</th>
-            <th className="text-right">QTD</th>
-            <th className="text-right">VL. UN.</th>
-            <th className="text-right">VL. TOTAL</th>
+            <th className="text-left font-bold">ITEM</th>
+            <th className="text-right font-bold">QTD</th>
+            <th className="text-right font-bold">VL. UN.</th>
+            <th className="text-right font-bold">VL. TOTAL</th>
           </tr>
         </thead>
         <tbody>
@@ -88,7 +88,7 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
             <span>- {formatCurrency(sale.discountAmount)}</span>
           </div>
         )}
-        <div className="flex justify-between font-bold text-xs">
+        <div className="flex justify-between font-bold text-sm">
           <span>TOTAL</span>
           <span>{formatCurrency(sale.totalAmount)}</span>
         </div>
@@ -123,7 +123,7 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
           <hr className="border-dashed border-black my-2" />
           <div className="text-center font-bold">
               <p>CRÉDITO DE TROCO GERADO:</p>
-              <p className="text-xs">{formatCurrency(sale.changeGiven)}</p>
+              <p className="text-sm">{formatCurrency(sale.changeGiven)}</p>
           </div>
       </>
     )}
@@ -135,5 +135,3 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
     </div>
   );
 };
-
-    
