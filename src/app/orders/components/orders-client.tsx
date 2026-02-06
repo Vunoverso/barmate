@@ -363,7 +363,8 @@ export default function OrdersClient() {
         const client = clients.find(c => c.id === clientId);
         if (!client) return;
 
-        const updatedOrders = openOrders.map(order => {
+        const allOrders = getOpenOrders();
+        const updatedOrders = allOrders.map(order => {
             if (order.id === orderId) {
                 return { ...order, clientId: client.id, name: client.name };
             }
@@ -372,7 +373,7 @@ export default function OrdersClient() {
 
         saveOpenOrders(updatedOrders);
         toast({ title: "Cliente Associado", description: `A comanda foi associada a ${client.name}.` });
-    }, [clients, openOrders, toast]);
+    }, [clients, toast]);
 
   const addToOrder = useCallback((product: Product) => {
     if (!currentOrderId) {
@@ -623,58 +624,18 @@ export default function OrdersClient() {
             <style>
                 body { 
                     font-family: monospace; 
-                    line-height: 1.2; 
-                    font-size: 10px; 
-                    color: black; 
-                    background-color: white; 
                     margin: 0; 
-                    padding: 0;
                 }
                 .print-area {
                     width: 300px;
                     margin: 0 auto;
                 }
-                .print-area .printable-content {
+                .printable-content {
+                    width: 100%;
                     padding: 0 8px;
                     border-left: 1px dotted black;
                     border-right: 1px dotted black;
                     box-sizing: border-box;
-                }
-                table { 
-                    width: 100%; 
-                    border-collapse: collapse; 
-                }
-                hr { 
-                    border: none; 
-                    border-top: 1px dotted black; 
-                    margin: 8px 0; 
-                }
-                .text-center { text-align: center; }
-                .font-bold { font-weight: bold; }
-                .text-sm { font-size: 12px; }
-                .mb-2 { margin-bottom: 8px; }
-                .justify-between { display: flex; justify-content: space-between; }
-                .capitalize { text-transform: capitalize; }
-                
-                /* Table-specific styles for alignment */
-                th, td {
-                    vertical-align: top;
-                    padding: 1px 0;
-                }
-                th {
-                    font-weight: normal;
-                }
-                td.uppercase {
-                    text-transform: uppercase;
-                }
-                th:nth-child(1), td:nth-child(1) {
-                    text-align: left;
-                    word-break: break-all;
-                }
-                th:nth-child(n+2), td:nth-child(n+2) {
-                    text-align: right;
-                    white-space: nowrap;
-                    padding-left: 4px;
                 }
             </style>
         `);
@@ -1554,6 +1515,8 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     </Dialog>
   );
 }
+
+    
 
     
 
