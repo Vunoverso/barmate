@@ -251,7 +251,7 @@ export default function OrdersClient() {
 
         // Save the order to the archived list
         const allArchivedOrders = getArchivedOrders();
-        saveOpenOrders([...allArchivedOrders, orderToArchive]);
+        saveArchivedOrders([...allArchivedOrders, orderToArchive]);
 
         // Remove from open orders
         const oldOrders = getOpenOrders();
@@ -617,36 +617,44 @@ export default function OrdersClient() {
         return;
     }
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '', 'width=800,height=600');
     if (printWindow) {
-        printWindow.document.write('<html><head><title>Comanda</title>');
-        printWindow.document.write(`
-            <style>
-                body { margin: 0; font-family: monospace; }
-                @page { size: 80mm auto; margin: 0; }
-                .print-container {
-                    width: 76mm;
-                    margin: 0 auto;
-                    box-sizing: border-box;
-                    border-left: 1px dotted black;
-                    border-right: 1px dotted black;
-                    padding: 0 2mm;
-                }
-                .printable-content {
-                    box-sizing: border-box;
-                    width: 100%;
-                }
-            </style>
-        `);
-        printWindow.document.write('</head><body>');
-        printWindow.document.write(`<div class="print-container">${node.innerHTML}</div>`);
-        printWindow.document.write('</body></html>');
-        printWindow.document.close();
-        printWindow.focus();
+        document.querySelectorAll('link[rel="stylesheet"], style').forEach(styleSheet => {
+            printWindow.document.head.appendChild(styleSheet.cloneNode(true));
+        });
+
+        printWindow.document.body.innerHTML = node.outerHTML;
+
+        const printSpecificStyles = printWindow.document.createElement('style');
+        printSpecificStyles.innerHTML = `
+            @page { size: 80mm auto; margin: 0; }
+            body { 
+                background: white !important; 
+                margin: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .printable-content {
+                width: 76mm;
+                margin: 0 auto !important;
+                padding: 2mm !important;
+                box-sizing: border-box !important;
+                border-left: 1px dotted black !important;
+                border-right: 1px dotted black !important;
+                color: black !important;
+            }
+            /* Ensure all text within is black for printing */
+            .printable-content * {
+                color: black !important;
+            }
+        `;
+        printWindow.document.head.appendChild(printSpecificStyles);
+        
         setTimeout(() => {
+            printWindow.focus();
             printWindow.print();
             printWindow.close();
-        }, 250);
+        }, 500); // Wait for styles to apply
     } else {
         toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
     }
@@ -1519,3 +1527,6 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
 
     
 
+
+
+    

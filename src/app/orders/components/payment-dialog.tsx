@@ -22,7 +22,6 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import html2canvas from 'html2canvas';
 import { Receipt } from './receipt';
 import { useToast } from '@/hooks/use-toast';
 
@@ -185,15 +184,45 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         return;
     };
     try {
-        const canvas = await html2canvas(receiptRef.current, {
-            scale: 2, 
-            backgroundColor: '#ffffff',
-        });
-        const image = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = image;
-        link.download = `recibo-${saleCompleted?.id.slice(-6) || 'venda'}.png`;
-        link.click();
+        const printWindow = window.open('', '', 'width=800,height=600');
+        if (printWindow) {
+            document.querySelectorAll('link[rel="stylesheet"], style').forEach(styleSheet => {
+                printWindow.document.head.appendChild(styleSheet.cloneNode(true));
+            });
+
+            const contentNode = receiptRef.current;
+            printWindow.document.body.innerHTML = contentNode.outerHTML;
+
+            const printSpecificStyles = printWindow.document.createElement('style');
+            printSpecificStyles.innerHTML = `
+                @page { size: 80mm auto; margin: 0; }
+                body { 
+                    background: white !important; 
+                    margin: 0;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+                .printable-content {
+                    width: 76mm;
+                    margin: 0 auto !important;
+                    padding: 2mm !important;
+                    box-sizing: border-box !important;
+                    border-left: 1px dotted black !important;
+                    border-right: 1px dotted black !important;
+                    color: black !important;
+                }
+                .printable-content * {
+                    color: black !important;
+                }
+            `;
+            printWindow.document.head.appendChild(printSpecificStyles);
+        
+            setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
     } catch (err) {
         console.error(err);
         toast({ title: "Erro ao gerar imagem", description: "Não foi possível criar a imagem do recibo.", variant: "destructive" });
@@ -207,36 +236,44 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             return;
         }
 
-        const printWindow = window.open('', '_blank');
+        const printWindow = window.open('', '', 'width=800,height=600');
         if (printWindow) {
-            printWindow.document.write('<html><head><title>Recibo</title>');
-            printWindow.document.write(`
-                <style>
-                    body { margin: 0; font-family: monospace; }
-                    @page { size: 80mm auto; margin: 0; }
-                    .print-container {
-                        width: 76mm;
-                        margin: 0 auto;
-                        box-sizing: border-box;
-                        border-left: 1px dotted black;
-                        border-right: 1px dotted black;
-                        padding: 0 2mm;
-                    }
-                    .printable-content {
-                        box-sizing: border-box;
-                        width: 100%;
-                    }
-                </style>
-            `);
-            printWindow.document.write('</head><body>');
-            printWindow.document.write(`<div class="print-container">${node.innerHTML}</div>`);
-            printWindow.document.write('</body></html>');
-            printWindow.document.close();
-            printWindow.focus();
+            document.querySelectorAll('link[rel="stylesheet"], style').forEach(styleSheet => {
+                printWindow.document.head.appendChild(styleSheet.cloneNode(true));
+            });
+
+            printWindow.document.body.innerHTML = node.outerHTML;
+
+            const printSpecificStyles = printWindow.document.createElement('style');
+            printSpecificStyles.innerHTML = `
+                @page { size: 80mm auto; margin: 0; }
+                body { 
+                    background: white !important; 
+                    margin: 0;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+                .printable-content {
+                    width: 76mm;
+                    margin: 0 auto !important;
+                    padding: 2mm !important;
+                    box-sizing: border-box !important;
+                    border-left: 1px dotted black !important;
+                    border-right: 1px dotted black !important;
+                    color: black !important;
+                }
+                /* Ensure all text within is black for printing */
+                .printable-content * {
+                    color: black !important;
+                }
+            `;
+            printWindow.document.head.appendChild(printSpecificStyles);
+        
             setTimeout(() => {
+                printWindow.focus();
                 printWindow.print();
                 printWindow.close();
-            }, 250); 
+            }, 500); // Wait for styles to apply
         } else {
             toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
         }
@@ -366,7 +403,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
                         <Printer className="mr-2 h-4 w-4" />
                         Imprimir
                     </Button>
-                    <Button onClick={handleDownloadReceipt}>
+                    <Button onClick={handleDownloadReceipt} disabled>
                         <Download className="mr-2 h-4 w-4" />
                         Baixar
                     </Button>
@@ -385,5 +422,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
+
+    
 
     
