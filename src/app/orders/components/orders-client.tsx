@@ -621,17 +621,19 @@ export default function OrdersClient() {
         printWindow.document.write('<html><head><title>Comanda</title>');
         printWindow.document.write(`
             <style>
-                body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; }
-                .print-area { 
-                  max-width: 300px; 
-                  margin: 0 auto;
+                body { 
+                  font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; 
+                }
+                .printable-content {
+                  max-width: 300px;
+                  margin: 0 auto !important;
+                  padding: 0 8px !important;
                   border-left: 1px dotted black;
                   border-right: 1px dotted black;
-                  padding-left: 8px;
-                  padding-right: 8px;
+                  box-sizing: border-box !important;
                 }
                 table { width: 100%; border-collapse: collapse; }
-                hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
+                hr { border: none; border-top: 1px dotted black; margin: 8px 0; }
                 .text-center { text-align: center; }
                 .font-bold { font-weight: bold; }
                 .text-sm { font-size: 12px; }
@@ -648,9 +650,7 @@ export default function OrdersClient() {
             </style>
         `);
         printWindow.document.write('</head><body>');
-        printWindow.document.write('<div class="print-area">');
         printWindow.document.write(node.innerHTML);
-        printWindow.document.write('</div>');
         printWindow.document.write('</body></html>');
         printWindow.document.close();
         printWindow.focus();
