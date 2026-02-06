@@ -31,7 +31,7 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
 
 
   return (
-    <div className="printable-content bg-white text-black font-mono w-full text-[10px] leading-tight">
+    <div className="printable-content bg-white text-black font-mono w-full text-[10px] leading-tight p-2">
       <div className="text-center mb-2">
         <h2 className="font-bold text-sm">{barDetails.name}</h2>
         {barDetails.address && <p>{barDetails.address}</p>}
@@ -50,20 +50,20 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
 
       <table className="w-full">
         <thead>
-          <tr>
-            <th>ITEM</th>
-            <th>QTD</th>
-            <th>VL. UN.</th>
-            <th>VL. TOTAL</th>
+          <tr className="border-b border-dotted border-black">
+            <th className="text-left">ITEM</th>
+            <th className="text-right">QTD</th>
+            <th className="text-right">VL. UN.</th>
+            <th className="text-right">VL. TOTAL</th>
           </tr>
         </thead>
         <tbody>
           {consumedItems.map((item, index) => (
-            <tr key={item.lineItemId || `${item.id}-${index}`}>
+            <tr key={item.lineItemId || `${item.id}-${index}`} className="border-b border-dotted border-black last:border-b-0">
               <td className="uppercase">{item.name}</td>
-              <td>{item.quantity}</td>
-              <td>{formatCurrency(item.price)}</td>
-              <td>{formatCurrency(item.price * item.quantity)}</td>
+              <td className="text-right">{item.quantity}</td>
+              <td className="text-right">{formatCurrency(item.price)}</td>
+              <td className="text-right">{formatCurrency(item.price * item.quantity)}</td>
             </tr>
           ))}
         </tbody>

@@ -200,88 +200,49 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     }
   };
   
-    const handlePrintReceipt = () => {
+    const handlePrintReceipt = async () => {
         const node = receiptRef.current;
         if (!node) {
             toast({ title: "Erro", description: "Não foi possível encontrar o recibo para imprimir.", variant: "destructive" });
             return;
         }
 
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-            printWindow.document.write('<html><head><title>Recibo</title>');
-            printWindow.document.write(`
-                <style>
-                    body { 
-                        font-family: monospace; 
-                        line-height: 1.2; 
-                        font-size: 10px; 
-                        color: black; 
-                        background-color: white; 
-                        margin: 0; 
-                        padding: 0;
-                    }
-                    .print-area {
-                        width: 300px;
-                        margin: 0 auto;
-                    }
-                    .print-area .printable-content {
-                        padding: 0 8px;
-                        border-left: 1px dotted black;
-                        border-right: 1px dotted black;
-                        box-sizing: border-box;
-                    }
-                    table { 
-                        width: 100%; 
-                        border-collapse: collapse; 
-                    }
-                    hr { 
-                        border: none; 
-                        border-top: 1px dotted black; 
-                        margin: 8px 0; 
-                    }
-                    .text-center { text-align: center; }
-                    .font-bold { font-weight: bold; }
-                    .text-sm { font-size: 12px; }
-                    .mb-2 { margin-bottom: 8px; }
-                    .justify-between { display: flex; justify-content: space-between; }
-                    .capitalize { text-transform: capitalize; }
-                    
-                    /* Table-specific styles for alignment */
-                    th, td {
-                        vertical-align: top;
-                        padding: 1px 0;
-                    }
-                    th {
-                        font-weight: normal;
-                    }
-                    td.uppercase {
-                        text-transform: uppercase;
-                    }
-                    th:nth-child(1), td:nth-child(1) {
-                        text-align: left;
-                        word-break: break-all;
-                    }
-                    th:nth-child(n+2), td:nth-child(n+2) {
-                        text-align: right;
-                        white-space: nowrap;
-                        padding-left: 4px;
-                    }
-                </style>
-            `);
-            printWindow.document.write('</head><body>');
-            printWindow.document.write('<div class="print-area">');
-            printWindow.document.write(node.innerHTML);
-            printWindow.document.write('</div>');
-            printWindow.document.write('</body></html>');
-            printWindow.document.close();
-            printWindow.focus();
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.close();
-            }, 250); 
-        } else {
-            toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
+        try {
+            const canvas = await html2canvas(node, {
+                scale: 2, 
+                backgroundColor: '#ffffff',
+            });
+            const imageUrl = canvas.toDataURL('image/png');
+
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.write('<html><head><title>Recibo</title>');
+                printWindow.document.write(`
+                    <style>
+                        @media print {
+                            @page { size: 80mm auto; margin: 0; }
+                            body { margin: 0; }
+                            img { width: 100%; }
+                        }
+                        body { margin: 0; text-align: center; }
+                        img { width: 100%; max-width: 302px; /* 80mm thermal paper width approx */ }
+                    </style>
+                `);
+                printWindow.document.write('</head><body>');
+                printWindow.document.write(`<img src="${imageUrl}" />`);
+                printWindow.document.write('</body></html>');
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => {
+                    printWindow.print();
+                    printWindow.close();
+                }, 250); 
+            } else {
+                toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
+            }
+        } catch (err) {
+            console.error("Print error:", err);
+            toast({ title: "Erro ao gerar imagem", description: "Não foi possível criar a imagem do recibo para impressão.", variant: "destructive" });
         }
     };
   
