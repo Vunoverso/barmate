@@ -200,49 +200,45 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     }
   };
   
-    const handlePrintReceipt = async () => {
+    const handlePrintReceipt = () => {
         const node = receiptRef.current;
         if (!node) {
             toast({ title: "Erro", description: "Não foi possível encontrar o recibo para imprimir.", variant: "destructive" });
             return;
         }
 
-        try {
-            const canvas = await html2canvas(node, {
-                scale: 2, 
-                backgroundColor: '#ffffff',
-            });
-            const imageUrl = canvas.toDataURL('image/png');
-
-            const printWindow = window.open('', '_blank');
-            if (printWindow) {
-                printWindow.document.write('<html><head><title>Recibo</title>');
-                printWindow.document.write(`
-                    <style>
-                        @media print {
-                            @page { size: 80mm auto; margin: 0; }
-                            body { margin: 0; }
-                            img { width: 100%; }
-                        }
-                        body { margin: 0; text-align: center; }
-                        img { width: 100%; max-width: 302px; /* 80mm thermal paper width approx */ }
-                    </style>
-                `);
-                printWindow.document.write('</head><body>');
-                printWindow.document.write(`<img src="${imageUrl}" />`);
-                printWindow.document.write('</body></html>');
-                printWindow.document.close();
-                printWindow.focus();
-                setTimeout(() => {
-                    printWindow.print();
-                    printWindow.close();
-                }, 250); 
-            } else {
-                toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
-            }
-        } catch (err) {
-            console.error("Print error:", err);
-            toast({ title: "Erro ao gerar imagem", description: "Não foi possível criar a imagem do recibo para impressão.", variant: "destructive" });
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write('<html><head><title>Recibo</title>');
+            printWindow.document.write(`
+                <style>
+                    body { margin: 0; font-family: monospace; }
+                    @page { size: 80mm auto; margin: 0; }
+                    .print-container {
+                        width: 76mm;
+                        margin: 0 auto;
+                        box-sizing: border-box;
+                        border-left: 1px dotted black;
+                        border-right: 1px dotted black;
+                        padding: 0 2mm;
+                    }
+                    .printable-content {
+                        box-sizing: border-box;
+                        width: 100%;
+                    }
+                </style>
+            `);
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(`<div class="print-container">${node.innerHTML}</div>`);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 250); 
+        } else {
+            toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
         }
     };
   
