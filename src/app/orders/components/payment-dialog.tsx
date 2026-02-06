@@ -213,7 +213,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             printWindow.document.write(`
                 <style>
                     body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; box-sizing: border-box; }
-                    .receipt-container { max-width: 300px; margin: 0 auto; }
+                    .receipt-container { max-width: 300px; margin: 0 auto; box-sizing: border-box; }
                     table { width: 100%; border-collapse: collapse; }
                     hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
                     .text-center { text-align: center; }
@@ -259,7 +259,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         
         <ScrollArea className="px-6">
         {saleCompleted ? (
-            <div ref={receiptRef} className="bg-white p-2">
+            <div ref={receiptRef} className="bg-white">
                 <Receipt sale={saleCompleted} orderName={currentOrder?.name} />
             </div>
         ) : (
@@ -388,4 +388,5 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
+
 

@@ -25,7 +25,7 @@ export const OrderStatement = ({ order }: OrderStatementProps) => {
   const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   return (
-    <div className="bg-white text-black font-mono p-4 max-w-sm w-full text-[10px] leading-tight">
+    <div className="bg-white text-black font-mono p-2 w-full text-[10px] leading-tight border border-black">
       <div className="text-center mb-2">
         <h2 className="font-bold text-sm">{barDetails.name}</h2>
         {barDetails.address && <p>{barDetails.address}</p>}

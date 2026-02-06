@@ -31,7 +31,7 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
 
 
   return (
-    <div className="bg-white text-black font-mono p-4 max-w-sm w-full text-[10px] leading-tight">
+    <div className="bg-white text-black font-mono p-2 w-full text-[10px] leading-tight border border-black">
       <div className="text-center mb-2">
         <h2 className="font-bold text-sm">{barDetails.name}</h2>
         {barDetails.address && <p>{barDetails.address}</p>}

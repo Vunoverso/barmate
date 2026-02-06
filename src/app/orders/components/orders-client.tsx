@@ -632,7 +632,9 @@ export default function OrdersClient() {
         printWindow.document.write(`
             <style>
                 body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; box-sizing: border-box; }
-                .statement-container { max-width: 300px; margin: 0 auto; }
+                .statement-container { max-width: 300px; margin: 0 auto; box-sizing: border-box; }
+                .p-4 { padding: 0 !important; }
+                .max-w-sm { max-width: 100% !important; }
                 table { width: 100%; border-collapse: collapse; }
                 hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
                 .text-center { text-align: center; }
@@ -874,7 +876,7 @@ export default function OrdersClient() {
                       >
                         <div className="flex-1 min-w-0">
                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-xs truncate block max-w-full">{order.name}</span>
+                              <div className="font-semibold text-xs truncate block max-w-full">{order.name}</div>
                               {order.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-4 text-[10px] px-1.5">Paga</Badge>}
                            </div>
                            <div className="text-[0.65rem] text-muted-foreground flex items-center gap-1.5">
@@ -1152,7 +1154,7 @@ export default function OrdersClient() {
                   </DialogDescription>
               </DialogHeader>
               <div className="py-4">
-                  <div ref={statementRef} className="bg-white p-2">
+                  <div ref={statementRef} className="bg-white">
                       {orderToPrint && <OrderStatement order={orderToPrint} />}
                   </div>
               </div>
