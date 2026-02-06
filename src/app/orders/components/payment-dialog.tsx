@@ -216,8 +216,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
                     .print-area { 
                       max-width: 300px; 
                       margin: 0 auto;
-                      border-left: 1px dashed black;
-                      border-right: 1px dashed black;
+                      border-left: 1px dotted black;
+                      border-right: 1px dotted black;
                       padding-left: 8px;
                       padding-right: 8px;
                     }

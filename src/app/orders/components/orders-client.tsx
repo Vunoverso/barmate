@@ -388,7 +388,7 @@ export default function OrdersClient() {
     
     const isNormalProduct = !product.isCombo;
     const existingItemIndex = isNormalProduct 
-        ? orderToUpdate.items.findIndex(item => item.id === product.id && !item.isCombo)
+        ? orderToUpdate.items.findIndex(item => item.id === product.id && !item.isCombo && item.price === product.price)
         : -1;
 
     if (existingItemIndex > -1) {
@@ -625,8 +625,8 @@ export default function OrdersClient() {
                 .print-area { 
                   max-width: 300px; 
                   margin: 0 auto;
-                  border-left: 1px dashed black;
-                  border-right: 1px dashed black;
+                  border-left: 1px dotted black;
+                  border-right: 1px dotted black;
                   padding-left: 8px;
                   padding-right: 8px;
                 }
