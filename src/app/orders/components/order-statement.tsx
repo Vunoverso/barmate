@@ -26,7 +26,7 @@ export const OrderStatement = ({ order }: OrderStatementProps) => {
   const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   return (
-    <div className="printable-content bg-white text-black font-mono w-full text-[10px] leading-tight px-2 py-2">
+    <div className="printable-content bg-white text-black font-mono w-full text-[10px] leading-tight">
       <div className="text-center mb-2">
         <h2 className="font-bold text-sm">{barDetails.name}</h2>
         {barDetails.address && <p>{barDetails.address}</p>}
@@ -46,19 +46,19 @@ export const OrderStatement = ({ order }: OrderStatementProps) => {
       <table className="w-full">
         <thead>
           <tr>
-            <th className="text-left font-normal">ITEM</th>
-            <th className="text-right font-normal">QTD</th>
-            <th className="text-right font-normal">VL. UN.</th>
-            <th className="text-right font-normal">VL. TOTAL</th>
+            <th>ITEM</th>
+            <th>QTD</th>
+            <th>VL. UN.</th>
+            <th>VL. TOTAL</th>
           </tr>
         </thead>
         <tbody>
           {order.items.map((item, index) => (
             <tr key={item.lineItemId || `item-${index}`}>
-              <td className="text-left uppercase align-top">{item.name}</td>
-              <td className="text-right align-top">{item.quantity}</td>
-              <td className="text-right align-top">{formatCurrency(item.price)}</td>
-              <td className="text-right align-top">{formatCurrency(item.price * item.quantity)}</td>
+              <td className="uppercase">{item.name}</td>
+              <td>{item.quantity}</td>
+              <td>{formatCurrency(item.price)}</td>
+              <td>{formatCurrency(item.price * item.quantity)}</td>
             </tr>
           ))}
         </tbody>
