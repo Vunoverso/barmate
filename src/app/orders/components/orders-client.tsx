@@ -379,39 +379,30 @@ export default function OrdersClient() {
       toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
       return;
     }
-
+    
     const allOrders = getOpenOrders();
     const orderToUpdate = allOrders.find(order => order.id === currentOrderId);
     if (!orderToUpdate) return;
     
     let updatedItems: OrderItem[];
     
-    // Combos are always added as a new line
-    if (product.isCombo) {
-      const newItem: OrderItem = {
-        ...product,
-        lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        quantity: 1,
-        claimedQuantity: 0,
-      };
-      updatedItems = [...orderToUpdate.items, newItem];
-    } else {
-      // Normal products are grouped
-      const existingItemIndex = orderToUpdate.items.findIndex(item => item.id === product.id && !item.isCombo);
-      if (existingItemIndex > -1) {
+    const isNormalProduct = !product.isCombo;
+    const existingItemIndex = isNormalProduct 
+        ? orderToUpdate.items.findIndex(item => item.id === product.id && !item.isCombo)
+        : -1;
+
+    if (existingItemIndex > -1) {
         updatedItems = [...orderToUpdate.items];
-        updatedItems[existingItemIndex] = {
-          ...updatedItems[existingItemIndex],
-          quantity: updatedItems[existingItemIndex].quantity + 1
-        };
-      } else {
+        const existingItem = updatedItems[existingItemIndex];
+        updatedItems[existingItemIndex] = { ...existingItem, quantity: existingItem.quantity + 1 };
+    } else {
         const newItem: OrderItem = {
-          ...product,
-          lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          quantity: 1,
+            ...product,
+            lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            quantity: 1,
+            claimedQuantity: 0,
         };
         updatedItems = [...orderToUpdate.items, newItem];
-      }
     }
     
     let updatedOrder: ActiveOrder = { ...orderToUpdate, items: updatedItems };
@@ -466,8 +457,8 @@ export default function OrdersClient() {
   const handleClaimItem = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
 
-    const allOrders = getOpenOrders();
     let orderToPotentiallyClose: ActiveOrder | null = null;
+    const allOrders = getOpenOrders();
     
     const updatedOrdersList = allOrders.map(order => {
         if (order.id === currentOrderId) {
@@ -484,7 +475,6 @@ export default function OrdersClient() {
             
             const updatedOrder: ActiveOrder = { ...order, items: newItems };
             
-            // Check if the order is now complete
             const hasUnclaimedCombos = newItems.some(item => {
                 if (!item.isCombo) return false;
                 const totalComboItems = (item.comboItems || 1) * item.quantity;
@@ -494,7 +484,7 @@ export default function OrdersClient() {
 
             if (updatedOrder.status === 'paid' && !hasUnclaimedCombos) {
                 orderToPotentiallyClose = updatedOrder;
-                return null; // This order will be filtered out later
+                return null;
             }
             
             return updatedOrder;
@@ -631,10 +621,15 @@ export default function OrdersClient() {
         printWindow.document.write('<html><head><title>Comanda</title>');
         printWindow.document.write(`
             <style>
-                body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; box-sizing: border-box; }
-                .statement-container { max-width: 300px; margin: 0 auto; box-sizing: border-box; }
-                .p-4 { padding: 0 !important; }
-                .max-w-sm { max-width: 100% !important; }
+                body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; }
+                .print-area { 
+                  max-width: 300px; 
+                  margin: 0 auto;
+                  border-left: 1px dashed black;
+                  border-right: 1px dashed black;
+                  padding-left: 8px;
+                  padding-right: 8px;
+                }
                 table { width: 100%; border-collapse: collapse; }
                 hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
                 .text-center { text-align: center; }
@@ -652,9 +647,11 @@ export default function OrdersClient() {
                 .capitalize { text-transform: capitalize; }
             </style>
         `);
-        printWindow.document.write('</head><body><div class="statement-container">');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write('<div class="print-area">');
         printWindow.document.write(node.innerHTML);
-        printWindow.document.write('</div></body></html>');
+        printWindow.document.write('</div>');
+        printWindow.document.write('</body></html>');
         printWindow.document.close();
         printWindow.focus();
         setTimeout(() => {

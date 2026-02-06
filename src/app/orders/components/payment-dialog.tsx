@@ -212,8 +212,15 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             printWindow.document.write('<html><head><title>Recibo</title>');
             printWindow.document.write(`
                 <style>
-                    body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; box-sizing: border-box; }
-                    .receipt-container { max-width: 300px; margin: 0 auto; box-sizing: border-box; }
+                    body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; }
+                    .print-area { 
+                      max-width: 300px; 
+                      margin: 0 auto;
+                      border-left: 1px dashed black;
+                      border-right: 1px dashed black;
+                      padding-left: 8px;
+                      padding-right: 8px;
+                    }
                     table { width: 100%; border-collapse: collapse; }
                     hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
                     .text-center { text-align: center; }
@@ -231,9 +238,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
                     .capitalize { text-transform: capitalize; }
                 </style>
             `);
-            printWindow.document.write('</head><body><div class="receipt-container">');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write('<div class="print-area">');
             printWindow.document.write(node.innerHTML);
-            printWindow.document.write('</div></body></html>');
+            printWindow.document.write('</div>');
+            printWindow.document.write('</body></html>');
             printWindow.document.close();
             printWindow.focus();
             setTimeout(() => {
@@ -388,5 +397,3 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
-
-
