@@ -376,65 +376,61 @@ export default function OrdersClient() {
 
   const addToOrder = useCallback((product: Product) => {
     if (!currentOrderId) {
-        toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
-        return;
+      toast({ title: "Nenhuma comanda selecionada", description: "Crie ou selecione uma comanda para adicionar produtos.", variant: "destructive" });
+      return;
+    }
+
+    const allOrders = getOpenOrders();
+    const orderToUpdate = allOrders.find(order => order.id === currentOrderId);
+    if (!orderToUpdate) return;
+    
+    let updatedItems: OrderItem[];
+    
+    // Combos are always added as a new line
+    if (product.isCombo) {
+      const newItem: OrderItem = {
+        ...product,
+        lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        quantity: 1,
+        claimedQuantity: 0,
+      };
+      updatedItems = [...orderToUpdate.items, newItem];
+    } else {
+      // Normal products are grouped
+      const existingItemIndex = orderToUpdate.items.findIndex(item => item.id === product.id && !item.isCombo);
+      if (existingItemIndex > -1) {
+        updatedItems = [...orderToUpdate.items];
+        updatedItems[existingItemIndex] = {
+          ...updatedItems[existingItemIndex],
+          quantity: updatedItems[existingItemIndex].quantity + 1
+        };
+      } else {
+        const newItem: OrderItem = {
+          ...product,
+          lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          quantity: 1,
+        };
+        updatedItems = [...orderToUpdate.items, newItem];
+      }
     }
     
-    const allOrders = getOpenOrders();
-    const updatedOrders = allOrders.map(order => {
-        if (order.id !== currentOrderId) {
-            return order;
-        }
+    let updatedOrder: ActiveOrder = { ...orderToUpdate, items: updatedItems };
 
-        let updatedItems;
+    const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    if (updatedOrder.status === 'paid' && currentTotal > 0) {
+      delete updatedOrder.status;
+    }
+    updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
 
-        // If it's a combo, always add as a new line.
-        // If it's a normal product, try to group it.
-        if (product.isCombo) {
-            const newItem: OrderItem = {
-                ...product,
-                lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                quantity: 1,
-                claimedQuantity: 0,
-            };
-            updatedItems = [...order.items, newItem];
-        } else {
-            const existingItem = order.items.find(item => item.id === product.id && !item.isCombo);
-            if (existingItem && existingItem.lineItemId) {
-                // Item exists, just increase quantity
-                updatedItems = order.items.map(item =>
-                    item.lineItemId === existingItem.lineItemId
-                        ? { ...item, quantity: item.quantity + 1 }
-                        : item
-                );
-            } else {
-                // Item does not exist, add as new line
-                const newItem: OrderItem = {
-                    ...product,
-                    lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    quantity: 1,
-                };
-                updatedItems = [...order.items, newItem];
-            }
-        }
-        
-        let updatedOrder = { ...order, items: updatedItems };
-
-        const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        if (updatedOrder.status === 'paid' && currentTotal > 0) {
-            delete updatedOrder.status;
-        }
-        updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
-
-        return updatedOrder;
-    });
-
-    saveOpenOrders(updatedOrders);
+    const newOpenOrders = allOrders.map(order => (order.id === currentOrderId ? updatedOrder : order));
+    saveOpenOrders(newOpenOrders);
   }, [currentOrderId, toast]);
+  
 
   const updateQuantity = useCallback((lineItemId: string, quantity: number) => {
     if (!currentOrderId) return;
-    const updatedOrders = getOpenOrders().map(order => {
+    const allOrders = getOpenOrders();
+    const updatedOrders = allOrders.map(order => {
         if (order.id === currentOrderId) {
             let updatedItems;
             if (quantity <= 0) {
@@ -455,7 +451,8 @@ export default function OrdersClient() {
 
   const removeFromOrder = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
-    const updatedOrders = getOpenOrders().map(order => {
+    const allOrders = getOpenOrders();
+    const updatedOrders = allOrders.map(order => {
         if (order.id === currentOrderId) {
             let updatedOrder = { ...order, items: order.items.filter(item => item.lineItemId !== lineItemId) };
             updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
@@ -468,10 +465,11 @@ export default function OrdersClient() {
 
   const handleClaimItem = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
-    
-    let orderClosed = false;
+
     const allOrders = getOpenOrders();
-    let updatedOrdersList = allOrders.map(order => {
+    let orderToPotentiallyClose: ActiveOrder | null = null;
+    
+    const updatedOrdersList = allOrders.map(order => {
         if (order.id === currentOrderId) {
             const newItems = order.items.map(item => {
                 if (item.lineItemId === lineItemId && item.isCombo) {
@@ -484,19 +482,19 @@ export default function OrdersClient() {
                 return item;
             });
             
-            const updatedOrder = { ...order, items: newItems };
+            const updatedOrder: ActiveOrder = { ...order, items: newItems };
             
-            const isNowComplete = updatedOrder.status === 'paid' && !newItems.some(item => {
+            // Check if the order is now complete
+            const hasUnclaimedCombos = newItems.some(item => {
                 if (!item.isCombo) return false;
                 const totalComboItems = (item.comboItems || 1) * item.quantity;
                 const claimed = item.claimedQuantity || 0;
                 return claimed < totalComboItems;
             });
 
-            if (isNowComplete) {
-                orderClosed = true;
-                toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${updatedOrder.name}" foram liberados e a comanda foi fechada.`});
-                return null; // This order will be filtered out
+            if (updatedOrder.status === 'paid' && !hasUnclaimedCombos) {
+                orderToPotentiallyClose = updatedOrder;
+                return null; // This order will be filtered out later
             }
             
             return updatedOrder;
@@ -504,7 +502,8 @@ export default function OrdersClient() {
         return order;
     }).filter(Boolean) as ActiveOrder[];
 
-    if (orderClosed) {
+    if (orderToPotentiallyClose) {
+        toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${orderToPotentiallyClose.name}" foram liberados e a comanda foi fechada.`});
         const deletedIndex = allOrders.findIndex(o => o.id === currentOrderId);
         let nextSelectedId: string | null = null;
         if (updatedOrdersList.length > 0) {
@@ -516,6 +515,7 @@ export default function OrdersClient() {
     saveOpenOrders(updatedOrdersList);
 
   }, [currentOrderId, toast]);
+
 
   const { orderTotal, consumedTotal } = useMemo(() => {
     if (!currentOrderItems) return { orderTotal: 0, consumedTotal: 0 };
@@ -631,7 +631,7 @@ export default function OrdersClient() {
         printWindow.document.write('<html><head><title>Comanda</title>');
         printWindow.document.write(`
             <style>
-                body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; }
+                body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; box-sizing: border-box; }
                 .statement-container { max-width: 300px; margin: 0 auto; }
                 table { width: 100%; border-collapse: collapse; }
                 hr { border: none; border-top: 1px dashed black; margin: 8px 0; }

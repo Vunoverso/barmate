@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
@@ -211,7 +212,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             printWindow.document.write('<html><head><title>Recibo</title>');
             printWindow.document.write(`
                 <style>
-                    body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; }
+                    body { font-family: monospace; line-height: 1.2; font-size: 10px; color: black; background-color: white; margin: 0; padding: 10px; width: 300px; box-sizing: border-box; }
                     .receipt-container { max-width: 300px; margin: 0 auto; }
                     table { width: 100%; border-collapse: collapse; }
                     hr { border: none; border-top: 1px dashed black; margin: 8px 0; }
@@ -387,3 +388,4 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
+
