@@ -630,10 +630,12 @@ export default function OrdersClient() {
                     margin: 0; 
                     padding: 0;
                 }
-                .printable-content {
+                .print-area {
                     width: 300px;
                     margin: 0 auto;
-                    padding: 10px 8px;
+                }
+                .print-area .printable-content {
+                    padding: 0 8px;
                     border-left: 1px dotted black;
                     border-right: 1px dotted black;
                     box-sizing: border-box;
@@ -667,17 +669,19 @@ export default function OrdersClient() {
                 }
                 th:nth-child(1), td:nth-child(1) {
                     text-align: left;
-                    word-break: break-all; /* Use break-all for aggressive wrapping */
+                    word-break: break-all;
                 }
                 th:nth-child(n+2), td:nth-child(n+2) {
                     text-align: right;
                     white-space: nowrap;
-                    padding-left: 4px; /* small gap between columns */
+                    padding-left: 4px;
                 }
             </style>
         `);
         printWindow.document.write('</head><body>');
+        printWindow.document.write('<div class="print-area">');
         printWindow.document.write(node.innerHTML);
+        printWindow.document.write('</div>');
         printWindow.document.write('</body></html>');
         printWindow.document.close();
         printWindow.focus();
@@ -1178,7 +1182,7 @@ export default function OrdersClient() {
                   </DialogDescription>
               </DialogHeader>
               <div className="py-4">
-                  <div ref={statementRef} className="bg-white">
+                  <div ref={statementRef}>
                       {orderToPrint && <OrderStatement order={orderToPrint} />}
                   </div>
               </div>
@@ -1550,5 +1554,7 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     </Dialog>
   );
 }
+
+    
 
     

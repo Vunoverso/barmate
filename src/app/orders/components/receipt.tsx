@@ -135,3 +135,5 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
     </div>
   );
 };
+
+    
