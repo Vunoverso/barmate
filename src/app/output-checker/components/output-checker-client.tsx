@@ -7,20 +7,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, CheckCircle, Bot } from 'lucide-react';
+import { AlertCircle, CheckCircle, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { checkExpense, type CheckExpenseOutput } from '@/ai/flows/check-outputs-flow';
 import { DatePickerWithRange } from '@/components/ui/date-picker-range';
 import type { DateRange } from "react-day-picker";
 import { addDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/constants';
 
+// Tipo de resultado para a verificação, agora local.
+type VerificationResult = {
+  isDuplicate: boolean;
+  summary: string;
+  foundEntries: {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+  }[];
+}
+
+
 export default function OutputCheckerClient() {
   const [allEntries, setAllEntries] = useState<FinancialEntry[]>([]);
   const [pastedText, setPastedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<CheckExpenseOutput | null>(null);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const { toast } = useToast();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
@@ -32,7 +44,7 @@ export default function OutputCheckerClient() {
     setAllEntries(entries);
   }, []);
 
-  const handleVerify = async () => {
+  const handleVerify = () => {
     if (!pastedText.trim()) {
       toast({ title: "Cole a despesa", description: "A área de texto não pode estar vazia.", variant: "destructive" });
       return;
@@ -45,9 +57,28 @@ export default function OutputCheckerClient() {
     setIsLoading(true);
     setVerificationResult(null);
 
-    // Filter entries by date range and type 'expense'
+    // 1. Analisa o valor do texto colado.
+    const amountRegex = /((?:[0-9]{1,3}(?:\.[0-9]{3})*|[0-9]+)(?:,[0-9]{1,2}))|([0-9]+(?:\.[0-9]{1,2})?)/;
+    const match = pastedText.match(amountRegex);
+
+    if (!match) {
+        toast({ title: "Valor não encontrado", description: "Não foi possível encontrar um valor numérico no texto colado. Ex: '150,25' ou '150.25'.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+    }
+    
+    // Normaliza a string para ser analisada: remove pontos de milhares, troca vírgula por ponto.
+    const parsedAmount = parseFloat(match[0].replace(/\./g, '').replace(',', '.'));
+    
+    if (isNaN(parsedAmount)) {
+        toast({ title: "Valor inválido", description: "O valor numérico encontrado não é válido.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+    }
+
+    // 2. Filtra as entradas financeiras por data e tipo
     const fromDate = new Date(dateRange.from);
-    fromDate.setHours(0,0,0,0);
+    fromDate.setHours(0, 0, 0, 0);
     const toDate = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
     toDate.setHours(23, 59, 59, 999);
 
@@ -56,23 +87,26 @@ export default function OutputCheckerClient() {
         return entry.type === 'expense' && entryDate >= fromDate && entryDate <= toDate;
     });
 
-    try {
-      const result = await checkExpense({
-        pastedText: pastedText,
-        financialEntriesJson: JSON.stringify(relevantExpenses.map(e => ({ id: e.id, date: e.timestamp, description: e.description, amount: e.amount })), null, 2),
-        dateRange: {
-            from: fromDate.toISOString(),
-            to: toDate.toISOString()
-        }
-      });
-      setVerificationResult(result);
-    } catch (error) {
-      console.error("AI verification failed:", error);
-      toast({ title: "Erro na Verificação", description: "A IA não conseguiu processar a solicitação. Tente novamente.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+    // 3. Encontra lançamentos com valor idêntico
+    const foundEntries = relevantExpenses.filter(entry => Math.abs(entry.amount - parsedAmount) < 0.01);
+    
+    const result: VerificationResult = {
+        isDuplicate: foundEntries.length > 0,
+        summary: foundEntries.length > 0
+            ? `Atenção: Encontrei ${foundEntries.length} despesa(s) com valor idêntico.`
+            : `Nenhuma despesa com o valor ${formatCurrency(parsedAmount)} foi encontrada neste período.`,
+        foundEntries: foundEntries.map(e => ({
+            id: e.id,
+            date: e.timestamp.toString(),
+            description: e.description,
+            amount: e.amount,
+        }))
+    };
+
+    setVerificationResult(result);
+    setIsLoading(false);
   };
+
 
   return (
     <div className="grid md:grid-cols-2 gap-8">
@@ -80,7 +114,7 @@ export default function OutputCheckerClient() {
         <CardHeader>
           <CardTitle>Conferência de Saídas</CardTitle>
           <CardDescription>
-            Cole uma despesa (valor e descrição) e a IA irá conferir se uma saída similar já foi lançada no período selecionado.
+            Cole uma despesa (valor e descrição) e o sistema irá conferir se uma saída com valor idêntico já foi lançada no período selecionado.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -101,8 +135,8 @@ export default function OutputCheckerClient() {
         </CardContent>
         <CardFooter>
           <Button onClick={handleVerify} disabled={isLoading}>
-            {isLoading ? 'Verificando...' : 'Verificar com IA'}
-            <Bot className="ml-2 h-4 w-4" />
+            {isLoading ? 'Verificando...' : 'Verificar Despesa'}
+            <Search className="ml-2 h-4 w-4" />
           </Button>
         </CardFooter>
       </Card>
@@ -110,23 +144,23 @@ export default function OutputCheckerClient() {
       <Card className="flex flex-col">
         <CardHeader>
           <CardTitle>Resultado da Verificação</CardTitle>
-          <CardDescription>A análise da IA será exibida aqui.</CardDescription>
+          <CardDescription>A análise da busca será exibida aqui.</CardDescription>
         </CardHeader>
         <CardContent className="flex-grow flex items-center justify-center">
-          {isLoading && <p>Analisando...</p>}
+          {isLoading && <p>Buscando...</p>}
           {!isLoading && !verificationResult && <p className="text-muted-foreground text-center">Aguardando verificação...</p>}
           {verificationResult && (
             <div className="w-full space-y-4">
-              <div className={`flex items-center gap-2 p-4 rounded-lg ${verificationResult.isDuplicate ? 'bg-red-100 dark:bg-red-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
-                {verificationResult.isDuplicate ? <AlertCircle className="h-6 w-6 text-red-600" /> : <CheckCircle className="h-6 w-6 text-green-600" />}
-                <p className={`font-semibold ${verificationResult.isDuplicate ? 'text-red-800 dark:text-red-200' : 'text-green-800 dark:text-green-200'}`}>
+              <div className={`flex items-center gap-2 p-4 rounded-lg ${verificationResult.isDuplicate ? 'bg-yellow-100 dark:bg-yellow-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
+                {verificationResult.isDuplicate ? <AlertCircle className="h-6 w-6 text-yellow-600" /> : <CheckCircle className="h-6 w-6 text-green-600" />}
+                <p className={`font-semibold ${verificationResult.isDuplicate ? 'text-yellow-800 dark:text-yellow-200' : 'text-green-800 dark:text-green-200'}`}>
                   {verificationResult.summary}
                 </p>
               </div>
               
               {verificationResult.foundEntries && verificationResult.foundEntries.length > 0 && (
                 <div>
-                    <h3 className="font-semibold mb-2">Despesas Similares Encontradas:</h3>
+                    <h3 className="font-semibold mb-2">Despesas Encontradas:</h3>
                     <ul className="space-y-2 text-sm text-muted-foreground">
                         {verificationResult.foundEntries.map((entry) => (
                           <li key={entry.id} className="p-2 border rounded-md">
