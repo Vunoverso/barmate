@@ -169,7 +169,9 @@ export default function OutputCheckerClient() {
         }
     }
     
-    toast({ title: "Despesas Lançadas!", description: `${selectedExpenses.length} despesa(s) foram registradas com sucesso.` });
+    const totalLaunched = selectedExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+    toast({ title: "Despesas Lançadas!", description: `${selectedExpenses.length} despesa(s) no valor total de ${formatCurrency(totalLaunched)} foram registradas com sucesso.` });
     
     setPastedText('');
     setParsedExpenses([]);
