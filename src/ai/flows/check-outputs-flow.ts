@@ -1,71 +1,79 @@
 'use server';
 /**
- * @fileOverview Um agente de IA para conferir saídas de produtos de uma comanda.
+ * @fileOverview Um agente de IA para conferir se uma despesa já foi lançada.
  *
- * - checkOutputs - Uma função que compara uma lista de texto com os itens de uma comanda.
- * - CheckOutputsInput - O tipo de entrada para a função.
- * - CheckOutputsOutput - O tipo de retorno para a função.
+ * - checkExpense - Uma função que verifica se um texto de despesa corresponde a alguma entrada financeira.
+ * - CheckExpenseInput - O tipo de entrada para a função.
+ * - CheckExpenseOutput - O tipo de retorno para a função.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
-const CheckOutputsInputSchema = z.object({
-  pastedText: z.string().describe("A lista de itens de saída, colada pelo usuário, com um item por linha."),
-  orderItemsJson: z.string().describe("Uma string JSON de um array de objetos `OrderItem`, representando os itens oficiais da comanda."),
-  orderName: z.string().describe("O nome da comanda que está sendo verificada."),
+const CheckExpenseInputSchema = z.object({
+  pastedText: z.string().describe("O texto da despesa colado pelo usuário, contendo valor e descrição. Ex: '135,90 mercado' ou 'Luz 250,00'"),
+  financialEntriesJson: z.string().describe("Uma string JSON de um array de objetos `FinancialEntry` do tipo 'expense', representando as despesas já lançadas no período."),
+  dateRange: z.object({
+    from: z.string().describe("Data de início do período de busca no formato ISO."),
+    to: z.string().describe("Data de fim do período de busca no formato ISO."),
+  }).describe("O período de datas em que a busca está sendo feita.")
 });
-export type CheckOutputsInput = z.infer<typeof CheckOutputsInputSchema>;
+export type CheckExpenseInput = z.infer<typeof CheckExpenseInputSchema>;
 
-const CheckOutputsOutputSchema = z.object({
-  isCorrect: z.boolean().describe("Indica se a lista colada corresponde exatamente aos itens da comanda."),
-  summary: z.string().describe("Um resumo conciso do resultado da verificação. Ex: 'Tudo certo!' ou 'Encontramos divergências.'"),
-  discrepancies: z.array(z.string()).describe("Uma lista de strings descrevendo cada divergência encontrada. Ex: 'Item \"Batata Frita\" está faltando na lista', 'Quantidade de \"Cerveja\" está incorreta (pedido: 2, lista: 1)'.")
+const FoundEntrySchema = z.object({
+  id: z.string().describe("O ID da despesa encontrada."),
+  date: z.string().describe("A data da despesa encontrada."),
+  description: z.string().describe("A descrição da despesa encontrada."),
+  amount: z.number().describe("O valor da despesa encontrada."),
 });
-export type CheckOutputsOutput = z.infer<typeof CheckOutputsOutputSchema>;
 
-export async function checkOutputs(input: CheckOutputsInput): Promise<CheckOutputsOutput> {
-  return checkOutputsFlow(input);
+const CheckExpenseOutputSchema = z.object({
+  isDuplicate: z.boolean().describe("Indica se uma ou mais despesas parecidas foram encontradas."),
+  summary: z.string().describe("Um resumo conciso do resultado da verificação. Ex: 'Nenhuma despesa parecida encontrada.' ou 'Atenção: Encontrei uma despesa que parece ser a mesma.'"),
+  foundEntries: z.array(FoundEntrySchema).describe("Uma lista de objetos descrevendo cada despesa similar encontrada.")
+});
+export type CheckExpenseOutput = z.infer<typeof CheckExpenseOutputSchema>;
+
+export async function checkExpense(input: CheckExpenseInput): Promise<CheckExpenseOutput> {
+  return checkExpenseFlow(input);
 }
 
 const prompt = ai.definePrompt({
-  name: 'checkOutputsPrompt',
-  input: { schema: CheckOutputsInputSchema },
-  output: { schema: CheckOutputsOutputSchema },
-  prompt: `Você é um assistente de conferência para um bar. Sua tarefa é comparar a lista de produtos de uma comanda com a lista de produtos que estão saindo.
+  name: 'checkExpensePrompt',
+  input: { schema: CheckExpenseInputSchema },
+  output: { schema: CheckExpenseOutputSchema },
+  prompt: `Você é um assistente financeiro de um bar. Sua tarefa é verificar se uma nova despesa, informada pelo usuário, já foi lançada anteriormente em um período específico.
 
-A comanda se chama: "{{orderName}}".
+A nova despesa informada é: "{{pastedText}}".
 
-Os itens OFICIAIS da comanda estão neste JSON:
+As despesas JÁ LANÇADAS no período de {{dateRange.from}} a {{dateRange.to}} são:
 \`\`\`json
-{{{orderItemsJson}}}
+{{{financialEntriesJson}}}
 \`\`\`
 
-A lista de itens que estão saindo (fornecida pelo usuário) é:
-\`\`\`
-{{{pastedText}}}
-\`\`\`
+Analise o texto "{{pastedText}}". Extraia o valor e a descrição. Por exemplo, em "135,90 mercado", o valor é 135.90 e a descrição é "mercado".
 
-Compare as duas listas e verifique as seguintes condições:
-1.  Todos os itens da comanda estão na lista de saída.
-2.  Todos os itens da lista de saída estão na comanda.
-3.  As quantidades de cada item batem exatamente. Ignore letras maiúsculas/minúsculas na comparação dos nomes.
+Compare o valor e a descrição extraídos com a lista de despesas já lançadas.
+- A comparação de valor deve ser EXATA. Considere uma pequena margem de centavos se for o caso, mas prefira exatidão.
+- A comparação da descrição deve ser por similaridade semântica (ex: "mercado" é similar a "compras mercado"). Ignore maiúsculas/minúsculas.
 
-Se tudo estiver correto, defina \`isCorrect\` como \`true\`, escreva um \`summary\` amigável como "Tudo certo! A saída bate com a comanda '{{orderName}}'." e deixe \`discrepancies\` como um array vazio.
+Se você encontrar UMA OU MAIS despesas que pareçam ser a mesma:
+- Defina \`isDuplicate\` como \`true\`.
+- Defina o \`summary\` como "Atenção: Encontrei uma ou mais despesas que podem ser a mesma.".
+- Preencha \`foundEntries\` com os detalhes da(s) despesa(s) encontrada(s).
 
-Se houver QUALQUER divergência, defina \`isCorrect\` como \`false\`, escreva um \`summary\` como "Atenção: Foram encontradas divergências na comanda '{{orderName}}'." e preencha o array \`discrepancies\` com uma descrição clara e objetiva de CADA problema encontrado.
-Exemplos de divergências:
-- "Item 'Batata Frita' está na comanda mas não foi encontrado na lista de saída."
-- "Item 'Água com gás' foi encontrado na lista de saída mas não pertence a esta comanda."
-- "A quantidade de 'Cerveja Pilsen' está errada. Comanda pedia 2, mas na lista de saída consta 1."
+Se você não encontrar nenhuma despesa parecida:
+- Defina \`isDuplicate\` como \`false\`.
+- Defina o \`summary\` como "Nenhuma despesa parecida foi encontrada neste período.".
+- Deixe \`foundEntries\` como um array vazio.
 `,
 });
 
-const checkOutputsFlow = ai.defineFlow(
+const checkExpenseFlow = ai.defineFlow(
   {
-    name: 'checkOutputsFlow',
-    inputSchema: CheckOutputsInputSchema,
-    outputSchema: CheckOutputsOutputSchema,
+    name: 'checkExpenseFlow',
+    inputSchema: CheckExpenseInputSchema,
+    outputSchema: CheckExpenseOutputSchema,
   },
   async (input) => {
     const { output } = await prompt(input);

@@ -1,59 +1,69 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import type { ActiveOrder, OrderItem } from '@/types';
-import { getOpenOrders } from '@/lib/constants';
+import type { FinancialEntry } from '@/types';
+import { getFinancialEntries } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, CheckCircle, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { checkOutputs, type CheckOutputsOutput } from '@/ai/flows/check-outputs-flow';
-import { Separator } from '@/components/ui/separator';
+import { checkExpense, type CheckExpenseOutput } from '@/ai/flows/check-outputs-flow';
+import { DatePickerWithRange } from '@/components/ui/date-picker-range';
+import type { DateRange } from "react-day-picker";
+import { addDays, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { formatCurrency } from '@/lib/constants';
 
 export default function OutputCheckerClient() {
-  const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
-  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const [allEntries, setAllEntries] = useState<FinancialEntry[]>([]);
   const [pastedText, setPastedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<CheckOutputsOutput | null>(null);
+  const [verificationResult, setVerificationResult] = useState<CheckExpenseOutput | null>(null);
   const { toast } = useToast();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: addDays(new Date(), -30),
+    to: new Date(),
+  });
 
   useEffect(() => {
-    const orders = getOpenOrders();
-    setOpenOrders(orders);
-    // Auto-select the first order if available
-    if (orders.length > 0) {
-      setSelectedOrderId(orders[0].id);
-    }
+    const entries = getFinancialEntries();
+    setAllEntries(entries);
   }, []);
 
   const handleVerify = async () => {
-    if (!selectedOrderId) {
-      toast({ title: "Selecione uma comanda", description: "Você precisa selecionar uma comanda para conferir.", variant: "destructive" });
-      return;
-    }
     if (!pastedText.trim()) {
-      toast({ title: "Cole a lista de saída", description: "A área de texto não pode estar vazia.", variant: "destructive" });
+      toast({ title: "Cole a despesa", description: "A área de texto não pode estar vazia.", variant: "destructive" });
       return;
     }
-
-    const selectedOrder = openOrders.find(o => o.id === selectedOrderId);
-    if (!selectedOrder) {
-      toast({ title: "Comanda não encontrada", variant: "destructive" });
-      return;
+    if (!dateRange || !dateRange.from) {
+        toast({ title: "Selecione um período", description: "Você precisa definir um período para a busca.", variant: "destructive" });
+        return;
     }
 
     setIsLoading(true);
     setVerificationResult(null);
 
+    // Filter entries by date range and type 'expense'
+    const fromDate = new Date(dateRange.from);
+    fromDate.setHours(0,0,0,0);
+    const toDate = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
+    toDate.setHours(23, 59, 59, 999);
+
+    const relevantExpenses = allEntries.filter(entry => {
+        const entryDate = new Date(entry.timestamp);
+        return entry.type === 'expense' && entryDate >= fromDate && entryDate <= toDate;
+    });
+
     try {
-      const result = await checkOutputs({
+      const result = await checkExpense({
         pastedText: pastedText,
-        orderItemsJson: JSON.stringify(selectedOrder.items, null, 2),
-        orderName: selectedOrder.name
+        financialEntriesJson: JSON.stringify(relevantExpenses.map(e => ({ id: e.id, date: e.timestamp, description: e.description, amount: e.amount })), null, 2),
+        dateRange: {
+            from: fromDate.toISOString(),
+            to: toDate.toISOString()
+        }
       });
       setVerificationResult(result);
     } catch (error) {
@@ -70,42 +80,27 @@ export default function OutputCheckerClient() {
         <CardHeader>
           <CardTitle>Conferência de Saídas</CardTitle>
           <CardDescription>
-            Selecione uma comanda, cole a lista de itens separados por linha e a IA irá conferir se bate com o pedido.
+            Cole uma despesa (valor e descrição) e a IA irá conferir se uma saída similar já foi lançada no período selecionado.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="order-select">Comanda para Verificar</Label>
-            <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
-              <SelectTrigger id="order-select">
-                <SelectValue placeholder="Selecione uma comanda..." />
-              </SelectTrigger>
-              <SelectContent>
-                {openOrders.length > 0 ? (
-                  openOrders.map(order => (
-                    <SelectItem key={order.id} value={order.id}>
-                      {order.name} ({order.items.length} itens)
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="p-4 text-center text-sm text-muted-foreground">Nenhuma comanda aberta.</div>
-                )}
-              </SelectContent>
-            </Select>
+            <Label>Período para Verificar</Label>
+            <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="output-paste">Cole a lista de itens aqui</Label>
+            <Label htmlFor="output-paste">Cole a despesa aqui</Label>
             <Textarea
               id="output-paste"
-              placeholder="Ex:&#10;2x Cerveja Pilsen&#10;1x Batata Frita"
-              className="min-h-48"
+              placeholder="Ex:&#10;135,90 mercado&#10;conta de luz 250,00"
+              className="min-h-40"
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
             />
           </div>
         </CardContent>
         <CardFooter>
-          <Button onClick={handleVerify} disabled={isLoading || !selectedOrderId}>
+          <Button onClick={handleVerify} disabled={isLoading}>
             {isLoading ? 'Verificando...' : 'Verificar com IA'}
             <Bot className="ml-2 h-4 w-4" />
           </Button>
@@ -122,19 +117,23 @@ export default function OutputCheckerClient() {
           {!isLoading && !verificationResult && <p className="text-muted-foreground text-center">Aguardando verificação...</p>}
           {verificationResult && (
             <div className="w-full space-y-4">
-              <div className={`flex items-center gap-2 p-4 rounded-lg ${verificationResult.isCorrect ? 'bg-green-100 dark:bg-green-900/50' : 'bg-red-100 dark:bg-red-900/50'}`}>
-                {verificationResult.isCorrect ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
-                <p className={`font-semibold ${verificationResult.isCorrect ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}`}>
+              <div className={`flex items-center gap-2 p-4 rounded-lg ${verificationResult.isDuplicate ? 'bg-red-100 dark:bg-red-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
+                {verificationResult.isDuplicate ? <AlertCircle className="h-6 w-6 text-red-600" /> : <CheckCircle className="h-6 w-6 text-green-600" />}
+                <p className={`font-semibold ${verificationResult.isDuplicate ? 'text-red-800 dark:text-red-200' : 'text-green-800 dark:text-green-200'}`}>
                   {verificationResult.summary}
                 </p>
               </div>
               
-              {verificationResult.discrepancies && verificationResult.discrepancies.length > 0 && (
+              {verificationResult.foundEntries && verificationResult.foundEntries.length > 0 && (
                 <div>
-                    <h3 className="font-semibold mb-2">Detalhes das Divergências:</h3>
-                    <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
-                        {verificationResult.discrepancies.map((item, index) => (
-                          <li key={index}>{item}</li>
+                    <h3 className="font-semibold mb-2">Despesas Similares Encontradas:</h3>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                        {verificationResult.foundEntries.map((entry) => (
+                          <li key={entry.id} className="p-2 border rounded-md">
+                            <p><strong>Descrição:</strong> {entry.description}</p>
+                            <p><strong>Valor:</strong> {formatCurrency(entry.amount)}</p>
+                            <p><strong>Data:</strong> {format(new Date(entry.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+                          </li>
                         ))}
                     </ul>
                 </div>
