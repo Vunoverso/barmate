@@ -50,3 +50,18 @@ Abra seu navegador de preferência e acesse:
 [**http://localhost:9002**](http://localhost:9002)
 
 Pronto! Agora o sistema está rodando localmente na sua máquina e todas as suas interações serão salvas no seu navegador.
+
+## Solução de Problemas
+
+### Página não encontrada (Page Not Found)
+
+Ao adicionar novas páginas (como a de "Verificar Saídas"), o Next.js pode, às vezes, não reconhecer a nova rota imediatamente devido ao cache de desenvolvimento. Se você clicar em um novo item de menu e vir uma página de erro "404 - Page Not Found", você pode forçar uma reinicialização limpa.
+
+**Como resolver:**
+1.  Pare o servidor de desenvolvimento (geralmente pressionando `Ctrl + C` no terminal).
+2.  Execute o comando abaixo, que limpará o cache e iniciará o servidor novamente:
+
+```bash
+npm run dev:clean
+```
+3.  Acesse `http://localhost:9002` novamente. A nova página agora deve estar acessível.
