@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store, Banknote, Users } from 'lucide-react';
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store, Banknote, Users, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -26,6 +26,7 @@ const mainNavItems: NavItem[] = [
   { href: '/cash-register', label: 'Caixa', icon: Banknote },
   { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
   { href: '/orders', label: 'Comandas', icon: HandCoins },
+  { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
   { href: '/products', label: 'Produtos', icon: Package },
   { href: '/clients', label: 'Clientes', icon: Users },
   { href: '/financial', label: 'Financeiro', icon: LineChart },
@@ -78,7 +79,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[150px_1fr] lg:grid-cols-[170px_1fr]">
+    <div className="grid min-h-screen w-full md:grid-cols-[170px_1fr] lg:grid-cols-[190px_1fr]">
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
