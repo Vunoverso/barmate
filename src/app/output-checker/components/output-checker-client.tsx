@@ -109,7 +109,10 @@ export default function OutputCheckerClient() {
     const from = dateRange.from;
     const to = dateRange.to || from;
 
-    const relevantEntries = allEntries.filter(entry => {
+    // Get a fresh list of existing entries directly from the source of truth (localStorage).
+    const existingFinancialEntries = getFinancialEntries();
+
+    const relevantEntries = existingFinancialEntries.filter(entry => {
         const entryDate = new Date(entry.timestamp);
         const fromDate = new Date(from);
         fromDate.setHours(0, 0, 0, 0);
@@ -186,7 +189,7 @@ export default function OutputCheckerClient() {
       saveCashRegisterStatus(updatedStatus);
     }
     
-    toast({ title: "Despesa Lançada!", description: `${formatCurrency(expenseToAdd.amount)} foi registrado como saída de ${source}.` });
+    toast({ title: "Despesa Lançada!", description: `${formatCurrency(expenseToAdd.amount)} foi registrado como saída.` });
     
     setVerificationResult(prev => prev!.map(res => res.id === expenseToAdd.id ? { ...res, status: 'added' } : res));
     setIsAddExpenseDialogOpen(false);
