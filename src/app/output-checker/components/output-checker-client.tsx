@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { FinancialEntry, CashRegisterStatus, CashAdjustment } from '@/types';
-import { getFinancialEntries, formatCurrency, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus } from '@/lib/constants';
+import { getFinancialEntries, formatCurrency, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Search, Loader2, AlertTriangle, CheckCircle, PlusCircle, Banknote, PiggyBank, Landmark } from 'lucide-react';
+import { Search, Loader2, AlertTriangle, CheckCircle, PlusCircle, Banknote, PiggyBank, Landmark, CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DatePickerWithRange } from '@/components/ui/date-picker-range';
@@ -18,6 +18,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 
 type ParsedExpense = {
@@ -137,7 +140,7 @@ export default function OutputCheckerClient() {
     setIsAddExpenseDialogOpen(true);
   };
   
-  const handleConfirmAddExpense = (source: 'daily_cash' | 'secondary_cash' | 'bank_account') => {
+  const handleConfirmAddExpense = (source: 'daily_cash' | 'secondary_cash' | 'bank_account', date: Date) => {
     if (!expenseToAdd) return;
     
     if (source === 'daily_cash') {
@@ -158,19 +161,26 @@ export default function OutputCheckerClient() {
     }
 
     const adjustmentId = `adj-exp-${Date.now()}`;
-    addFinancialEntry({
-      description: expenseToAdd.description,
-      amount: expenseToAdd.amount,
-      type: 'expense',
-      source: source,
-      saleId: null,
-      adjustmentId: source === 'daily_cash' ? adjustmentId : null
-    });
+    
+    const newEntry: FinancialEntry = {
+        id: `fin-${Date.now()}`,
+        description: expenseToAdd.description,
+        amount: expenseToAdd.amount,
+        type: 'expense',
+        source: source,
+        saleId: null,
+        adjustmentId: source === 'daily_cash' ? adjustmentId : null,
+        timestamp: date,
+    };
+
+    const currentEntries = getFinancialEntries();
+    const updatedEntries = [...currentEntries, newEntry];
+    saveFinancialEntries(updatedEntries);
 
     if (source === 'daily_cash' && cashStatus.status === 'open') {
       const currentCashStatus = getCashRegisterStatus();
       const sangriaAdjustment: CashAdjustment = {
-        id: adjustmentId, amount: expenseToAdd.amount, type: 'out' as 'out', description: `Despesa: ${expenseToAdd.description}`, timestamp: new Date().toISOString()
+        id: adjustmentId, amount: expenseToAdd.amount, type: 'out' as 'out', description: `Despesa: ${expenseToAdd.description}`, timestamp: date.toISOString()
       };
       const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), sangriaAdjustment]};
       saveCashRegisterStatus(updatedStatus);
@@ -262,7 +272,7 @@ export default function OutputCheckerClient() {
                                 <Button
                                   size="sm"
                                   onClick={() => handleOpenAddDialog(res)}
-                                  disabled={res.duplicates.length > 0 || res.status === 'added' || res.amount <= 0}
+                                  disabled={res.status === 'added' || res.amount <= 0}
                                 >
                                   <PlusCircle className="mr-2 h-4 w-4" />
                                   Lançar
@@ -345,21 +355,23 @@ interface AddExpenseDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     expense: ParsedExpense | null;
-    onConfirm: (source: 'daily_cash' | 'secondary_cash' | 'bank_account') => void;
+    onConfirm: (source: 'daily_cash' | 'secondary_cash' | 'bank_account', date: Date) => void;
     balances: { daily: number; secondary: number; bank: number; };
 }
 
 function AddExpenseDialog({ isOpen, onOpenChange, expense, onConfirm, balances }: AddExpenseDialogProps) {
     const [source, setSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
+    const [date, setDate] = useState<Date>(new Date());
 
     useEffect(() => {
         if (isOpen) {
             setSource('daily_cash');
+            setDate(new Date());
         }
     }, [isOpen]);
 
     const handleSubmit = () => {
-        onConfirm(source);
+        onConfirm(source, date);
     };
 
     if (!expense) return null;
@@ -380,6 +392,33 @@ function AddExpenseDialog({ isOpen, onOpenChange, expense, onConfirm, balances }
                             <p className="font-bold text-lg text-destructive">- {formatCurrency(expense.amount)}</p>
                         </CardContent>
                     </Card>
+
+                    <div className="space-y-2">
+                        <Label>Data do Lançamento</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full justify-start text-left font-normal",
+                                        !date && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={date}
+                                    onSelect={(d) => setDate(d || new Date())}
+                                    initialFocus
+                                    disabled={(d) => d > new Date() || d < new Date("2000-01-01")}
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
 
                     <div className="space-y-2">
                         <Label>De onde o dinheiro vai sair?</Label>
