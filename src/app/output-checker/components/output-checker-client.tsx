@@ -1,44 +1,39 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { FinancialEntry, CashRegisterStatus, CashAdjustment } from '@/types';
-import { getFinancialEntries, getCashRegisterStatus, saveCashRegisterStatus, addFinancialEntry, formatCurrency } from '@/lib/constants';
+import type { FinancialEntry } from '@/types';
+import { getFinancialEntries, formatCurrency } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Search, PlusCircle, Banknote, PiggyBank, Landmark, Check, ListChecks } from 'lucide-react';
+import { Search, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePickerWithRange } from '@/components/ui/date-picker-range';
+import { addDays, format } from 'date-fns';
+import type { DateRange } from "react-day-picker";
+import { ptBR } from 'date-fns/locale';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-type ParsedExpense = {
-  id: number;
-  description: string;
-  amount: number;
-  source: FinancialEntry['source'];
-  checked: boolean;
-};
+// Let's assume the flow is exported correctly from the AI folder
+import { checkExpense, type CheckExpenseOutput } from '@/ai/flows/check-outputs-flow';
 
-const SOURCE_MAP: Record<FinancialEntry['source'], { name: string, icon: React.FC<any> }> = {
-  daily_cash: { name: 'Caixa Diário', icon: Banknote },
-  secondary_cash: { name: 'Caixa 02', icon: PiggyBank },
-  bank_account: { name: 'Conta Bancária', icon: Landmark },
-};
 
 export default function OutputCheckerClient() {
   const [allEntries, setAllEntries] = useState<FinancialEntry[]>([]);
   const [pastedText, setPastedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [parsedExpenses, setParsedExpenses] = useState<ParsedExpense[]>([]);
-  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
+  const [verificationResult, setVerificationResult] = useState<CheckExpenseOutput | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: addDays(new Date(), -30),
+    to: new Date(),
+  });
   
   const { toast } = useToast();
 
   const loadData = useCallback(() => {
     setAllEntries(getFinancialEntries());
-    setCashStatus(getCashRegisterStatus());
   }, []);
   
   useEffect(() => {
@@ -49,235 +44,152 @@ export default function OutputCheckerClient() {
     }
   }, [loadData]);
 
-  // --- Balance Calculations ---
-  const secondaryCashBoxBalance = useMemo(() => allEntries.filter(e => e.source === 'secondary_cash').reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0), [allEntries]);
-  const bankAccountBalance = useMemo(() => allEntries.filter(e => e.source === 'bank_account').reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0), [allEntries]);
-  const expectedCashInDrawer = useMemo(() => {
-    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
-    const openingTime = new Date(cashStatus.openingTime);
-    return allEntries.filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime).reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
-  }, [allEntries, cashStatus]);
 
-  const balances: Record<FinancialEntry['source'], number> = {
-    daily_cash: expectedCashInDrawer,
-    secondary_cash: secondaryCashBoxBalance,
-    bank_account: bankAccountBalance
-  };
-
-  const handleParseText = () => {
+  const handleCheckExpense = async () => {
     if (!pastedText.trim()) {
-        toast({ title: "Cole as despesas", description: "A área de texto não pode estar vazia.", variant: "destructive" });
+        toast({ title: "Texto vazio", description: "Por favor, cole a despesa que deseja verificar.", variant: "destructive" });
+        return;
+    }
+    if (!dateRange?.from) {
+         toast({ title: "Período inválido", description: "Por favor, selecione um período de datas para a verificação.", variant: "destructive" });
         return;
     }
 
-    const lines = pastedText.trim().split('\n');
-    const amountRegex = /(\d{1,3}(\.\d{3})*,\d{2}|\d+,\d{2}|\d+(\.\d+)?)/;
-    
-    const expenses = lines.map((line, index) => {
-        const match = line.match(amountRegex);
-        if (!match) return null;
+    setIsLoading(true);
+    setVerificationResult(null);
 
-        const amountStr = match[0].replace(/\./g, '').replace(',', '.');
-        const amount = parseFloat(amountStr);
-        const description = line.replace(match[0], '').replace(/\s+/g, ' ').trim();
+    try {
+        const from = dateRange.from;
+        const to = dateRange.to || from; // If 'to' is not set, use 'from'
 
-        if (isNaN(amount) || !description) return null;
-
-        return {
-            id: index,
-            description,
-            amount,
-            source: 'daily_cash' as FinancialEntry['source'],
-            checked: true 
-        };
-    }).filter((item): item is ParsedExpense => item !== null);
-
-    if (expenses.length === 0) {
-        toast({ title: "Nenhuma despesa válida encontrada", description: "Verifique o formato. Ex: '150,25 mercado'", variant: "destructive" });
-    }
-
-    setParsedExpenses(expenses);
-  };
-  
-  const handleToggleAll = (checked: boolean) => {
-    setParsedExpenses(prev => prev.map(exp => ({ ...exp, checked })));
-  };
-
-  const handleItemCheckChange = (id: number, checked: boolean) => {
-    setParsedExpenses(prev => prev.map(exp => exp.id === id ? { ...exp, checked } : exp));
-  };
-  
-  const handleItemSourceChange = (id: number, source: FinancialEntry['source']) => {
-      setParsedExpenses(prev => prev.map(exp => exp.id === id ? { ...exp, source } : exp));
-  };
-
-  const handleLaunchExpenses = () => {
-    const selectedExpenses = parsedExpenses.filter(e => e.checked);
-    if (selectedExpenses.length === 0) {
-        toast({ title: "Nenhuma despesa selecionada", variant: "destructive" });
-        return;
-    }
-
-    const totalsBySource = selectedExpenses.reduce((acc, exp) => {
-        acc[exp.source] = (acc[exp.source] || 0) + exp.amount;
-        return acc;
-    }, {} as Record<FinancialEntry['source'], number>);
-
-    if (totalsBySource.daily_cash && cashStatus.status !== 'open') {
-        toast({ title: "Caixa Fechado", description: "Não é possível lançar despesas do Caixa Diário com ele fechado.", variant: "destructive" });
-        return;
-    }
-    for (const source in totalsBySource) {
-        if (totalsBySource[source as FinancialEntry['source']] > balances[source as FinancialEntry['source']]) {
-            toast({ title: "Saldo Insuficiente", description: `A conta "${SOURCE_MAP[source as FinancialEntry['source']].name}" não tem saldo para o total de ${formatCurrency(totalsBySource[source as FinancialEntry['source']])}.`, variant: "destructive" });
-            return;
-        }
-    }
-
-    const financialEntriesToAdd: Omit<FinancialEntry, 'id' | 'timestamp'>[] = [];
-    const adjustmentsToAdd: CashAdjustment[] = [];
-
-    selectedExpenses.forEach(exp => {
-        const adjustmentId = exp.source === 'daily_cash' ? `adj-exp-${Date.now()}-${exp.id}` : null;
-        financialEntriesToAdd.push({
-            description: exp.description,
-            amount: exp.amount,
-            type: 'expense',
-            source: exp.source,
-            saleId: null,
-            adjustmentId: adjustmentId
+        const relevantEntries = allEntries.filter(entry => {
+            const entryDate = new Date(entry.timestamp);
+            const fromDate = new Date(from);
+            fromDate.setHours(0, 0, 0, 0);
+            const toDate = new Date(to);
+            toDate.setHours(23, 59, 59, 999);
+            return entry.type === 'expense' && entryDate >= fromDate && entryDate <= toDate;
+        });
+        
+        const result = await checkExpense({
+            pastedText: pastedText,
+            financialEntriesJson: JSON.stringify(relevantEntries),
+            dateRange: {
+                from: from.toISOString(),
+                to: to.toISOString(),
+            }
         });
 
-        if (adjustmentId) {
-            adjustmentsToAdd.push({
-                id: adjustmentId,
-                amount: exp.amount,
-                type: 'out',
-                description: `Despesa: ${exp.description}`,
-                timestamp: new Date().toISOString()
-            });
-        }
-    });
+        setVerificationResult(result);
 
-    addFinancialEntry(financialEntriesToAdd);
-    
-    if (adjustmentsToAdd.length > 0) {
-        const currentCashStatus = getCashRegisterStatus();
-        if (currentCashStatus.status === 'open') {
-            const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), ...adjustmentsToAdd] };
-            saveCashRegisterStatus(updatedStatus);
-        }
+    } catch (error) {
+        console.error("AI check error:", error);
+        toast({
+            title: "Erro na Verificação",
+            description: "Ocorreu um erro ao comunicar com a IA. Verifique o console para mais detalhes.",
+            variant: "destructive"
+        });
+    } finally {
+        setIsLoading(false);
     }
-    
-    const totalLaunched = selectedExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-
-    toast({ title: "Despesas Lançadas!", description: `${selectedExpenses.length} despesa(s) no valor total de ${formatCurrency(totalLaunched)} foram registradas com sucesso.` });
-    
-    setPastedText('');
-    setParsedExpenses([]);
-    loadData();
   };
   
   const handleCancel = () => {
-    setParsedExpenses([]);
     setPastedText('');
+    setVerificationResult(null);
   }
 
-  const allChecked = parsedExpenses.length > 0 && parsedExpenses.every(e => e.checked);
-  const someChecked = parsedExpenses.some(e => e.checked);
+  const ResultIcon = useMemo(() => {
+    if (!verificationResult) return null;
+    if (verificationResult.isDuplicate) return <AlertTriangle className="h-4 w-4" />;
+    return <CheckCircle className="h-4 w-4 text-green-600" />;
+  }, [verificationResult]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Lançamento Rápido de Saídas</CardTitle>
+        <CardTitle>Conferência de Saídas</CardTitle>
         <CardDescription>
-          {parsedExpenses.length === 0
-            ? "Cole uma ou mais despesas (uma por linha, com valor e descrição) para analisá-las e lançá-las rapidamente."
-            : "Selecione as despesas, defina a origem e lance-as de uma vez."}
+          Cole uma despesa (ex: "150,25 mercado"), selecione o período, e a IA verificará se um lançamento similar já existe para evitar duplicidade.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {parsedExpenses.length === 0 ? (
-          <div className="space-y-2">
-            <Label htmlFor="output-paste">Cole as despesas aqui</Label>
-            <Textarea
-              id="output-paste"
-              placeholder="Ex:&#10;135,90 mercado&#10;conta de luz 250,00&#10;compra de gelo 50,00"
-              className="min-h-48"
-              value={pastedText}
-              onChange={(e) => setPastedText(e.target.value)}
-            />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="select-all" 
-                checked={allChecked}
-                onCheckedChange={(checked) => handleToggleAll(Boolean(checked))}
-              />
-              <Label htmlFor="select-all">Selecionar Todas as Despesas</Label>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="output-paste">Despesa a ser verificada</Label>
+                <Textarea
+                id="output-paste"
+                placeholder="Cole o valor e a descrição da despesa aqui..."
+                className="min-h-24"
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                disabled={isLoading}
+                />
             </div>
-            <div className="border rounded-md overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]"><span className="sr-only">Selecionar</span></TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="w-[120px] text-right">Valor</TableHead>
-                    <TableHead className="w-[220px]">Origem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {parsedExpenses.map((exp) => (
-                    <TableRow key={exp.id}>
-                      <TableCell>
-                        <Checkbox 
-                          checked={exp.checked}
-                          onCheckedChange={(checked) => handleItemCheckChange(exp.id, Boolean(checked))}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{exp.description}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(exp.amount)}</TableCell>
-                      <TableCell>
-                        <Select value={exp.source} onValueChange={(value) => handleItemSourceChange(exp.id, value as FinancialEntry['source'])}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(SOURCE_MAP).map(([key, { name, icon: Icon }]) => (
-                                <SelectItem key={key} value={key}>
-                                    <div className="flex items-center gap-2">
-                                        <Icon className="h-4 w-4 text-muted-foreground" />
-                                        {name} ({formatCurrency(balances[key as FinancialEntry['source']])})
-                                    </div>
-                                </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+             <div className="space-y-2">
+                <Label>Período de Verificação</Label>
+                <DatePickerWithRange 
+                    date={dateRange} 
+                    onDateChange={setDateRange} 
+                    className="w-full"
+                    disabled={(date) => date > new Date() || date < new Date("2000-01-01")}
+                />
+             </div>
+        </div>
+
+        {verificationResult && (
+            <div>
+                <h3 className="font-semibold mb-2">Resultado da Análise</h3>
+                 <Alert variant={verificationResult.isDuplicate ? "destructive" : "default"}>
+                    {ResultIcon}
+                    <AlertTitle className="font-bold">{verificationResult.summary}</AlertTitle>
+                    {verificationResult.isDuplicate && (
+                        <AlertDescription className="mt-2">
+                            <p className="mb-2">A(s) seguinte(s) despesa(s) já lançada(s) no período selecionado parece(m) ser a mesma. Analise visualmente antes de fazer um novo lançamento:</p>
+                             <div className="border rounded-md overflow-hidden bg-background mt-4">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Data</TableHead>
+                                            <TableHead>Descrição</TableHead>
+                                            <TableHead className="text-right">Valor</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {verificationResult.foundEntries.map(entry => (
+                                            <TableRow key={entry.id}>
+                                                <TableCell>{format(new Date(entry.date), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
+                                                <TableCell>{entry.description}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(entry.amount)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                             </div>
+                        </AlertDescription>
+                    )}
+                 </Alert>
             </div>
-          </div>
         )}
+
       </CardContent>
       <CardFooter className="flex justify-end gap-2">
-        {parsedExpenses.length === 0 ? (
-          <Button onClick={handleParseText} disabled={isLoading}>
-            {isLoading ? 'Analisando...' : 'Analisar Despesas'}
-            <ListChecks className="ml-2 h-4 w-4" />
-          </Button>
+        {verificationResult ? (
+          <Button variant="outline" onClick={handleCancel}>Fazer Nova Verificação</Button>
         ) : (
-          <>
-            <Button variant="outline" onClick={handleCancel}>Cancelar</Button>
-            <Button onClick={handleLaunchExpenses} disabled={!someChecked}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Lançar Despesas Selecionadas
+            <Button onClick={handleCheckExpense} disabled={isLoading}>
+                {isLoading ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verificando...
+                    </>
+                ) : (
+                    <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Verificar Despesa
+                    </>
+                )}
             </Button>
-          </>
         )}
       </CardFooter>
     </Card>
