@@ -109,7 +109,6 @@ export default function OutputCheckerClient() {
     const from = dateRange.from;
     const to = dateRange.to || from;
 
-    // Get a fresh list of existing entries directly from the source of truth (localStorage).
     const existingFinancialEntries = getFinancialEntries();
 
     const relevantEntries = existingFinancialEntries.filter(entry => {
@@ -263,7 +262,7 @@ export default function OutputCheckerClient() {
                                 {res.duplicates.length > 0 ? (
                                   <Button variant="outline" size="sm" onClick={() => setViewingDuplicates(res.duplicates)}>
                                     <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
-                                    {res.duplicates.length} {res.duplicates.length === 1 ? 'Suspeita' : 'Suspeitas'}
+                                    Ver {res.duplicates.length} suspeita(s)
                                   </Button>
                                 ) : (
                                   <Badge variant={res.status === 'added' ? 'secondary' : 'default'} className={res.status !== 'added' ? 'bg-green-100 text-green-800' : ''}>
@@ -306,9 +305,9 @@ export default function OutputCheckerClient() {
         <Dialog open={!!viewingDuplicates} onOpenChange={() => setViewingDuplicates(null)}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Possíveis Despesas Duplicadas</DialogTitle>
+                    <DialogTitle>Despesas Suspeitas Encontradas nas Saídas</DialogTitle>
                     <DialogDescription>
-                        Encontramos as seguintes despesas já lançadas no período que podem ser a mesma. Compare visualmente.
+                        Encontramos as seguintes despesas já cadastradas no período que podem ser a(s) mesma(s). Compare visualmente antes de decidir lançar a nova despesa.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4 max-h-96 overflow-y-auto">
