@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Client, ActiveOrder } from '@/types';
+import type { Client, ActiveOrder, Sale } from '@/types';
 import { getClients, saveClients, getArchivedOrders, saveArchivedOrders, addSale } from '@/lib/data-access';
 import { formatCurrency } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -150,25 +150,18 @@ export default function ClientsClient() {
     setClientToDelete(null);
   };
   
-  const handleSettleDebt = (details: any) => {
+  const handleSettleDebt = (details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'>; leaveChangeAsCredit: boolean; isPartial: boolean; }) => {
     if (!viewingDebtClient) return;
 
-    const allArchived = getArchivedOrders();
-    const clientDebtOrders = allArchived.filter(order => order.clientId === viewingDebtClient.id);
-    const debtItems = clientDebtOrders.flatMap(o => o.items);
+    const { sale } = details;
     
     addSale({
-      items: debtItems,
+      ...sale,
       name: `Quitação de Dívida: ${viewingDebtClient.name}`,
-      originalAmount: viewingDebtClient.debtAmount || 0,
-      discountAmount: details.discountAmount,
-      totalAmount: (viewingDebtClient.debtAmount || 0) - details.discountAmount,
-      payments: details.payments,
-      changeGiven: details.changeGiven,
-      status: 'completed',
     });
     
     // Remove archived orders for this client
+    const allArchived = getArchivedOrders();
     const remainingArchived = allArchived.filter(order => order.clientId !== viewingDebtClient.id);
     saveArchivedOrders(remainingArchived);
     
@@ -391,7 +384,7 @@ export default function ClientsClient() {
         }}
         totalAmount={viewingDebtClient?.debtAmount || 0}
         currentOrder={debtOrderForPayment}
-        onSubmit={(details: any) => { // Using 'any' as defined in original code for this part
+        onSubmit={(details) => {
             handleSettleDebt(details);
         }}
         allowCredit={false}
@@ -463,5 +456,3 @@ function DebtDetailsDialog({ isOpen, onOpenChange, client, onSettleDebt }: DebtD
     </Dialog>
   );
 }
-
-    
