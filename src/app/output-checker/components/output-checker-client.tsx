@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { FinancialEntry, CashRegisterStatus, CashAdjustment } from '@/types';
-import { getFinancialEntries, formatCurrency, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries, SOURCE_MAP } from '@/lib/constants';
+import { getFinancialEntries, formatCurrency, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +24,11 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
+  daily_cash: 'Caixa Diário',
+  secondary_cash: 'Caixa 02',
+  bank_account: 'Conta Bancária',
+};
 
 type ParsedExpense = {
   id: string;

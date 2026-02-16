@@ -12,7 +12,6 @@ import {
   getVisuallyRemovedFinancialEntries,
   saveVisuallyRemovedFinancialEntries,
   removeSale,
-  SOURCE_MAP,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -80,6 +79,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
+const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
+  daily_cash: 'Caixa Diário',
+  secondary_cash: 'Caixa 02',
+  bank_account: 'Conta Bancária',
+};
 
 const expenseSchema = z.object({
   description: z.string().min(3, { message: "A descrição deve ter pelo menos 3 caracteres." }),
@@ -1260,3 +1264,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
     
 
     
+

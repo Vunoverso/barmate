@@ -361,12 +361,6 @@ export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: Lucide
   { name: 'PIX', value: 'pix', icon: QrCode },
 ];
 
-export const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
-  daily_cash: 'Caixa Diário',
-  secondary_cash: 'Caixa 02',
-  bank_account: 'Conta Bancária',
-};
-
 export const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return 'R$ 0,00';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);

@@ -5,7 +5,7 @@
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { 
   getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
-  getSecondaryCashBox, getBankAccount, getCashRegisterStatus, removeSale, SOURCE_MAP
+  removeSale, 
 } from '@/lib/constants';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -49,6 +49,11 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Label } from '@/components/ui/label';
 import { SummaryTable } from './summary-table';
 
+const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
+  daily_cash: 'Caixa Diário',
+  secondary_cash: 'Caixa 02',
+  bank_account: 'Conta Bancária',
+};
 
 const isTransferEntry = (entry: FinancialEntry, allEntries: FinancialEntry[]): boolean => {
     if (entry.isCorrection) return false;
