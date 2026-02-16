@@ -2,7 +2,8 @@
 "use client";
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
-import { getProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients, getArchivedOrders, saveArchivedOrders } from '@/lib/constants';
+import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
+import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients, getArchivedOrders, saveArchivedOrders } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1528,5 +1529,7 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
     
 
 
+
+    
 
     

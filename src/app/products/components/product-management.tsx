@@ -2,7 +2,8 @@
 "use client";
 
 import type { Product, ProductCategory } from '@/types';
-import { getProducts, saveProducts, formatCurrency, getProductCategories, LUCIDE_ICON_MAP, saveProductCategories } from '@/lib/constants';
+import { getProducts, saveProducts, getProductCategories, saveProductCategories } from '@/lib/data-access';
+import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';

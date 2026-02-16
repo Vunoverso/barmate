@@ -1,7 +1,9 @@
+
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { getSales, formatCurrency, getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, KEY_CLOSED_SESSIONS, getVisuallyRemovedAdjustments, saveVisuallyRemovedAdjustments, getSales as getAllSales, saveSales } from '@/lib/constants';
+import { formatCurrency, KEY_CLOSED_SESSIONS } from '@/lib/constants';
+import { getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, getVisuallyRemovedAdjustments, saveVisuallyRemovedAdjustments, saveSales, getSales } from '@/lib/data-access';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -944,3 +946,5 @@ function TransferDialog({ isOpen, onOpenChange, balances, onTransfer, cashStatus
     </Dialog>
   );
 }
+
+    

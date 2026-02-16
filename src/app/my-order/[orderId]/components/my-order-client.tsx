@@ -1,8 +1,10 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { ActiveOrder } from '@/types';
-import { getOpenOrders, formatCurrency, getArchivedOrders } from '@/lib/constants';
+import { getOpenOrders, getArchivedOrders } from '@/lib/data-access';
+import { formatCurrency } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';

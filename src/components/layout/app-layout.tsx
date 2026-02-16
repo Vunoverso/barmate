@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import type { ReactNode } from 'react';
@@ -12,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { migrateOldData, getGuestRequests } from '@/lib/constants';
+import { migrateOldData, getGuestRequests } from '@/lib/data-access';
 
 interface NavItem {
   href: string;
@@ -188,3 +189,5 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+    

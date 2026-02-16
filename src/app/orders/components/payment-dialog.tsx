@@ -2,7 +2,8 @@
 "use client";
 
 import type { PaymentMethod, Payment, Sale, OrderItem, ActiveOrder } from '@/types';
-import { PAYMENT_METHODS, formatCurrency, getProductCategories } from '@/lib/constants';
+import { PAYMENT_METHODS, formatCurrency } from '@/lib/constants';
+import { getProductCategories } from '@/lib/data-access';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
@@ -422,7 +423,3 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
-
-    
-
-    

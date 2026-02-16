@@ -2,7 +2,8 @@
 "use client";
 
 import type { Client, ActiveOrder } from '@/types';
-import { getClients, saveClients, formatCurrency, getArchivedOrders, saveArchivedOrders, addSale } from '@/lib/constants';
+import { getClients, saveClients, getArchivedOrders, saveArchivedOrders, addSale } from '@/lib/data-access';
+import { formatCurrency } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';

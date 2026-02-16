@@ -2,7 +2,8 @@
 "use client";
 
 import type { Product, ProductCategory } from '@/types';
-import { getProductCategories, LUCIDE_ICON_MAP } from '@/lib/constants';
+import { getProductCategories } from '@/lib/data-access';
+import { LUCIDE_ICON_MAP } from '@/lib/constants';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";

@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { GuestRequest } from '@/types';
-import { getGuestRequests, saveGuestRequests, getGuestSession, saveGuestSession } from '@/lib/constants';
+import { getGuestRequests, saveGuestRequests, getGuestSession, saveGuestSession } from '@/lib/data-access';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

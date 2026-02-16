@@ -3,10 +3,8 @@
 "use client";
 
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
-import { 
-  getSales, saveSales, getFinancialEntries, formatCurrency, PAYMENT_METHODS, 
-  removeSale, 
-} from '@/lib/constants';
+import { getSales, getFinancialEntries, removeSale } from '@/lib/data-access';
+import { formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
@@ -85,7 +83,6 @@ export default function ReportsClient() {
       try {
           setSales(getSales());
           setFinancialEntries(getFinancialEntries());
-          setCashStatus(getCashRegisterStatus());
       } catch (error) {
           console.error("Failed to load report data from localStorage:", error);
           toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os dados para os relatórios.", variant: "destructive" });
@@ -575,7 +572,3 @@ export default function ReportsClient() {
     </div>
   );
 }
-
-
-
-    
