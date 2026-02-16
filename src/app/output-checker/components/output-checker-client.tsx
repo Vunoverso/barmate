@@ -34,7 +34,7 @@ type ParsedExpense = {
   text: string;
   amount: number;
   description: string;
-  suggestedSource: 'daily_cash' | 'secondary_cash' | 'bank_account' | null;
+  suggestedSource: 'secondary_cash' | 'bank_account' | null;
   duplicates: FinancialEntry[];
   status: 'pending' | 'added';
 };
@@ -52,7 +52,7 @@ const parseExpenses = (text: string): Omit<ParsedExpense, 'id' | 'duplicates' | 
     description = description.replace(/R\$\s*/i, '').trim();
     description = description.replace(/[\s–-]+$/g, '').trim();
 
-    let suggestedSource: 'daily_cash' | 'secondary_cash' | 'bank_account' | null = null;
+    let suggestedSource: 'secondary_cash' | 'bank_account' | null = null;
     const lowerLine = originalLine.toLowerCase();
 
     if (lowerLine.includes('dinheiro')) {
@@ -128,11 +128,10 @@ export default function OutputCheckerClient() {
       const selected = verificationResult.filter(res => selectedExpenseIds.includes(res.id));
       const firstSource = selected[0]?.suggestedSource;
 
-      if (firstSource && firstSource !== 'daily_cash') {
-        const allSameSource = selected.every(exp => exp.suggestedSource === firstSource);
-        if (allSameSource) {
-          setBulkSource(firstSource);
-        }
+      const allHaveSameSource = selected.every(exp => exp.suggestedSource === firstSource);
+
+      if (firstSource && allHaveSameSource) {
+        setBulkSource(firstSource);
       }
     }
   }, [selectedExpenseIds, verificationResult, numSelected]);
@@ -340,7 +339,7 @@ export default function OutputCheckerClient() {
                           </TableHeader>
                           <TableBody>
                             {verificationResult.map(res => (
-                              <TableRow key={res.id}>
+                              <TableRow key={res.id} className={cn(res.status === 'added' && 'bg-muted/50')}>
                                 <TableCell>
                                   <Checkbox 
                                       checked={!!selectedExpenses[res.id]}
@@ -349,29 +348,30 @@ export default function OutputCheckerClient() {
                                       aria-label={`Selecionar ${res.description}`}
                                   />
                                 </TableCell>
-                                <TableCell className="text-muted-foreground text-xs">{res.text}</TableCell>
-                                <TableCell>{formatCurrency(res.amount)}</TableCell>
-                                <TableCell>
+                                <TableCell className={cn("text-muted-foreground text-xs", res.status === 'added' && 'line-through')}>{res.text}</TableCell>
+                                <TableCell className={cn(res.status === 'added' && 'line-through text-muted-foreground')}>{formatCurrency(res.amount)}</TableCell>
+                                <TableCell className={cn(res.status === 'added' && 'opacity-60')}>
                                   {res.suggestedSource ? (
                                       <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                                          {res.suggestedSource === 'daily_cash' && <Banknote className="h-3 w-3" />}
                                           {res.suggestedSource === 'bank_account' && <Landmark className="h-3 w-3" />}
                                           {res.suggestedSource === 'secondary_cash' && <PiggyBank className="h-3 w-3" />}
                                           {SOURCE_MAP[res.suggestedSource]}
                                       </Badge>
                                   ) : (
-                                      <span className="text-muted-foreground text-xs italic">Selecionar</span>
+                                      <span className={cn("text-muted-foreground text-xs italic", res.status === 'added' && 'line-through')}>Selecionar</span>
                                   )}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  {res.duplicates.length > 0 ? (
+                                  {res.status === 'added' ? (
+                                    <Badge variant="secondary">Lançado</Badge>
+                                  ) : res.duplicates.length > 0 ? (
                                     <Button variant="outline" size="sm" onClick={() => setViewingDuplicates({ expense: res, duplicates: res.duplicates })}>
                                       <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
                                       Ver {res.duplicates.length} suspeita(s) em Saídas
                                     </Button>
                                   ) : (
-                                    <Badge variant={res.status === 'added' ? 'secondary' : 'default'} className={res.status !== 'added' ? 'bg-green-100 text-green-800' : ''}>
-                                      {res.status === 'added' ? 'Lançado' : 'OK'}
+                                    <Badge variant="default" className="bg-green-100 text-green-800">
+                                      OK
                                     </Badge>
                                   )}
                                 </TableCell>
