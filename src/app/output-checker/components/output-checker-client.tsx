@@ -56,7 +56,7 @@ const parseExpenses = (text: string): Omit<ParsedExpense, 'id' | 'duplicates' | 
     const lowerLine = originalLine.toLowerCase();
 
     if (lowerLine.includes('dinheiro')) {
-      suggestedSource = 'daily_cash';
+      suggestedSource = 'secondary_cash';
       if (lowerLine.includes('(dinheiro)')) {
         description = description.replace(/\(dinheiro\)/ig, '').trim();
       }
@@ -77,7 +77,7 @@ export default function OutputCheckerClient() {
   const [viewingDuplicates, setViewingDuplicates] = useState<{ expense: ParsedExpense, duplicates: FinancialEntry[] } | null>(null);
   const [selectedExpenses, setSelectedExpenses] = useState<Record<string, boolean>>({});
 
-  const [bulkSource, setBulkSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
+  const [bulkSource, setBulkSource] = useState<'secondary_cash' | 'bank_account'>('secondary_cash');
   const [bulkDate, setBulkDate] = useState<Date>(new Date());
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -177,50 +177,26 @@ export default function OutputCheckerClient() {
       const totalAmountToLaunch = expensesToLaunch.reduce((sum, exp) => sum + exp.amount, 0);
 
       const balances = {
-        daily_cash: expectedCashInDrawer,
         secondary_cash: secondaryCashBoxBalance,
         bank_account: bankAccountBalance
       };
       
-      if (bulkSource === 'daily_cash' && cashStatus.status !== 'open') {
-          toast({ title: "Ação Bloqueada", description: "O caixa diário está fechado.", variant: "destructive" });
-          return;
-      }
       if (balances[bulkSource] < totalAmountToLaunch) {
           toast({ title: "Saldo Insuficiente", description: `A conta de origem não tem saldo suficiente para lançar ${formatCurrency(totalAmountToLaunch)}.`, variant: "destructive" });
           return;
       }
 
-      const entriesToAdd: Omit<FinancialEntry, 'id'>[] = [];
-      const adjustmentsToAdd: CashAdjustment[] = [];
-
-      expensesToLaunch.forEach(expense => {
-          const adjustmentId = bulkSource === 'daily_cash' ? `adj-exp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}` : null;
-          
-          entriesToAdd.push({
-              description: expense.description,
-              amount: expense.amount,
-              type: 'expense',
-              source: bulkSource,
-              saleId: null,
-              adjustmentId: adjustmentId,
-              timestamp: bulkDate,
-          });
-
-          if (bulkSource === 'daily_cash' && cashStatus.status === 'open' && adjustmentId) {
-              adjustmentsToAdd.push({
-                  id: adjustmentId, amount: expense.amount, type: 'out' as 'out', description: `Despesa: ${expense.description}`, timestamp: bulkDate.toISOString()
-              });
-          }
-      });
+      const entriesToAdd: Omit<FinancialEntry, 'id'>[] = expensesToLaunch.map(expense => ({
+          description: expense.description,
+          amount: expense.amount,
+          type: 'expense',
+          source: bulkSource,
+          saleId: null,
+          adjustmentId: null, // No adjustments for these bulk launches
+          timestamp: bulkDate,
+      }));
 
       addFinancialEntry(entriesToAdd);
-
-      if (adjustmentsToAdd.length > 0 && cashStatus.status === 'open') {
-          const currentCashStatus = getCashRegisterStatus();
-          const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), ...adjustmentsToAdd]};
-          saveCashRegisterStatus(updatedStatus);
-      }
 
       toast({ title: `${numSelected} Despesa(s) Lançada(s)!`, description: `${formatCurrency(totalAmountToLaunch)} foi registrado como saída.` });
 
@@ -326,10 +302,6 @@ export default function OutputCheckerClient() {
                             <Landmark className="mr-2 h-3 w-3" />
                             Todas de Conta Bancária
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleSelectBySource('daily_cash')}>
-                            <Banknote className="mr-2 h-3 w-3" />
-                            Todas de Caixa Diário
-                        </Button>
                         <Button variant="outline" size="sm" onClick={() => handleSelectBySource('secondary_cash')}>
                             <PiggyBank className="mr-2 h-3 w-3" />
                             Todas de Caixa 02
@@ -413,7 +385,6 @@ export default function OutputCheckerClient() {
                                         <SelectValue placeholder="Selecione a origem..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="daily_cash">Caixa Diário ({formatCurrency(expectedCashInDrawer)})</SelectItem>
                                         <SelectItem value="secondary_cash">Caixa 02 ({formatCurrency(secondaryCashBoxBalance)})</SelectItem>
                                         <SelectItem value="bank_account">Conta Bancária ({formatCurrency(bankAccountBalance)})</SelectItem>
                                     </SelectContent>
