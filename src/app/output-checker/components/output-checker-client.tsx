@@ -4,8 +4,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { FinancialEntry, CashRegisterStatus, CashAdjustment } from '@/types';
-import { formatCurrency, SOURCE_MAP } from '../../../../lib/constants';
-import { getFinancialEntries, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries } from '../../../../lib/data-access';
+import { formatCurrency, SOURCE_MAP } from '@/lib/constants';
+import { getFinancialEntries, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries } from '@/lib/data-access';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -493,5 +493,3 @@ export default function OutputCheckerClient() {
     </>
   );
 }
-
-    

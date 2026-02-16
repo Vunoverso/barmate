@@ -3,7 +3,7 @@
 "use client";
 
 import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod, CashAdjustment } from '@/types';
-import { formatCurrency, PAYMENT_METHODS, SOURCE_MAP } from '../../../../lib/constants';
+import { formatCurrency, PAYMENT_METHODS, SOURCE_MAP } from '@/lib/constants';
 import { 
   getFinancialEntries,
   getSales,
@@ -14,7 +14,7 @@ import {
   getVisuallyRemovedFinancialEntries,
   saveVisuallyRemovedFinancialEntries,
   removeSale,
-} from '../../../../lib/data-access';
+} from '@/lib/data-access';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -1263,3 +1263,4 @@ function EditBalanceDialog({ isOpen, onOpenChange, balanceInfo, onSave }: EditBa
 
 
     
+
