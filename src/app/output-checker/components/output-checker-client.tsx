@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -251,6 +250,26 @@ export default function OutputCheckerClient() {
       }));
   };
 
+  const handleSelectBySource = (source: 'daily_cash' | 'secondary_cash' | 'bank_account') => {
+    if (!verificationResult) return;
+    const newSelection: Record<string, boolean> = {};
+    let itemsFound = 0;
+    verificationResult.forEach(res => {
+        if (res.suggestedSource === source && res.status === 'pending' && res.amount > 0) {
+            newSelection[res.id] = true;
+            itemsFound++;
+        }
+    });
+    setSelectedExpenses(newSelection);
+    if (itemsFound === 0) {
+        toast({
+            title: "Nenhum item encontrado",
+            description: `Nenhuma despesa pendente foi encontrada com a origem sugerida "${SOURCE_MAP[source]}".`,
+            variant: "default"
+        });
+    }
+  };
+
   const handleCancel = () => {
     setPastedText('');
     setVerificationResult(null);
@@ -300,64 +319,82 @@ export default function OutputCheckerClient() {
                         <AlertDescription>O texto colado não continha despesas válidas.</AlertDescription>
                       </Alert>
                   ) : (
-                    <div className="border rounded-md overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[50px]">
-                                <Checkbox 
-                                    onCheckedChange={(checked) => toggleAllSelection(Boolean(checked))}
-                                    checked={numSelected > 0 && numSelected === verificationResult?.filter(r => r.status === 'pending' && r.amount > 0).length}
-                                    aria-label="Selecionar tudo"
-                                />
-                            </TableHead>
-                            <TableHead>Despesa Colada</TableHead>
-                            <TableHead>Valor Extraído</TableHead>
-                            <TableHead>Origem Sugerida</TableHead>
-                            <TableHead className="text-center">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {verificationResult.map(res => (
-                            <TableRow key={res.id}>
-                              <TableCell>
-                                <Checkbox 
-                                    checked={!!selectedExpenses[res.id]}
-                                    onCheckedChange={() => toggleRowSelection(res.id)}
-                                    disabled={res.status === 'added' || res.amount <= 0}
-                                    aria-label={`Selecionar ${res.description}`}
-                                />
-                              </TableCell>
-                              <TableCell className="text-muted-foreground text-xs">{res.text}</TableCell>
-                              <TableCell>{formatCurrency(res.amount)}</TableCell>
-                              <TableCell>
-                                {res.suggestedSource ? (
-                                    <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                                        {res.suggestedSource === 'daily_cash' && <Banknote className="h-3 w-3" />}
-                                        {res.suggestedSource === 'bank_account' && <Landmark className="h-3 w-3" />}
-                                        {SOURCE_MAP[res.suggestedSource]}
-                                    </Badge>
-                                ) : (
-                                    <span className="text-muted-foreground text-xs italic">Selecionar</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {res.duplicates.length > 0 ? (
-                                  <Button variant="outline" size="sm" onClick={() => setViewingDuplicates({ expense: res, duplicates: res.duplicates })}>
-                                    <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
-                                    Ver {res.duplicates.length} suspeita(s) em Saídas
-                                  </Button>
-                                ) : (
-                                  <Badge variant={res.status === 'added' ? 'secondary' : 'default'} className={res.status !== 'added' ? 'bg-green-100 text-green-800' : ''}>
-                                    {res.status === 'added' ? 'Lançado' : 'OK'}
-                                  </Badge>
-                                )}
-                              </TableCell>
+                    <>
+                      <div className="flex items-center gap-2 my-4">
+                        <span className="text-sm font-medium text-muted-foreground">Seleção Rápida:</span>
+                        <Button variant="outline" size="sm" onClick={() => handleSelectBySource('bank_account')}>
+                            <Landmark className="mr-2 h-3 w-3" />
+                            Todas de Conta Bancária
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleSelectBySource('daily_cash')}>
+                            <Banknote className="mr-2 h-3 w-3" />
+                            Todas de Caixa Diário
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleSelectBySource('secondary_cash')}>
+                            <PiggyBank className="mr-2 h-3 w-3" />
+                            Todas de Caixa 02
+                        </Button>
+                      </div>
+                      <div className="border rounded-md overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[50px]">
+                                  <Checkbox 
+                                      onCheckedChange={(checked) => toggleAllSelection(Boolean(checked))}
+                                      checked={numSelected > 0 && numSelected === verificationResult?.filter(r => r.status === 'pending' && r.amount > 0).length}
+                                      aria-label="Selecionar tudo"
+                                  />
+                              </TableHead>
+                              <TableHead>Despesa Colada</TableHead>
+                              <TableHead>Valor Extraído</TableHead>
+                              <TableHead>Origem Sugerida</TableHead>
+                              <TableHead className="text-center">Status</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          </TableHeader>
+                          <TableBody>
+                            {verificationResult.map(res => (
+                              <TableRow key={res.id}>
+                                <TableCell>
+                                  <Checkbox 
+                                      checked={!!selectedExpenses[res.id]}
+                                      onCheckedChange={() => toggleRowSelection(res.id)}
+                                      disabled={res.status === 'added' || res.amount <= 0}
+                                      aria-label={`Selecionar ${res.description}`}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-xs">{res.text}</TableCell>
+                                <TableCell>{formatCurrency(res.amount)}</TableCell>
+                                <TableCell>
+                                  {res.suggestedSource ? (
+                                      <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                                          {res.suggestedSource === 'daily_cash' && <Banknote className="h-3 w-3" />}
+                                          {res.suggestedSource === 'bank_account' && <Landmark className="h-3 w-3" />}
+                                          {res.suggestedSource === 'secondary_cash' && <PiggyBank className="h-3 w-3" />}
+                                          {SOURCE_MAP[res.suggestedSource]}
+                                      </Badge>
+                                  ) : (
+                                      <span className="text-muted-foreground text-xs italic">Selecionar</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {res.duplicates.length > 0 ? (
+                                    <Button variant="outline" size="sm" onClick={() => setViewingDuplicates({ expense: res, duplicates: res.duplicates })}>
+                                      <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
+                                      Ver {res.duplicates.length} suspeita(s) em Saídas
+                                    </Button>
+                                  ) : (
+                                    <Badge variant={res.status === 'added' ? 'secondary' : 'default'} className={res.status !== 'added' ? 'bg-green-100 text-green-800' : ''}>
+                                      {res.status === 'added' ? 'Lançado' : 'OK'}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
                   )}
 
                   {numSelected > 0 && (
@@ -422,7 +459,7 @@ export default function OutputCheckerClient() {
         <Dialog open={!!viewingDuplicates} onOpenChange={() => setViewingDuplicates(null)}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Comparar Despesa Suspeita</DialogTitle>
+                    <DialogTitle>Despesas Suspeitas Encontradas nas Saídas</DialogTitle>
                     <DialogDescription>
                         Compare a despesa que você está tentando lançar com as despesas já cadastradas que encontramos no período.
                     </DialogDescription>
