@@ -339,8 +339,3 @@ export function clearFinancialData() {
         window.dispatchEvent(new Event('storage'));
     }
 };
-
-// Dummy function to satisfy type checker, will not be used in local mode
-export function getFromSupabase() {
-  return Promise.resolve({ data: [], error: null });
-}

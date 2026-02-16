@@ -1,9 +1,6 @@
 
 
 import type { LucideIcon } from 'lucide-react';
-import type { Database } from './supabase';
-
-export type { Database } from './supabase';
 
 export type ProductCategory = {
   id: string;
@@ -124,7 +121,3 @@ export interface GuestRequest {
   associatedOrderId?: string | null;
   requestedAt: string;
 }
-
-
-// Helper for getting table row types
-type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
