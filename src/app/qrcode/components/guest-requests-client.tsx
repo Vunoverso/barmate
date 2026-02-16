@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { GuestRequest, ActiveOrder } from '@/types';
-import { getGuestRequests, saveGuestRequests, getOpenOrders } from '@/lib/data-access';
+import { getOpenOrders } from '@/lib/data-access';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +40,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Check, X, Users, Link as LinkIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/constants';
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+
 
 export default function GuestRequestsClient() {
     const [requests, setRequests] = useState<GuestRequest[]>([]);
@@ -53,35 +56,40 @@ export default function GuestRequestsClient() {
     const { toast } = useToast();
 
     useEffect(() => {
-        const loadData = () => {
-            setRequests(getGuestRequests());
-            setOpenOrders(getOpenOrders());
-            setIsMounted(true);
-        };
+        // Load non-realtime data
+        setOpenOrders(getOpenOrders());
 
+        // Listen for realtime guest requests
+        const q = query(collection(db, "guestRequests"), where("status", "==", "pending"));
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const pendingRequests: GuestRequest[] = [];
+            querySnapshot.forEach((doc) => {
+                pendingRequests.push({ id: doc.id, ...doc.data() } as GuestRequest);
+            });
+            setRequests(pendingRequests.sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime()));
+            setIsMounted(true);
+        }, (error) => {
+            console.error("Error listening for guest requests:", error);
+            toast({ title: "Erro de Conexão", description: "Não foi possível carregar as solicitações de acesso.", variant: "destructive" });
+        });
+        
         const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'barmate_guestRequests_v2' || e.key === 'barmate_openOrders_v2') {
-                loadData();
+            if (e.key === 'barmate_openOrders_v2') {
+                setOpenOrders(getOpenOrders());
             }
         };
-
-        loadData(); // Initial load
-        const interval = setInterval(loadData, 3000); // Polling every 3 seconds for robustness
-
         window.addEventListener('storage', handleStorageChange);
 
         return () => {
-            clearInterval(interval);
+            unsubscribe();
             window.removeEventListener('storage', handleStorageChange);
         };
-    }, []);
+    }, [toast]);
     
-    const pendingRequests = useMemo(() => {
-        return requests.filter(r => r.status === 'pending').sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime());
-    }, [requests]);
-
     const handleOpenAssociationDialog = (request: GuestRequest) => {
-        if (openOrders.length === 0) {
+        const currentOpenOrders = getOpenOrders();
+        setOpenOrders(currentOpenOrders);
+        if (currentOpenOrders.length === 0) {
             toast({ title: "Nenhuma comanda aberta", description: "Crie uma nova comanda antes de associar um cliente.", variant: "default" });
             return;
         }
@@ -89,34 +97,37 @@ export default function GuestRequestsClient() {
         setSelectedOrderId('');
     };
 
-    const handleConfirmAssociation = () => {
+    const handleConfirmAssociation = async () => {
         if (!associatingRequest || !selectedOrderId) {
             toast({ title: "Erro", description: "Selecione uma comanda para associar.", variant: "destructive" });
             return;
         }
 
-        const allRequests = getGuestRequests();
-        const updatedRequests = allRequests.map(r => {
-            if (r.id === associatingRequest.id) {
-                return { ...r, status: 'approved' as 'approved', associatedOrderId: selectedOrderId };
-            }
-            return r;
-        });
-
-        saveGuestRequests(updatedRequests);
-        toast({ title: "Cliente Associado!", description: `${associatingRequest.name} agora está associado à comanda selecionada.` });
-        setAssociatingRequest(null);
+        try {
+            const requestDocRef = doc(db, "guestRequests", associatingRequest.id);
+            await updateDoc(requestDocRef, {
+                status: 'approved',
+                associatedOrderId: selectedOrderId
+            });
+            toast({ title: "Cliente Associado!", description: `${associatingRequest.name} agora está associado à comanda selecionada.` });
+            setAssociatingRequest(null);
+        } catch (error) {
+            console.error("Error associating request:", error);
+            toast({ title: "Erro", description: "Não foi possível associar a solicitação.", variant: "destructive" });
+        }
     };
 
-    const handleConfirmRejection = () => {
+    const handleConfirmRejection = async () => {
         if (!rejectingRequest) return;
         
-        const allRequests = getGuestRequests();
-        const updatedRequests = allRequests.filter(r => r.id !== rejectingRequest.id);
-        
-        saveGuestRequests(updatedRequests);
-        toast({ title: "Solicitação Rejeitada", description: `A solicitação de ${rejectingRequest.name} foi removida.`, variant: "default" });
-        setRejectingRequest(null);
+        try {
+            await deleteDoc(doc(db, "guestRequests", rejectingRequest.id));
+            toast({ title: "Solicitação Rejeitada", description: `A solicitação de ${rejectingRequest.name} foi removida.`, variant: "default" });
+            setRejectingRequest(null);
+        } catch (error) {
+             console.error("Error rejecting request:", error);
+            toast({ title: "Erro", description: "Não foi possível rejeitar a solicitação.", variant: "destructive" });
+        }
     };
 
     if (!isMounted) {
@@ -145,8 +156,8 @@ export default function GuestRequestsClient() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {pendingRequests.length > 0 ? (
-                                pendingRequests.map(req => (
+                            {requests.length > 0 ? (
+                                requests.map(req => (
                                     <TableRow key={req.id}>
                                         <TableCell className="font-medium">{req.name}</TableCell>
                                         <TableCell>{formatDistanceToNow(new Date(req.requestedAt), { addSuffix: true, locale: ptBR })}</TableCell>

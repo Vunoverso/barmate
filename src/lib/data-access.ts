@@ -7,7 +7,6 @@ import {
     INITIAL_SALES,
     INITIAL_OPEN_ORDERS,
     INITIAL_ARCHIVED_ORDERS,
-    INITIAL_GUEST_REQUESTS,
     INITIAL_CLIENTS,
     INITIAL_FINANCIAL_ENTRIES,
     INITIAL_CASH_REGISTER_STATUS,
@@ -23,8 +22,6 @@ import {
     KEY_FINANCIAL_ENTRIES,
     KEY_CASH_REGISTER_STATUS,
     KEY_TRANSACTION_FEES,
-    KEY_GUEST_REQUESTS,
-    KEY_GUEST_SESSION,
     KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES,
     KEY_VISUALLY_REMOVED_ADJUSTMENTS,
     KEY_SECONDARY_CASH_BOX,
@@ -202,20 +199,6 @@ export function getTransactionFees(): TransactionFees {
 }
 export function saveTransactionFees(fees: TransactionFees, options?: { silent?: boolean }) {
     saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
-}
-
-export function getGuestRequests(): GuestRequest[] {
-    return getFromLocalStorage(KEY_GUEST_REQUESTS, INITIAL_GUEST_REQUESTS);
-}
-export function saveGuestRequests(requests: GuestRequest[]) {
-    saveToLocalStorage(KEY_GUEST_REQUESTS, requests);
-}
-
-export function getGuestSession(): { guestRequestId: string } | null {
-    return getFromLocalStorage(KEY_GUEST_SESSION, null);
-}
-export function saveGuestSession(session: { guestRequestId: string } | null) {
-    saveToLocalStorage(KEY_GUEST_SESSION, session, { silent: true });
 }
 
 export function getVisuallyRemovedFinancialEntries(): string[] {

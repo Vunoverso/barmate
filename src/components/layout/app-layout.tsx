@@ -12,7 +12,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { migrateOldData, getGuestRequests } from '@/lib/data-access';
+import { migrateOldData } from '@/lib/data-access';
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 interface NavItem {
   href: string;
@@ -34,35 +36,31 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // Run data migration once on app load
     migrateOldData();
 
-    const loadBadgeData = () => {
-        const requests = getGuestRequests();
-        const pendingCount = requests.filter(r => r.status === 'pending').length;
-        setPendingGuestCount(pendingCount);
-    };
-
     const loadBarName = () => {
         const storedName = localStorage.getItem('barName') || 'BarMate';
         setBarName(storedName);
     };
     
     const handleStorageChange = (event: StorageEvent) => {
-        if (event.key === 'barmate_guestRequests_v2') {
-            loadBadgeData();
-        }
         if (event.key === 'barName') {
             loadBarName();
         }
     };
     
-    loadBadgeData();
     loadBarName();
     window.addEventListener('storage', handleStorageChange);
-    
-    const interval = setInterval(loadBadgeData, 5000); // Also add polling for the badge for robustness
+
+    // Firebase real-time listener for pending guest requests
+    const q = query(collection(db, "guestRequests"), where("status", "==", "pending"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        setPendingGuestCount(snapshot.size);
+    }, (error) => {
+        console.error("Error listening to guest requests:", error);
+    });
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('storage', handleStorageChange);
+      unsubscribe();
     };
   }, []);
   
