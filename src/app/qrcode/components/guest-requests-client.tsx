@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -51,22 +52,29 @@ export default function GuestRequestsClient() {
 
     const { toast } = useToast();
 
-    const loadData = useCallback(() => {
-        setRequests(getGuestRequests());
-        setOpenOrders(getOpenOrders());
-        setIsMounted(true);
-    }, []);
-
     useEffect(() => {
-        loadData();
-        const interval = setInterval(loadData, 5000); // Poll every 5 seconds to get new requests
+        const loadData = () => {
+            setRequests(getGuestRequests());
+            setOpenOrders(getOpenOrders());
+            setIsMounted(true);
+        };
 
-        window.addEventListener('storage', loadData);
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'barmate_guestRequests_v2' || e.key === 'barmate_openOrders_v2') {
+                loadData();
+            }
+        };
+
+        loadData(); // Initial load
+        const interval = setInterval(loadData, 3000); // Polling every 3 seconds for robustness
+
+        window.addEventListener('storage', handleStorageChange);
+
         return () => {
             clearInterval(interval);
-            window.removeEventListener('storage', loadData);
+            window.removeEventListener('storage', handleStorageChange);
         };
-    }, [loadData]);
+    }, []);
     
     const pendingRequests = useMemo(() => {
         return requests.filter(r => r.status === 'pending').sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime());

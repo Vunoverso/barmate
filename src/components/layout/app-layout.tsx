@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store, Banknote, Users, ClipboardCheck, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -33,21 +33,35 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Run data migration once on app load
     migrateOldData();
-    
-    const handleStorageChange = () => {
-        const storedName = localStorage.getItem('barName') || 'BarMate';
-        setBarName(storedName);
-        
-        // Check for pending guest requests
+
+    const loadBadgeData = () => {
         const requests = getGuestRequests();
         const pendingCount = requests.filter(r => r.status === 'pending').length;
         setPendingGuestCount(pendingCount);
     };
+
+    const loadBarName = () => {
+        const storedName = localStorage.getItem('barName') || 'BarMate';
+        setBarName(storedName);
+    };
     
-    handleStorageChange(); // Initial check
+    const handleStorageChange = (event: StorageEvent) => {
+        if (event.key === 'barmate_guestRequests_v2') {
+            loadBadgeData();
+        }
+        if (event.key === 'barName') {
+            loadBarName();
+        }
+    };
+    
+    loadBadgeData();
+    loadBarName();
     window.addEventListener('storage', handleStorageChange);
+    
+    const interval = setInterval(loadBadgeData, 5000); // Also add polling for the badge for robustness
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
@@ -123,8 +137,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="flex flex-col">
-              <SheetHeader className="sr-only">
-                <SheetTitle>Menu</SheetTitle>
+              <SheetHeader>
+                <SheetTitle className="sr-only">Menu Principal</SheetTitle>
               </SheetHeader>
               <nav className="grid gap-1 text-lg font-medium">
                 <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold mb-4">
