@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { migrateOldData } from '@/lib/constants';
+import { migrateOldData, getGuestRequests } from '@/lib/constants';
 
 interface NavItem {
   href: string;
@@ -21,24 +21,13 @@ interface NavItem {
   badge?: number;
 }
 
-const mainNavItems: NavItem[] = [
-  { href: '/dashboard', label: 'Início', icon: Home },
-  { href: '/cash-register', label: 'Caixa', icon: Banknote },
-  { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
-  { href: '/orders', label: 'Comandas', icon: HandCoins },
-  { href: '/qrcode', label: 'Acesso Cliente', icon: QrCode },
-  { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
-  { href: '/products', label: 'Produtos', icon: Package },
-  { href: '/clients', label: 'Clientes', icon: Users },
-  { href: '/financial', label: 'Financeiro', icon: LineChart },
-];
-
 const settingsNavItem: NavItem = { href: '/settings', label: 'Configurações', icon: Settings };
 
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
+  const [pendingGuestCount, setPendingGuestCount] = useState(0);
   const version = "1.3.2"; // Version number
 
   useEffect(() => {
@@ -48,15 +37,32 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     const handleStorageChange = () => {
         const storedName = localStorage.getItem('barName') || 'BarMate';
         setBarName(storedName);
+        
+        // Check for pending guest requests
+        const requests = getGuestRequests();
+        const pendingCount = requests.filter(r => r.status === 'pending').length;
+        setPendingGuestCount(pendingCount);
     };
     
-    handleStorageChange();
+    handleStorageChange(); // Initial check
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
+  
+  const mainNavItems: NavItem[] = [
+    { href: '/dashboard', label: 'Início', icon: Home },
+    { href: '/cash-register', label: 'Caixa', icon: Banknote },
+    { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
+    { href: '/orders', label: 'Comandas', icon: HandCoins },
+    { href: '/qrcode', label: 'Acesso Cliente', icon: QrCode, badge: pendingGuestCount > 0 ? pendingGuestCount : undefined },
+    { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
+    { href: '/products', label: 'Produtos', icon: Package },
+    { href: '/clients', label: 'Clientes', icon: Users },
+    { href: '/financial', label: 'Financeiro', icon: LineChart },
+  ];
   
   const allNavItems = [...mainNavItems, settingsNavItem];
 
@@ -82,7 +88,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <Link href={item.href} className="flex items-center gap-2 rounded-lg px-3 py-1 text-primary transition-all hover:text-primary">
             <item.icon className="h-4 w-4" />
             {item.label}
-            {item.badge && <Badge className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full">{item.badge}</Badge>}
+            {item.badge && item.badge > 0 && <Badge className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">{item.badge}</Badge>}
           </Link>
         </Button>
       ))}
@@ -137,7 +143,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   >
                     <item.icon className="h-4 w-4" />
                     {item.label}
-                    {item.badge && <Badge className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full">{item.badge}</Badge>}
+                    {item.badge && item.badge > 0 && <Badge className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">{item.badge}</Badge>}
                   </Link>
                 ))}
               </nav>
