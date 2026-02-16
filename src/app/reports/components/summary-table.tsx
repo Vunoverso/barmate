@@ -45,3 +45,5 @@ export const SummaryTable = ({ data, isBalanceVisible = true }: SummaryTableProp
         </TableBody>
     </Table>
 );
+
+    

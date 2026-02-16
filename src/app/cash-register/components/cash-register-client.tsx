@@ -946,5 +946,6 @@ function TransferDialog({ isOpen, onOpenChange, balances, onTransfer, cashStatus
     </Dialog>
   );
 }
+    
 
     

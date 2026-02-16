@@ -1,10 +1,9 @@
 
-
 "use client";
 
 import type { Sale, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus } from '@/types';
 import { getSales, getFinancialEntries, removeSale } from '@/lib/data-access';
-import { formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
+import { formatCurrency, PAYMENT_METHODS, SOURCE_MAP } from '@/lib/constants';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
@@ -46,12 +45,6 @@ import { downloadAsCSV } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Label } from '@/components/ui/label';
 import { SummaryTable } from './summary-table';
-
-const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
-  daily_cash: 'Caixa Diário',
-  secondary_cash: 'Caixa 02',
-  bank_account: 'Conta Bancária',
-};
 
 const isTransferEntry = (entry: FinancialEntry, allEntries: FinancialEntry[]): boolean => {
     if (entry.isCorrection) return false;
@@ -572,3 +565,5 @@ export default function ReportsClient() {
     </div>
   );
 }
+
+    

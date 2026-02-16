@@ -480,3 +480,5 @@ function ProductDisplay({ products, addToOrder, viewMode }: ProductDisplayProps)
     </div>
   );
 }
+
+    

@@ -22,7 +22,7 @@ import { Terminal, Banknote, HelpCircle, Download, Printer } from "lucide-react"
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Receipt } from './receipt';
 import { useToast } from '@/hooks/use-toast';
 
@@ -423,3 +423,5 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
+
+    

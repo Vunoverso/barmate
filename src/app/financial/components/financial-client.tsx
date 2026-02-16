@@ -1,8 +1,9 @@
 
+
 "use client";
 
 import type { FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Sale, PaymentMethod, CashAdjustment } from '@/types';
-import { formatCurrency, PAYMENT_METHODS, } from '@/lib/constants';
+import { formatCurrency, PAYMENT_METHODS, SOURCE_MAP } from '../../../../lib/constants';
 import { 
   getFinancialEntries,
   getSales,
@@ -13,7 +14,7 @@ import {
   getVisuallyRemovedFinancialEntries,
   saveVisuallyRemovedFinancialEntries,
   removeSale,
-} from '@/lib/data-access';
+} from '../../../../lib/data-access';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -79,12 +80,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-
-const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
-  daily_cash: 'Caixa Diário',
-  secondary_cash: 'Caixa 02',
-  bank_account: 'Conta Bancária',
-};
 
 const expenseSchema = z.object({
   description: z.string().min(3, { message: "A descrição deve ter pelo menos 3 caracteres." }),

@@ -83,7 +83,7 @@ export default function ClientsClient() {
     const clientsWithDebt = allClients.map(client => {
       const clientDebt = allArchivedOrders
         .filter(order => order.clientId === client.id)
-        .reduce((sum, order) => sum + order.items.reduce((orderSum, item) => orderSum + item.price * item.quantity, 0), 0);
+        .reduce((sum, order) => sum + order.items.reduce((orderSum, item) => orderSum + item.price * item.quantity, 0), 0), 0);
       return { ...client, debtAmount: clientDebt };
     });
     setClients(clientsWithDebt);
@@ -463,3 +463,5 @@ function DebtDetailsDialog({ isOpen, onOpenChange, client, onSettleDebt }: DebtD
     </Dialog>
   );
 }
+
+    

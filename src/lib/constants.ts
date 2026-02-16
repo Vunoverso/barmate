@@ -26,12 +26,12 @@ export const KEY_PRODUCT_CATEGORIES = 'barmate_productCategories_v2';
 export const KEY_PRODUCTS = 'barmate_products_v2';
 export const KEY_SALES = 'barmate_sales_v2';
 export const KEY_OPEN_ORDERS = 'barmate_openOrders_v2';
+export const KEY_ARCHIVED_ORDERS = 'barmate_archivedOrders_v2';
 export const KEY_CLIENTS = 'barmate_clients_v2';
 export const KEY_FINANCIAL_ENTRIES = 'barmate_financialEntries_v2';
 export const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
 export const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
 export const KEY_CLOSED_SESSIONS = 'barmate_closedCashSessions_v2';
-export const KEY_ARCHIVED_ORDERS = 'barmate_archivedOrders_v2';
 export const KEY_GUEST_REQUESTS = 'barmate_guestRequests_v2';
 export const KEY_GUEST_SESSION = 'barmate_guestSession_v2';
 export const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
@@ -115,4 +115,10 @@ export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: Lucide
 export function formatCurrency(value: number) {
   if (typeof value !== 'number') return 'R$ 0,00';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
+export const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
+  daily_cash: 'Caixa Diário',
+  secondary_cash: 'Caixa 02',
+  bank_account: 'Conta Bancária',
 };

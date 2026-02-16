@@ -265,3 +265,5 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
     </Dialog>
   );
 }
+
+    

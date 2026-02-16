@@ -88,6 +88,16 @@ function EditCategoryDialog({ isOpen, onOpenChange, category, onSave }: EditCate
               placeholder="Digite o novo nome"
               autoFocus
             />
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="categoryName">Novo Nome da Categoria</Label>
+            <Input
+              id="categoryName"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Digite o novo nome"
+              autoFocus
+            />
           </div>
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
@@ -678,3 +688,5 @@ export default function SettingsClient() {
     </>
   );
 }
+
+    
