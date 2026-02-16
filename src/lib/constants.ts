@@ -1,6 +1,6 @@
 
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, type LucideIcon } from 'lucide-react';
 
 // --- LocalStorage Helper Functions ---
@@ -77,6 +77,8 @@ export const DATA_KEYS = [
     'barmate_counterSaleOrderItems_v2',
     'barmate_closedCashSessions_v2',
     'barmate_archivedOrders_v2',
+    'barmate_guestRequests_v2',
+    'barmate_guestSession_v2',
     'barName',
     'barCnpj',
     'barAddress'
@@ -91,6 +93,8 @@ const KEY_CASH_REGISTER_STATUS = 'barmate_cashRegisterStatus_v2';
 const KEY_TRANSACTION_FEES = 'barmate_transactionFees_v2';
 export const KEY_CLOSED_SESSIONS = 'barmate_closedCashSessions_v2';
 const KEY_ARCHIVED_ORDERS = 'barmate_archivedOrders_v2';
+export const KEY_GUEST_REQUESTS = 'barmate_guestRequests_v2';
+export const KEY_GUEST_SESSION = 'barmate_guestSession_v2';
 const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
 const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
 const KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES = 'barmate_session_visuallyRemovedFinancialEntries';
@@ -147,6 +151,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 export const INITIAL_SALES: Sale[] = [];
 export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
 export const INITIAL_ARCHIVED_ORDERS: ActiveOrder[] = [];
+export const INITIAL_GUEST_REQUESTS: GuestRequest[] = [];
 export const INITIAL_CLIENTS: Client[] = [];
 export const INITIAL_FINANCIAL_ENTRIES: FinancialEntry[] = [];
 export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'closed', adjustments: [] };
@@ -232,6 +237,14 @@ export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { s
 
 export const getTransactionFees = (): TransactionFees => getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
 export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
+
+export const getGuestRequests = (): GuestRequest[] => getFromLocalStorage(KEY_GUEST_REQUESTS, INITIAL_GUEST_REQUESTS);
+export const saveGuestRequests = (requests: GuestRequest[]) => saveToLocalStorage(KEY_GUEST_REQUESTS, requests);
+
+// This will store just the ID of the guest's request in their own browser
+export const getGuestSession = (): { guestRequestId: string } | null => getFromLocalStorage(KEY_GUEST_SESSION, null);
+export const saveGuestSession = (session: { guestRequestId: string } | null) => saveToLocalStorage(KEY_GUEST_SESSION, session, { silent: true });
+
 
 export const getVisuallyRemovedFinancialEntries = (): string[] => getFromSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
 export const saveVisuallyRemovedFinancialEntries = (ids: string[]) => saveToSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);

@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store, Banknote, Users, ClipboardCheck } from 'lucide-react';
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, LucideIcon, Store, Banknote, Users, ClipboardCheck, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -26,6 +26,7 @@ const mainNavItems: NavItem[] = [
   { href: '/cash-register', label: 'Caixa', icon: Banknote },
   { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
   { href: '/orders', label: 'Comandas', icon: HandCoins },
+  { href: '/qrcode', label: 'Acesso Cliente', icon: QrCode },
   { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
   { href: '/products', label: 'Produtos', icon: Package },
   { href: '/clients', label: 'Clientes', icon: Users },
@@ -38,7 +39,7 @@ const settingsNavItem: NavItem = { href: '/settings', label: 'Configurações', 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
-  const version = "v1.3.2"; // Version number
+  const version = "1.3.2"; // Version number
 
   useEffect(() => {
     // Run data migration once on app load
@@ -58,6 +59,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, []);
   
   const allNavItems = [...mainNavItems, settingsNavItem];
+
+  const isGuestView = pathname.startsWith('/guest') || pathname.startsWith('/my-order');
+
+  if (isGuestView) {
+      return (
+          <main className="flex flex-col min-h-screen bg-background">
+              {children}
+          </main>
+      );
+  }
 
   const SidebarNav = ({ items, className }: { items: NavItem[], className?: string }) => (
     <nav className={`flex flex-col gap-1 ${className}`}>

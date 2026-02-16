@@ -117,6 +117,14 @@ export interface TransactionFees {
   pixRate: number;
 }
 
+export interface GuestRequest {
+  id: string;
+  name: string;
+  status: 'pending' | 'approved' | 'rejected';
+  associatedOrderId?: string | null;
+  requestedAt: string;
+}
+
 
 // Helper for getting table row types
 type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
