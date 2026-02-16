@@ -123,6 +123,20 @@ export default function OutputCheckerClient() {
   const selectedExpenseIds = useMemo(() => Object.keys(selectedExpenses).filter(id => selectedExpenses[id]), [selectedExpenses]);
   const numSelected = selectedExpenseIds.length;
 
+  useEffect(() => {
+    if (numSelected > 0 && verificationResult) {
+      const selected = verificationResult.filter(res => selectedExpenseIds.includes(res.id));
+      const firstSource = selected[0]?.suggestedSource;
+
+      if (firstSource && firstSource !== 'daily_cash') {
+        const allSameSource = selected.every(exp => exp.suggestedSource === firstSource);
+        if (allSameSource) {
+          setBulkSource(firstSource);
+        }
+      }
+    }
+  }, [selectedExpenseIds, verificationResult, numSelected]);
+
   const handleCheckExpense = () => {
     if (!pastedText.trim()) {
         toast({ title: "Texto vazio", description: "Por favor, cole a despesa que deseja verificar.", variant: "destructive" });
@@ -226,7 +240,7 @@ export default function OutputCheckerClient() {
       }));
   };
 
-  const handleSelectBySource = (source: 'daily_cash' | 'secondary_cash' | 'bank_account') => {
+  const handleSelectBySource = (source: 'secondary_cash' | 'bank_account') => {
     if (!verificationResult) return;
     const newSelection: Record<string, boolean> = {};
     let itemsFound = 0;
@@ -380,7 +394,7 @@ export default function OutputCheckerClient() {
                         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                             <div className="space-y-2">
                                 <Label htmlFor="bulk-source">Origem do dinheiro</Label>
-                                <Select onValueChange={(value) => setBulkSource(value as any)} defaultValue={bulkSource}>
+                                <Select onValueChange={(value) => setBulkSource(value as any)} value={bulkSource}>
                                     <SelectTrigger id="bulk-source">
                                         <SelectValue placeholder="Selecione a origem..." />
                                     </SelectTrigger>
