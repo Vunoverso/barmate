@@ -202,60 +202,106 @@ export const migrateOldData = () => {
 
 // --- Data Accessor Functions ---
 
-export const getProductCategories = (): ProductCategory[] => getFromLocalStorage(KEY_PRODUCT_CATEGORIES, INITIAL_PRODUCT_CATEGORIES);
-export const saveProductCategories = (categories: ProductCategory[]) => saveToLocalStorage(KEY_PRODUCT_CATEGORIES, categories);
+export function getProductCategories(): ProductCategory[] {
+    return getFromLocalStorage(KEY_PRODUCT_CATEGORIES, INITIAL_PRODUCT_CATEGORIES);
+}
+export function saveProductCategories(categories: ProductCategory[]) {
+    saveToLocalStorage(KEY_PRODUCT_CATEGORIES, categories);
+}
 
-export const getProducts = (): Product[] => getFromLocalStorage(KEY_PRODUCTS, INITIAL_PRODUCTS);
-export const saveProducts = (products: Product[]) => saveToLocalStorage(KEY_PRODUCTS, products);
+export function getProducts(): Product[] {
+    return getFromLocalStorage(KEY_PRODUCTS, INITIAL_PRODUCTS);
+}
+export function saveProducts(products: Product[]) {
+    saveToLocalStorage(KEY_PRODUCTS, products);
+}
 
-export const getSales = (): Sale[] => {
-  const sales = getFromLocalStorage<Sale[]>(KEY_SALES, INITIAL_SALES);
-  // Data sanitization: ensure every sale has `payments` and `items` arrays.
-  return sales.map(sale => ({
-    ...sale,
-    payments: sale.payments || [],
-    items: sale.items || [],
-  }));
-};
-export const saveSales = (sales: Sale[]) => saveToLocalStorage(KEY_SALES, sales);
+export function getSales(): Sale[] {
+    const sales = getFromLocalStorage<Sale[]>(KEY_SALES, INITIAL_SALES);
+    return sales.map(sale => ({
+        ...sale,
+        payments: sale.payments || [],
+        items: sale.items || [],
+    }));
+}
+export function saveSales(sales: Sale[]) {
+    saveToLocalStorage(KEY_SALES, sales);
+}
 
-export const getOpenOrders = (): ActiveOrder[] => getFromLocalStorage(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
-export const saveOpenOrders = (orders: ActiveOrder[]) => saveToLocalStorage(KEY_OPEN_ORDERS, orders);
+export function getOpenOrders(): ActiveOrder[] {
+    return getFromLocalStorage(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
+}
+export function saveOpenOrders(orders: ActiveOrder[]) {
+    saveToLocalStorage(KEY_OPEN_ORDERS, orders);
+}
 
-export const getArchivedOrders = (): ActiveOrder[] => getFromLocalStorage(KEY_ARCHIVED_ORDERS, INITIAL_ARCHIVED_ORDERS);
-export const saveArchivedOrders = (orders: ActiveOrder[]) => saveToLocalStorage(KEY_ARCHIVED_ORDERS, orders);
+export function getArchivedOrders(): ActiveOrder[] {
+    return getFromLocalStorage(KEY_ARCHIVED_ORDERS, INITIAL_ARCHIVED_ORDERS);
+}
+export function saveArchivedOrders(orders: ActiveOrder[]) {
+    saveToLocalStorage(KEY_ARCHIVED_ORDERS, orders);
+}
 
+export function getClients(): Client[] {
+    return getFromLocalStorage(KEY_CLIENTS, INITIAL_CLIENTS);
+}
+export function saveClients(clients: Client[]) {
+    saveToLocalStorage(KEY_CLIENTS, clients);
+}
 
-export const getClients = (): Client[] => getFromLocalStorage(KEY_CLIENTS, INITIAL_CLIENTS);
-export const saveClients = (clients: Client[]) => saveToLocalStorage(KEY_CLIENTS, clients);
+export function getFinancialEntries(): FinancialEntry[] {
+    return getFromLocalStorage(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
+}
+export function saveFinancialEntries(entries: FinancialEntry[]) {
+    saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
+}
 
-export const getFinancialEntries = (): FinancialEntry[] => getFromLocalStorage(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
-export const saveFinancialEntries = (entries: FinancialEntry[]) => saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
+export function getCashRegisterStatus(): CashRegisterStatus {
+    return getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
+}
+export function saveCashRegisterStatus(status: CashRegisterStatus, options?: { silent?: boolean }) {
+    saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
+}
 
-export const getCashRegisterStatus = (): CashRegisterStatus => getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
-export const saveCashRegisterStatus = (status: CashRegisterStatus, options?: { silent?: boolean }) => saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
+export function getTransactionFees(): TransactionFees {
+    return getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
+}
+export function saveTransactionFees(fees: TransactionFees, options?: { silent?: boolean }) {
+    saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
+}
 
-export const getTransactionFees = (): TransactionFees => getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
-export const saveTransactionFees = (fees: TransactionFees, options?: { silent?: boolean }) => saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
+export function getGuestRequests(): GuestRequest[] {
+    return getFromLocalStorage(KEY_GUEST_REQUESTS, INITIAL_GUEST_REQUESTS);
+}
+export function saveGuestRequests(requests: GuestRequest[]) {
+    saveToLocalStorage(KEY_GUEST_REQUESTS, requests);
+}
 
-export const getGuestRequests = (): GuestRequest[] => getFromLocalStorage(KEY_GUEST_REQUESTS, INITIAL_GUEST_REQUESTS);
-export const saveGuestRequests = (requests: GuestRequest[]) => saveToLocalStorage(KEY_GUEST_REQUESTS, requests);
+export function getGuestSession(): { guestRequestId: string } | null {
+    return getFromLocalStorage(KEY_GUEST_SESSION, null);
+}
+export function saveGuestSession(session: { guestRequestId: string } | null) {
+    saveToLocalStorage(KEY_GUEST_SESSION, session, { silent: true });
+}
 
-// This will store just the ID of the guest's request in their own browser
-export const getGuestSession = (): { guestRequestId: string } | null => getFromLocalStorage(KEY_GUEST_SESSION, null);
-export const saveGuestSession = (session: { guestRequestId: string } | null) => saveToLocalStorage(KEY_GUEST_SESSION, session, { silent: true });
+export function getVisuallyRemovedFinancialEntries(): string[] {
+    return getFromSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
+}
+export function saveVisuallyRemovedFinancialEntries(ids: string[]) {
+    saveToSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
+}
 
-
-export const getVisuallyRemovedFinancialEntries = (): string[] => getFromSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
-export const saveVisuallyRemovedFinancialEntries = (ids: string[]) => saveToSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
-
-export const getVisuallyRemovedAdjustments = (): string[] => getFromSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, []);
-export const saveVisuallyRemovedAdjustments = (ids: string[]) => saveToSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
+export function getVisuallyRemovedAdjustments(): string[] {
+    return getFromSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, []);
+}
+export function saveVisuallyRemovedAdjustments(ids: string[]) {
+    saveToSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
+}
 
 
 // --- Business Logic Functions ---
 
-export const addSale = (sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: string, timestamp?: Date })) => {
+export function addSale(sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: string, timestamp?: Date })) {
   const newSale: Sale = {
     id: `sale-${Date.now()}`,
     timestamp: new Date(),
@@ -322,7 +368,7 @@ export const addSale = (sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
   }
 };
 
-export const removeSale = (saleId: string) => {
+export function removeSale(saleId: string) {
   const currentSales = getSales();
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
@@ -333,7 +379,7 @@ export const removeSale = (saleId: string) => {
   saveFinancialEntries(entriesToKeep);
 }
 
-export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) => {
+export function addFinancialEntry(entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) {
     const currentEntries = getFinancialEntries();
     const entriesToAdd = Array.isArray(entry) ? entry : [entry];
 
@@ -348,7 +394,7 @@ export const addFinancialEntry = (entry: Omit<FinancialEntry, 'id' | 'timestamp'
 };
 
 
-export const clearFinancialData = () => {
+export function clearFinancialData() {
     if (typeof window !== 'undefined') {
         saveToLocalStorage(KEY_SALES, []);
         saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
@@ -374,7 +420,7 @@ export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: Lucide
   { name: 'PIX', value: 'pix', icon: QrCode },
 ];
 
-export const formatCurrency = (value: number) => {
+export function formatCurrency(value: number) {
   if (typeof value !== 'number') return 'R$ 0,00';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
