@@ -49,7 +49,7 @@ export default function OutputCheckerClient() {
   const [pastedText, setPastedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [verificationResult, setVerificationResult] = useState<ParsedExpense[] | null>(null);
-  const [viewingDuplicates, setViewingDuplicates] = useState<FinancialEntry[] | null>(null);
+  const [viewingDuplicates, setViewingDuplicates] = useState<{ expense: ParsedExpense, duplicates: FinancialEntry[] } | null>(null);
   const [selectedExpenses, setSelectedExpenses] = useState<Record<string, boolean>>({});
 
   const [bulkSource, setBulkSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
@@ -305,7 +305,7 @@ export default function OutputCheckerClient() {
                               <TableCell>{formatCurrency(res.amount)}</TableCell>
                               <TableCell className="text-center">
                                 {res.duplicates.length > 0 ? (
-                                  <Button variant="outline" size="sm" onClick={() => setViewingDuplicates(res.duplicates)}>
+                                  <Button variant="outline" size="sm" onClick={() => setViewingDuplicates({ expense: res, duplicates: res.duplicates })}>
                                     <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
                                     Ver {res.duplicates.length} suspeita(s) em Saídas
                                   </Button>
@@ -384,32 +384,48 @@ export default function OutputCheckerClient() {
         <Dialog open={!!viewingDuplicates} onOpenChange={() => setViewingDuplicates(null)}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Despesas Suspeitas Encontradas nas Saídas</DialogTitle>
+                    <DialogTitle>Comparar Despesa Suspeita</DialogTitle>
                     <DialogDescription>
-                        Encontramos as seguintes despesas já cadastradas no período que podem ser a(s) mesma(s). Compare visualmente antes de decidir lançar a nova despesa.
+                        Compare a despesa que você está tentando lançar com as despesas já cadastradas que encontramos no período.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="py-4 max-h-96 overflow-y-auto">
-                     <div className="border rounded-md overflow-hidden bg-background mt-4">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Data</TableHead>
-                                    <TableHead>Descrição</TableHead>
-                                    <TableHead className="text-right">Valor</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {viewingDuplicates.map(entry => (
-                                    <TableRow key={entry.id}>
-                                        <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
-                                        <TableCell>{entry.description}</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(entry.amount)}</TableCell>
+                <div className="py-4 max-h-[60vh] overflow-y-auto space-y-4">
+                    <Card className="bg-muted/50 border-primary">
+                        <CardHeader className="pb-2 pt-4">
+                            <CardTitle className="text-base">Despesa para Lançar:</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex justify-between items-center">
+                                <p className="font-medium">{viewingDuplicates.expense.description}</p>
+                                <p className="font-bold text-lg">{formatCurrency(viewingDuplicates.expense.amount)}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Texto original: "{viewingDuplicates.expense.text}"</p>
+                        </CardContent>
+                    </Card>
+                    
+                    <div>
+                        <h4 className="text-sm font-semibold mb-2">Despesas já cadastradas (suspeitas):</h4>
+                        <div className="border rounded-md overflow-hidden bg-background">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Data</TableHead>
+                                        <TableHead>Descrição</TableHead>
+                                        <TableHead className="text-right">Valor</TableHead>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                     </div>
+                                </TableHeader>
+                                <TableBody>
+                                    {viewingDuplicates.duplicates.map(entry => (
+                                        <TableRow key={entry.id}>
+                                            <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                                            <TableCell>{entry.description}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(entry.amount)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button>Fechar</Button></DialogClose>
