@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Search, Loader2, AlertTriangle, CheckCircle, PlusCircle, Banknote, PiggyBank, Landmark, CalendarIcon } from 'lucide-react';
+import { Search, Loader2, AlertTriangle, CheckCircle, PlusCircle, Banknote, PiggyBank, Landmark, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DatePickerWithRange } from '@/components/ui/date-picker-range';
@@ -16,11 +16,12 @@ import type { DateRange } from "react-day-picker";
 import { ptBR } from 'date-fns/locale';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 type ParsedExpense = {
@@ -49,8 +50,10 @@ export default function OutputCheckerClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [verificationResult, setVerificationResult] = useState<ParsedExpense[] | null>(null);
   const [viewingDuplicates, setViewingDuplicates] = useState<FinancialEntry[] | null>(null);
-  const [expenseToAdd, setExpenseToAdd] = useState<ParsedExpense | null>(null);
-  const [isAddExpenseDialogOpen, setIsAddExpenseDialogOpen] = useState(false);
+  const [selectedExpenses, setSelectedExpenses] = useState<Record<string, boolean>>({});
+
+  const [bulkSource, setBulkSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
+  const [bulkDate, setBulkDate] = useState<Date>(new Date());
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
@@ -92,6 +95,8 @@ export default function OutputCheckerClient() {
       .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
   }, [allEntries, cashStatus]);
 
+  const selectedExpenseIds = useMemo(() => Object.keys(selectedExpenses).filter(id => selectedExpenses[id]), [selectedExpenses]);
+  const numSelected = selectedExpenseIds.length;
 
   const handleCheckExpense = () => {
     if (!pastedText.trim()) {
@@ -105,6 +110,7 @@ export default function OutputCheckerClient() {
 
     setIsLoading(true);
     setVerificationResult(null);
+    setSelectedExpenses({});
 
     const from = dateRange.from;
     const to = dateRange.to || from;
@@ -136,68 +142,93 @@ export default function OutputCheckerClient() {
     setVerificationResult(results);
     setIsLoading(false);
   };
-
-  const handleOpenAddDialog = (expense: ParsedExpense) => {
-    setExpenseToAdd(expense);
-    setIsAddExpenseDialogOpen(true);
-  };
   
-  const handleConfirmAddExpense = (source: 'daily_cash' | 'secondary_cash' | 'bank_account', date: Date) => {
-    if (!expenseToAdd) return;
-    
-    if (source === 'daily_cash') {
-      if (cashStatus.status !== 'open') {
-        toast({ title: "Ação Bloqueada", description: "O caixa diário está fechado.", variant: "destructive" });
-        return;
-      }
-      if (expectedCashInDrawer < expenseToAdd.amount) {
-        toast({ title: "Saldo Insuficiente", description: "O caixa diário não tem saldo para esta despesa.", variant: "destructive" });
-        return;
-      }
-    } else if (source === 'secondary_cash' && secondaryCashBoxBalance < expenseToAdd.amount) {
-      toast({ title: "Saldo Insuficiente", description: "O Caixa 02 não tem saldo para esta despesa.", variant: "destructive" });
-      return;
-    } else if (source === 'bank_account' && bankAccountBalance < expenseToAdd.amount) {
-      toast({ title: "Saldo Insuficiente", description: "A conta bancária não tem saldo para esta despesa.", variant: "destructive" });
-      return;
-    }
+  const handleBulkLaunch = () => {
+      if (numSelected === 0) return;
+      
+      const expensesToLaunch = verificationResult?.filter(exp => selectedExpenseIds.includes(exp.id)) || [];
+      if (expensesToLaunch.length === 0) return;
 
-    const adjustmentId = `adj-exp-${Date.now()}`;
-    
-    const newEntry: FinancialEntry = {
-        id: `fin-${Date.now()}`,
-        description: expenseToAdd.description,
-        amount: expenseToAdd.amount,
-        type: 'expense',
-        source: source,
-        saleId: null,
-        adjustmentId: source === 'daily_cash' ? adjustmentId : null,
-        timestamp: date,
-    };
+      const totalAmountToLaunch = expensesToLaunch.reduce((sum, exp) => sum + exp.amount, 0);
 
-    const currentEntries = getFinancialEntries();
-    const updatedEntries = [...currentEntries, newEntry];
-    saveFinancialEntries(updatedEntries);
-
-    if (source === 'daily_cash' && cashStatus.status === 'open') {
-      const currentCashStatus = getCashRegisterStatus();
-      const sangriaAdjustment: CashAdjustment = {
-        id: adjustmentId, amount: expenseToAdd.amount, type: 'out' as 'out', description: `Despesa: ${expenseToAdd.description}`, timestamp: date.toISOString()
+      const balances = {
+        daily_cash: expectedCashInDrawer,
+        secondary_cash: secondaryCashBoxBalance,
+        bank_account: bankAccountBalance
       };
-      const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), sangriaAdjustment]};
-      saveCashRegisterStatus(updatedStatus);
-    }
-    
-    toast({ title: "Despesa Lançada!", description: `${formatCurrency(expenseToAdd.amount)} foi registrado como saída.` });
-    
-    setVerificationResult(prev => prev!.map(res => res.id === expenseToAdd.id ? { ...res, status: 'added' } : res));
-    setIsAddExpenseDialogOpen(false);
-    setExpenseToAdd(null);
+      
+      if (bulkSource === 'daily_cash' && cashStatus.status !== 'open') {
+          toast({ title: "Ação Bloqueada", description: "O caixa diário está fechado.", variant: "destructive" });
+          return;
+      }
+      if (balances[bulkSource] < totalAmountToLaunch) {
+          toast({ title: "Saldo Insuficiente", description: `A conta de origem não tem saldo suficiente para lançar ${formatCurrency(totalAmountToLaunch)}.`, variant: "destructive" });
+          return;
+      }
+
+      const entriesToAdd: Omit<FinancialEntry, 'id'>[] = [];
+      const adjustmentsToAdd: CashAdjustment[] = [];
+
+      expensesToLaunch.forEach(expense => {
+          const adjustmentId = bulkSource === 'daily_cash' ? `adj-exp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}` : null;
+          
+          entriesToAdd.push({
+              description: expense.description,
+              amount: expense.amount,
+              type: 'expense',
+              source: bulkSource,
+              saleId: null,
+              adjustmentId: adjustmentId,
+              timestamp: bulkDate,
+          });
+
+          if (bulkSource === 'daily_cash' && cashStatus.status === 'open' && adjustmentId) {
+              adjustmentsToAdd.push({
+                  id: adjustmentId, amount: expense.amount, type: 'out' as 'out', description: `Despesa: ${expense.description}`, timestamp: bulkDate.toISOString()
+              });
+          }
+      });
+
+      addFinancialEntry(entriesToAdd);
+
+      if (adjustmentsToAdd.length > 0 && cashStatus.status === 'open') {
+          const currentCashStatus = getCashRegisterStatus();
+          const updatedStatus = { ...currentCashStatus, adjustments: [...(currentCashStatus.adjustments || []), ...adjustmentsToAdd]};
+          saveCashRegisterStatus(updatedStatus);
+      }
+
+      toast({ title: `${numSelected} Despesa(s) Lançada(s)!`, description: `${formatCurrency(totalAmountToLaunch)} foi registrado como saída.` });
+
+      const launchedIds = expensesToLaunch.map(e => e.id);
+      setVerificationResult(prev => prev!.map(res => launchedIds.includes(res.id) ? { ...res, status: 'added' } : res));
+      
+      setSelectedExpenses({});
+  };
+
+  const toggleAllSelection = (checked: boolean) => {
+      if (!verificationResult) return;
+      const newSelection: Record<string, boolean> = {};
+      if (checked) {
+          verificationResult.forEach(res => {
+              if (res.status === 'pending' && res.amount > 0) {
+                  newSelection[res.id] = true;
+              }
+          });
+      }
+      setSelectedExpenses(newSelection);
+  };
+
+  const toggleRowSelection = (id: string) => {
+      setSelectedExpenses(prev => ({
+          ...prev,
+          [id]: !prev[id]
+      }));
   };
 
   const handleCancel = () => {
     setPastedText('');
     setVerificationResult(null);
+    setSelectedExpenses({});
   }
 
   return (
@@ -247,22 +278,36 @@ export default function OutputCheckerClient() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-[50px]">
+                                <Checkbox 
+                                    onCheckedChange={(checked) => toggleAllSelection(Boolean(checked))}
+                                    checked={numSelected > 0 && numSelected === verificationResult?.filter(r => r.status === 'pending' && r.amount > 0).length}
+                                    aria-label="Selecionar tudo"
+                                />
+                            </TableHead>
                             <TableHead>Despesa Colada</TableHead>
                             <TableHead>Valor Extraído</TableHead>
                             <TableHead className="text-center">Status</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {verificationResult.map(res => (
                             <TableRow key={res.id}>
+                              <TableCell>
+                                <Checkbox 
+                                    checked={!!selectedExpenses[res.id]}
+                                    onCheckedChange={() => toggleRowSelection(res.id)}
+                                    disabled={res.status === 'added' || res.amount <= 0}
+                                    aria-label={`Selecionar ${res.description}`}
+                                />
+                              </TableCell>
                               <TableCell className="text-muted-foreground text-xs">{res.text}</TableCell>
                               <TableCell>{formatCurrency(res.amount)}</TableCell>
                               <TableCell className="text-center">
                                 {res.duplicates.length > 0 ? (
                                   <Button variant="outline" size="sm" onClick={() => setViewingDuplicates(res.duplicates)}>
                                     <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
-                                    Ver {res.duplicates.length} suspeita(s)
+                                    Ver {res.duplicates.length} suspeita(s) em Saídas
                                   </Button>
                                 ) : (
                                   <Badge variant={res.status === 'added' ? 'secondary' : 'default'} className={res.status !== 'added' ? 'bg-green-100 text-green-800' : ''}>
@@ -270,22 +315,56 @@ export default function OutputCheckerClient() {
                                   </Badge>
                                 )}
                               </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleOpenAddDialog(res)}
-                                  disabled={res.status === 'added' || res.amount <= 0}
-                                >
-                                  <PlusCircle className="mr-2 h-4 w-4" />
-                                  Lançar
-                                </Button>
-                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
                   )}
+
+                  {numSelected > 0 && (
+                    <Card className="mt-4 border-primary">
+                        <CardHeader>
+                            <CardTitle>Lançar Despesas Selecionadas</CardTitle>
+                            <CardDescription>
+                                Você selecionou {numSelected} despesa(s) totalizando <strong>{formatCurrency(verificationResult!.filter(res => selectedExpenseIds.includes(res.id)).reduce((sum, res) => sum + res.amount, 0))}</strong>.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div className="space-y-2">
+                                <Label htmlFor="bulk-source">Origem do dinheiro</Label>
+                                <Select onValueChange={(value) => setBulkSource(value as any)} defaultValue={bulkSource}>
+                                    <SelectTrigger id="bulk-source">
+                                        <SelectValue placeholder="Selecione a origem..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="daily_cash">Caixa Diário ({formatCurrency(expectedCashInDrawer)})</SelectItem>
+                                        <SelectItem value="secondary_cash">Caixa 02 ({formatCurrency(secondaryCashBoxBalance)})</SelectItem>
+                                        <SelectItem value="bank_account">Conta Bancária ({formatCurrency(bankAccountBalance)})</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="bulk-date">Data do Lançamento</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button id="bulk-date" variant="outline" className={cn("w-full justify-start text-left font-normal", !bulkDate && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {bulkDate ? format(bulkDate, "dd/MM/yyyy", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar mode="single" selected={bulkDate} onSelect={(d) => setBulkDate(d || new Date())} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button onClick={handleBulkLaunch}>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Lançar {numSelected} despesa(s)
+                            </Button>
+                        </CardContent>
+                    </Card>
+                   )}
               </div>
           )}
 
@@ -338,122 +417,6 @@ export default function OutputCheckerClient() {
             </DialogContent>
         </Dialog>
       )}
-
-      {expenseToAdd && (
-        <AddExpenseDialog
-          isOpen={isAddExpenseDialogOpen}
-          onOpenChange={setIsAddExpenseDialogOpen}
-          expense={expenseToAdd}
-          onConfirm={handleConfirmAddExpense}
-          balances={{ daily: expectedCashInDrawer, secondary: secondaryCashBoxBalance, bank: bankAccountBalance }}
-        />
-      )}
     </>
   );
-}
-
-
-interface AddExpenseDialogProps {
-    isOpen: boolean;
-    onOpenChange: (open: boolean) => void;
-    expense: ParsedExpense | null;
-    onConfirm: (source: 'daily_cash' | 'secondary_cash' | 'bank_account', date: Date) => void;
-    balances: { daily: number; secondary: number; bank: number; };
-}
-
-function AddExpenseDialog({ isOpen, onOpenChange, expense, onConfirm, balances }: AddExpenseDialogProps) {
-    const [source, setSource] = useState<'daily_cash' | 'secondary_cash' | 'bank_account'>('daily_cash');
-    const [date, setDate] = useState<Date>(new Date());
-
-    useEffect(() => {
-        if (isOpen) {
-            setSource('daily_cash');
-            setDate(new Date());
-        }
-    }, [isOpen]);
-
-    const handleSubmit = () => {
-        onConfirm(source, date);
-    };
-
-    if (!expense) return null;
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Lançar Nova Despesa</DialogTitle>
-                    <DialogDescription>Confirme os detalhes e selecione a origem do dinheiro.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                    <Card>
-                        <CardContent className="p-4 space-y-1">
-                            <p className="text-sm text-muted-foreground">Descrição</p>
-                            <p className="font-medium">{expense.description}</p>
-                            <p className="text-sm text-muted-foreground pt-2">Valor</p>
-                            <p className="font-bold text-lg text-destructive">- {formatCurrency(expense.amount)}</p>
-                        </CardContent>
-                    </Card>
-
-                    <div className="space-y-2">
-                        <Label>Data do Lançamento</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !date && "text-muted-foreground"
-                                    )}
-                                >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : <span>Escolha uma data</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                    mode="single"
-                                    selected={date}
-                                    onSelect={(d) => setDate(d || new Date())}
-                                    initialFocus
-                                    disabled={(d) => d > new Date() || d < new Date("2000-01-01")}
-                                />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>De onde o dinheiro vai sair?</Label>
-                        <RadioGroup onValueChange={(value) => setSource(value as any)} defaultValue={source}>
-                            <div className="flex items-center space-x-2 p-3 border rounded-md has-[:disabled]:opacity-50">
-                                <RadioGroupItem value="daily_cash" id="source-daily" disabled={balances.daily < expense.amount} />
-                                <Label htmlFor="source-daily" className="w-full flex justify-between items-center">
-                                    <span className="flex items-center gap-2"><Banknote className="h-4 w-4" />Caixa Diário</span>
-                                    <span className={balances.daily < expense.amount ? 'text-destructive' : ''}>{formatCurrency(balances.daily)}</span>
-                                </Label>
-                            </div>
-                            <div className="flex items-center space-x-2 p-3 border rounded-md has-[:disabled]:opacity-50">
-                                <RadioGroupItem value="secondary_cash" id="source-secondary" disabled={balances.secondary < expense.amount} />
-                                <Label htmlFor="source-secondary" className="w-full flex justify-between items-center">
-                                    <span className="flex items-center gap-2"><PiggyBank className="h-4 w-4" />Caixa 02</span>
-                                     <span className={balances.secondary < expense.amount ? 'text-destructive' : ''}>{formatCurrency(balances.secondary)}</span>
-                                </Label>
-                            </div>
-                            <div className="flex items-center space-x-2 p-3 border rounded-md has-[:disabled]:opacity-50">
-                                <RadioGroupItem value="bank_account" id="source-bank" disabled={balances.bank < expense.amount} />
-                                <Label htmlFor="source-bank" className="w-full flex justify-between items-center">
-                                    <span className="flex items-center gap-2"><Landmark className="h-4 w-4" />Conta Bancária</span>
-                                     <span className={balances.bank < expense.amount ? 'text-destructive' : ''}>{formatCurrency(balances.bank)}</span>
-                                </Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSubmit}>Confirmar Lançamento</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
 }
