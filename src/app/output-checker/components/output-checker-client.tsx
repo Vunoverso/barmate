@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { FinancialEntry, CashRegisterStatus, CashAdjustment } from '@/types';
-import { getFinancialEntries, formatCurrency, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries } from '@/lib/constants';
+import { getFinancialEntries, formatCurrency, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries, SOURCE_MAP } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,6 +30,7 @@ type ParsedExpense = {
   text: string;
   amount: number;
   description: string;
+  suggestedSource: 'daily_cash' | 'secondary_cash' | 'bank_account' | null;
   duplicates: FinancialEntry[];
   status: 'pending' | 'added';
 };
@@ -36,10 +38,29 @@ type ParsedExpense = {
 const parseExpenses = (text: string): Omit<ParsedExpense, 'id' | 'duplicates' | 'status'>[] => {
   const lines = text.split('\n').filter(line => line.trim() !== '');
   return lines.map(line => {
-    const match = line.match(/(\d[\d.,]*)/);
+    const originalLine = line;
+    line = line.replace(/^[\s*-]+/, '').trim();
+    
+    const match = line.match(/(\d[\d,.]*)/);
     const amount = match ? parseFloat(match[0].replace(/\./g, '').replace(',', '.')) : 0;
-    const description = line.replace(match ? match[0] : '', '').replace(/\s\s+/g, ' ').trim();
-    return { text: line, amount, description: description || 'Despesa sem descrição' };
+    
+    let description = line.replace(match ? match[0] : '', '').replace(/\s\s+/g, ' ').trim();
+    description = description.replace(/R\$\s*/i, '').trim();
+    description = description.replace(/[\s–-]+$/g, '').trim();
+
+    let suggestedSource: 'daily_cash' | 'secondary_cash' | 'bank_account' | null = null;
+    const lowerLine = originalLine.toLowerCase();
+
+    if (lowerLine.includes('dinheiro')) {
+      suggestedSource = 'daily_cash';
+      if (lowerLine.includes('(dinheiro)')) {
+        description = description.replace(/\(dinheiro\)/ig, '').trim();
+      }
+    } else if (lowerLine.includes('pix') || lowerLine.includes('cartão')) {
+      suggestedSource = 'bank_account';
+    }
+
+    return { text: originalLine, amount, description: description || 'Despesa sem descrição', suggestedSource };
   });
 };
 
@@ -128,7 +149,7 @@ export default function OutputCheckerClient() {
 
     const parsed = parseExpenses(pastedText);
 
-    const results = parsed.map((p, index) => {
+    const results: ParsedExpense[] = parsed.map((p, index) => {
         const duplicates = relevantEntries.filter(re => {
             if (p.amount > 0 && Math.abs(re.amount - p.amount) < 0.01) return true;
             const parsedWords = p.description.toLowerCase().split(' ').filter(w => w.length > 3);
@@ -287,6 +308,7 @@ export default function OutputCheckerClient() {
                             </TableHead>
                             <TableHead>Despesa Colada</TableHead>
                             <TableHead>Valor Extraído</TableHead>
+                            <TableHead>Origem Sugerida</TableHead>
                             <TableHead className="text-center">Status</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -303,6 +325,17 @@ export default function OutputCheckerClient() {
                               </TableCell>
                               <TableCell className="text-muted-foreground text-xs">{res.text}</TableCell>
                               <TableCell>{formatCurrency(res.amount)}</TableCell>
+                              <TableCell>
+                                {res.suggestedSource ? (
+                                    <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                                        {res.suggestedSource === 'daily_cash' && <Banknote className="h-3 w-3" />}
+                                        {res.suggestedSource === 'bank_account' && <Landmark className="h-3 w-3" />}
+                                        {SOURCE_MAP[res.suggestedSource]}
+                                    </Badge>
+                                ) : (
+                                    <span className="text-muted-foreground text-xs italic">Selecionar</span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-center">
                                 {res.duplicates.length > 0 ? (
                                   <Button variant="outline" size="sm" onClick={() => setViewingDuplicates({ expense: res, duplicates: res.duplicates })}>

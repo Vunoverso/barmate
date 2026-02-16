@@ -12,6 +12,7 @@ import {
   getVisuallyRemovedFinancialEntries,
   saveVisuallyRemovedFinancialEntries,
   removeSale,
+  SOURCE_MAP,
 } from '@/lib/constants';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -89,12 +90,6 @@ const expenseSchema = z.object({
 });
 
 type ExpenseFormData = z.infer<typeof expenseSchema>;
-
-const SOURCE_MAP: Record<FinancialEntry['source'], string> = {
-  daily_cash: 'Caixa Diário',
-  secondary_cash: 'Caixa 02',
-  bank_account: 'Conta Bancária',
-};
 
 // Helper function to identify transfer entries
 const isTransferEntry = (entry: FinancialEntry, allEntries: FinancialEntry[]): boolean => {
