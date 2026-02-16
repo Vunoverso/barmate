@@ -4,11 +4,11 @@
 import type { Product, ProductCategory } from '@/types';
 import { getProducts, saveProducts, getProductCategories, saveProductCategories } from '@/lib/data-access';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { PlusCircle, Edit3, Trash2, Search, Filter, Package } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Search, Filter, Package, Upload, Download } from 'lucide-react';
 import AddProductDialog from './add-product-dialog';
 import {
   Table,
@@ -39,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { format } from 'date-fns';
 
 
 export default function ProductManagement() {
@@ -50,6 +51,10 @@ export default function ProductManagement() {
   const [categoryFilter, setCategoryFilter] = useState<string>(''); // Stores categoryId
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [isImporting, setIsImporting] = useState(false);
+  const [importAlertOpen, setImportAlertOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
 
@@ -99,6 +104,70 @@ export default function ProductManagement() {
     }
   }, [products, toast]);
 
+  const handleExportProducts = () => {
+    toast({ title: "Exportando produtos...", description: "Aguarde enquanto preparamos seu arquivo." });
+    try {
+        const productsToExport = getProducts();
+        const jsonString = JSON.stringify(productsToExport, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `barmate_produtos_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast({ title: "Backup de Produtos Concluído!", description: "Seu arquivo de produtos foi baixado." });
+    } catch (error) {
+        console.error("Export error:", error);
+        toast({ title: "Erro na Exportação", description: "Não foi possível gerar o arquivo de backup dos produtos.", variant: "destructive" });
+    }
+  };
+
+  const handleTriggerImport = () => {
+    setImportAlertOpen(true);
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    toast({ title: "Importando produtos...", description: "Isso pode levar alguns instantes." });
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const text = e.target?.result as string;
+            const data = JSON.parse(text);
+
+            if (!Array.isArray(data) || (data.length > 0 && (!data[0].id || !data[0].name))) {
+              throw new Error("Arquivo de produtos inválido ou formato incorreto.");
+            }
+            
+            saveProducts(data as Product[]);
+            
+            toast({ title: "Importação Concluída!", description: "Sua lista de produtos foi substituída com sucesso." });
+        } catch (innerError: any) {
+            console.error("Import processing error:", innerError);
+            toast({ title: "Erro ao Processar Arquivo", description: innerError.message || "O arquivo JSON é inválido ou está corrompido.", variant: "destructive" });
+        } finally {
+            setIsImporting(false);
+            if (fileInputRef.current) {
+               fileInputRef.current.value = "";
+            }
+        }
+    };
+    reader.onerror = (error) => {
+      console.error("Import file reading error:", error);
+      toast({ title: "Erro na Importação", description: "Não foi possível ler o arquivo selecionado.", variant: "destructive" });
+      setIsImporting(false);
+    };
+    reader.readAsText(file);
+  };
+
+
   const filteredProducts = useMemo(() => {
     return products
     .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -146,9 +215,17 @@ export default function ProductManagement() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button onClick={openAddDialog} className="ml-auto">
-          <PlusCircle className="mr-2 h-5 w-5" /> Adicionar Produto
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" onClick={handleExportProducts}>
+                <Download className="mr-2 h-4 w-4" /> Exportar
+            </Button>
+            <Button variant="outline" onClick={handleTriggerImport} disabled={isImporting}>
+                <Upload className="mr-2 h-4 w-4" /> Importar
+            </Button>
+            <Button onClick={openAddDialog}>
+                <PlusCircle className="mr-2 h-5 w-5" /> Adicionar Produto
+            </Button>
+        </div>
       </div>
 
       <Card>
@@ -227,6 +304,14 @@ export default function ProductManagement() {
         </CardFooter>
       </Card>
 
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".json"
+        className="hidden"
+      />
+
       <AddProductDialog
         isOpen={isDialogOpen}
         onOpenChange={setIsDialogOpen}
@@ -255,8 +340,30 @@ export default function ProductManagement() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Atenção: Importar Produtos</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta ação irá <strong className="text-destructive">substituir toda a sua lista de produtos atual</strong> pelos produtos do arquivo selecionado.
+                        Esta operação não pode ser desfeita. Recomendamos exportar um backup antes de continuar.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={() => {
+                            setImportAlertOpen(false);
+                            fileInputRef.current?.click();
+                        }}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
+                        Entendi, substituir produtos
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     </>
   );
 }
-
-    
