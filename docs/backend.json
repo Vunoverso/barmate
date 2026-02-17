@@ -1,0 +1,42 @@
+
+{
+  "entities": {
+    "guestRequest": {
+      "title": "Guest Request",
+      "description": "A request from a guest for access to an order.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the guest."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the request.",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the request was made."
+        },
+        "associatedOrderId": {
+          "type": "string",
+          "description": "The ID of the order associated with this request once approved."
+        }
+      },
+      "required": ["name", "status", "requestedAt"]
+    }
+  },
+  "auth": {
+    "providers": []
+  },
+  "firestore": {
+    "/guestRequests/{guestRequestId}": {
+      "schema": {
+        "$ref": "#/entities/guestRequest"
+      },
+      "description": "Stores guest requests for access."
+    }
+  }
+}

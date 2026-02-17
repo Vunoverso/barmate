@@ -1,0 +1,21 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regras para a coleção de solicitações de acesso de convidados
+    match /guestRequests/{requestId} {
+      // Qualquer pessoa pode criar uma solicitação para entrar.
+      allow create: if true;
+      
+      // Qualquer pessoa pode ler as solicitações.
+      // O cliente precisa ler para saber se foi aprovado.
+      // O administrador precisa ler para ver a lista de pendentes.
+      // Em um aplicativo de produção, isso seria mais restrito.
+      allow read: if true;
+      
+      // Qualquer pessoa pode atualizar (para aprovar) ou deletar (para rejeitar).
+      // Em um aplicativo de produção, isso deve ser restrito a administradores.
+      allow update, delete: if true;
+    }
+  }
+}
