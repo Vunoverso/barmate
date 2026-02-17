@@ -128,5 +128,3 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
         </div>
     );
 }
-
-    
