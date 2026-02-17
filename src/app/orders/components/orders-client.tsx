@@ -842,7 +842,7 @@ export default function OrdersClient() {
             <CardHeader>
               <div className="flex items-center justify-between gap-2">
                 <CardTitle>Comandas Abertas</CardTitle>
-                <Button onClick={handleOpenCreateOrderDialog}>
+                <Button size="sm" onClick={handleOpenCreateOrderDialog}>
                   <PlusSquare className="mr-2 h-4 w-4" />
                   Nova Comanda
                 </Button>
@@ -866,40 +866,42 @@ export default function OrdersClient() {
                   <TooltipContent><p>Adicionar Crédito</p></TooltipContent>
                 </Tooltip>
               </div>
-              <div className="border-t pt-2 mt-2 flex items-center gap-1">
+              <div className="border-t pt-2 mt-2">
                 <span className="text-xs text-muted-foreground mr-auto">Ações da comanda:</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleShareOrder} disabled={!currentOrder}>
-                      <LinkIcon className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Compartilhar Comanda</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handlePrintOrder} disabled={!currentOrder || currentOrder.items.length === 0}>
-                      <Printer className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Imprimir Comanda</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setIsMergeDialogOpen(true)} disabled={!currentOrderId || openOrders.length < 2}>
-                      <Merge className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Juntar Comandas</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleEditOrder} disabled={!currentOrderId}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Editar Nome</p></TooltipContent>
-                </Tooltip>
+                <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleShareOrder} disabled={!currentOrder}>
+                        <LinkIcon className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Compartilhar Comanda</p></TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handlePrintOrder} disabled={!currentOrder || currentOrder.items.length === 0}>
+                        <Printer className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Imprimir Comanda</p></TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setIsMergeDialogOpen(true)} disabled={!currentOrderId || openOrders.length < 2}>
+                        <Merge className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Juntar Comandas</p></TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleEditOrder} disabled={!currentOrderId}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Editar Nome</p></TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
