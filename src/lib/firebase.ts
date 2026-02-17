@@ -1,3 +1,1 @@
-// This feature has been removed.
-// Firebase is no longer used.
-export const db = null;
+// This file is intentionally left blank as Firebase is no longer used in the project.
