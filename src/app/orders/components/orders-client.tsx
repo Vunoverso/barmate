@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy, MoreHorizontal } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -38,6 +38,13 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -178,13 +185,16 @@ export default function OrdersClient() {
 
     const syncOrderToFirestore = async (order: ActiveOrder) => {
         try {
+            if (!db) return;
             const orderRef = doc(db, 'open_orders', order.id);
-            await setDoc(orderRef, order, { merge: true });
+            // Remove undefined values to avoid Firestore errors
+            const plainOrder = JSON.parse(JSON.stringify(order));
+            await setDoc(orderRef, plainOrder, { merge: true });
         } catch (error) {
             console.error("Firestore sync error", error);
             toast({
                 title: "Erro de Sincronização",
-                description: "Não foi possível atualizar a comanda na nuvem.",
+                description: "Não foi possível atualizar a comanda na nuvem. Verifique sua conexão.",
                 variant: "destructive",
             });
         }
@@ -192,11 +202,11 @@ export default function OrdersClient() {
     
     const deleteOrderFromFirestore = async (orderId: string) => {
         try {
+            if (!db) return;
             const orderRef = doc(db, 'open_orders', orderId);
             await deleteDoc(orderRef);
         } catch (error) {
             console.error("Firestore delete error", error);
-            // Non-critical, no toast
         }
     };
 
@@ -217,7 +227,7 @@ export default function OrdersClient() {
     const updatedOrders = [...getOpenOrders(), newOrder];
     saveOpenOrders(updatedOrders);
     syncOrderToFirestore(newOrder);
-    setCurrentOrderId(newOrderId); // Select the new order
+    setCurrentOrderId(newOrderId); 
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
   }, [toast]);
 
@@ -287,11 +297,9 @@ export default function OrdersClient() {
     const handleArchiveOrder = useCallback(() => {
         if (!orderToArchive || !orderToArchive.clientId) return;
 
-        // Save the order to the archived list
         const allArchivedOrders = getArchivedOrders();
         saveArchivedOrders([...allArchivedOrders, orderToArchive]);
 
-        // Remove from open orders
         const oldOrders = getOpenOrders();
         const updatedOrders = oldOrders.filter(order => order.id !== orderToArchive.id);
 
@@ -369,7 +377,7 @@ export default function OrdersClient() {
         id: `credit-${Date.now()}`,
         lineItemId: `line-item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: `Crédito: ${description}`,
-        price: -amount, // Negative price for credit
+        price: -amount,
         quantity: 1,
         categoryId: 'cat_outros',
         isCombo: false, 
@@ -456,7 +464,8 @@ export default function OrdersClient() {
 
     const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     if (updatedOrder.status === 'paid' && currentTotal > 0) {
-      delete updatedOrder.status;
+      const { status, ...orderWithoutStatus } = updatedOrder;
+      updatedOrder = orderWithoutStatus as ActiveOrder;
     }
     updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
 
@@ -608,7 +617,6 @@ export default function OrdersClient() {
         syncOrderToFirestore(updatedOrder);
         toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
     } else {
-        // Full payment logic
         const hasUnclaimedCombos = currentOrderForPayment.items.some(item => {
             if (!item.isCombo) return false;
             const totalComboItems = (item.comboItems || 1) * item.quantity;
@@ -617,7 +625,6 @@ export default function OrdersClient() {
         });
 
         if (hasUnclaimedCombos) {
-            // Keep order open, mark as paid
             const updatedOrder: ActiveOrder = { ...currentOrderForPayment, status: 'paid', items: sale.items };
             const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
             saveOpenOrders(newOpenOrders);
@@ -625,7 +632,6 @@ export default function OrdersClient() {
             toast({ title: "Comanda Paga!", description: `A comanda foi paga, mas permanece aberta para liberação dos itens do combo.` });
 
         } else {
-            // Full payment, close the order
             deleteOrderFromFirestore(currentOrderForPayment.id);
             const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
             let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
@@ -661,8 +667,6 @@ export default function OrdersClient() {
     }
   }, [currentOrderId, toast]);
   
-
-  const allowPartialPayment = true;
 
   const handlePrintOrder = useCallback(() => {
     if (currentOrder) {
@@ -710,7 +714,6 @@ export default function OrdersClient() {
                 border-right: 1px dotted black !important;
                 color: black !important;
             }
-            /* Ensure all text within is black for printing */
             .printable-content * {
                 color: black !important;
             }
@@ -721,7 +724,7 @@ export default function OrdersClient() {
             printWindow.focus();
             printWindow.print();
             printWindow.close();
-        }, 500); // Wait for styles to apply
+        }, 500);
     } else {
         toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
     }
@@ -787,7 +790,6 @@ export default function OrdersClient() {
             </li>
           );
         } else {
-            // Render the item itself (unified logic for non-combos)
             elements.push(
                 <li key={uniqueKey} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 p-1.5 rounded-md border">
                   <div className="flex-shrink-0">
@@ -818,7 +820,6 @@ export default function OrdersClient() {
             );
         }
         
-        // If it's a marker, add a separator after it
         if (isMarker) {
             elements.push(
                 <li key={`sep-${item.id}-${index}`} aria-hidden="true" className="!my-3">
@@ -844,8 +845,8 @@ export default function OrdersClient() {
                 <CardTitle>Comandas Abertas</CardTitle>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon" onClick={handleOpenCreateOrderDialog} className="h-9 w-9 shrink-0">
-                      <PlusSquare className="h-5 w-5" />
+                    <Button size="sm" variant="outline" onClick={handleOpenCreateOrderDialog} className="h-8 w-8 p-0 shrink-0 border-primary text-primary hover:bg-primary/10">
+                      <PlusSquare className="h-4 w-4" />
                       <span className="sr-only">Nova Comanda</span>
                     </Button>
                   </TooltipTrigger>
@@ -872,35 +873,6 @@ export default function OrdersClient() {
                   </TooltipTrigger>
                   <TooltipContent><p>Adicionar Crédito</p></TooltipContent>
                 </Tooltip>
-              </div>
-              <div className="border-t pt-2 mt-2">
-                <span className="text-xs text-muted-foreground mr-auto">Ações da comanda:</span>
-                <div className="flex items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handlePrintOrder} disabled={!currentOrder || currentOrder.items.length === 0}>
-                        <Printer className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent><p>Imprimir Comanda</p></TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setIsMergeDialogOpen(true)} disabled={!currentOrderId || openOrders.length < 2}>
-                        <Merge className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent><p>Juntar Comandas</p></TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleEditOrder} disabled={!currentOrderId}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent><p>Editar Nome</p></TooltipContent>
-                  </Tooltip>
-                </div>
               </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
@@ -937,7 +909,7 @@ export default function OrdersClient() {
                         }}
                         className={cn(
                           buttonVariants({ variant }),
-                          "w-full h-auto py-1 px-2 cursor-pointer group flex items-center justify-between",
+                          "w-full h-auto py-1.5 px-3 cursor-pointer group flex items-center justify-between",
                           customClass
                         )}
                       >
@@ -951,8 +923,30 @@ export default function OrdersClient() {
                               <span>{format(new Date(order.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
                            </div>
                         </div>
-                        <div className="flex-shrink-0 text-right">
+                        <div className="flex-shrink-0 text-right flex items-center gap-2">
                            <div className="font-semibold text-xs">{formatCurrency(total)}</div>
+                           <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuLabel>Ações da Comanda</DropdownMenuLabel>
+                                    <DropdownMenuItem onClick={() => { handleSelectOrder(order.id); handleEditOrder(); }}>
+                                        <Edit className="mr-2 h-4 w-4" /> Editar Nome
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => { handleSelectOrder(order.id); setIsMergeDialogOpen(true); }} disabled={openOrders.length < 2}>
+                                        <Merge className="mr-2 h-4 w-4" /> Juntar Comandas
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => { handleSelectOrder(order.id); handlePrintOrder(); }}>
+                                        <Printer className="mr-2 h-4 w-4" /> Imprimir Extrato
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive" onClick={() => confirmDeleteOrder(order)}>
+                                        <Trash2 className="mr-2 h-4 w-4" /> Cancelar Comanda
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                           </DropdownMenu>
                         </div>
                       </div>
                     )})}
@@ -1037,7 +1031,7 @@ export default function OrdersClient() {
                       {currentOrder && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={handleShareOrder}>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleShareOrder}>
                               <LinkIcon className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
@@ -1179,7 +1173,7 @@ export default function OrdersClient() {
         currentOrder={currentOrder}
         onSubmit={handlePayment}
         allowCredit={true}
-        allowPartialPayment={allowPartialPayment}
+        allowPartialPayment={true}
       />
 
       {orderToShare && (
@@ -1316,7 +1310,6 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
   );
 }
 
-// --- Edit Order Name Dialog ---
 interface EditOrderNameDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
@@ -1371,7 +1364,6 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: EditOrderN
     );
 }
 
-// --- Merge Orders Dialog ---
 interface MergeOrdersDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -1449,7 +1441,6 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
     );
 }
 
-// --- Add Credit Dialog ---
 interface AddCreditDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
