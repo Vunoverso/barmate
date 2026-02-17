@@ -3,49 +3,56 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { ActiveOrder } from '@/types';
-import { getOpenOrders, getArchivedOrders } from '@/lib/data-access';
+import { getArchivedOrders } from '@/lib/data-access';
 import { formatCurrency } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FileX, Package, ShoppingCart } from 'lucide-react';
+import { FileX, ShoppingCart } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export default function MyOrderClient({ orderId }: { orderId: string }) {
     const [order, setOrder] = useState<ActiveOrder | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const findOrder = useCallback(() => {
-        const openOrders = getOpenOrders();
-        const foundOpen = openOrders.find(o => o.id === orderId);
-        if (foundOpen) {
-            setOrder(foundOpen);
+    useEffect(() => {
+        if (!orderId) {
+            setIsLoading(false);
+            setOrder(null);
             return;
         }
 
-        const archivedOrders = getArchivedOrders();
-        const foundArchived = archivedOrders.find(o => o.id === orderId);
-        if (foundArchived) {
-            setOrder(foundArchived);
-        }
+        const docRef = doc(db, 'open_orders', orderId);
 
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data() as ActiveOrder;
+                // Firestore timestamps might need conversion
+                setOrder({
+                    ...data,
+                    createdAt: (data.createdAt as any).toDate ? (data.createdAt as any).toDate() : new Date(data.createdAt)
+                });
+            } else {
+                // If not in open_orders, check local archived orders as a fallback.
+                // In a full cloud app, this might also be a DB query.
+                const archivedOrders = getArchivedOrders();
+                const foundArchived = archivedOrders.find(o => o.id === orderId);
+                setOrder(foundArchived || null);
+            }
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching real-time order:", error);
+            setIsLoading(false);
+        });
+
+        // Cleanup subscription on unmount
+        return () => unsubscribe();
     }, [orderId]);
 
-    useEffect(() => {
-        findOrder();
-        setIsLoading(false);
-
-        const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'barmate_openOrders_v2' || e.key === 'barmate_archivedOrders_v2') {
-                findOrder();
-            }
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-        return () => window.removeEventListener('storage', handleStorageChange);
-    }, [findOrder]);
 
     const orderTotal = useMemo(() => {
         if (!order) return 0;

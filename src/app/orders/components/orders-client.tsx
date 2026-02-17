@@ -44,6 +44,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OrderStatement } from './order-statement';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, deleteDoc } from "firebase/firestore";
 
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   if (!categories.length) return {};
@@ -174,6 +176,30 @@ export default function OrdersClient() {
     }
   }, [displayCategories, activeDisplayCategory]);
 
+    const syncOrderToFirestore = async (order: ActiveOrder) => {
+        try {
+            const orderRef = doc(db, 'open_orders', order.id);
+            await setDoc(orderRef, order, { merge: true });
+        } catch (error) {
+            console.error("Firestore sync error", error);
+            toast({
+                title: "Erro de Sincronização",
+                description: "Não foi possível atualizar a comanda na nuvem.",
+                variant: "destructive",
+            });
+        }
+    };
+    
+    const deleteOrderFromFirestore = async (orderId: string) => {
+        try {
+            const orderRef = doc(db, 'open_orders', orderId);
+            await deleteDoc(orderRef);
+        } catch (error) {
+            console.error("Firestore delete error", error);
+            // Non-critical, no toast
+        }
+    };
+
 
   const handleOpenCreateOrderDialog = useCallback(() => {
     setIsCreateOrderDialogOpen(true);
@@ -190,6 +216,7 @@ export default function OrdersClient() {
     };
     const updatedOrders = [...getOpenOrders(), newOrder];
     saveOpenOrders(updatedOrders);
+    syncOrderToFirestore(newOrder);
     setCurrentOrderId(newOrderId); // Select the new order
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
   }, [toast]);
@@ -206,10 +233,16 @@ export default function OrdersClient() {
   }, [openOrders, currentOrderId]);
   
   const handleSaveOrderName = useCallback((orderId: string, newName: string) => {
-      const updatedOrders = getOpenOrders().map(order => 
-          order.id === orderId ? { ...order, name: newName } : order
-      );
+      let updatedOrder: ActiveOrder | undefined;
+      const updatedOrders = getOpenOrders().map(order => {
+          if(order.id === orderId) {
+              updatedOrder = { ...order, name: newName };
+              return updatedOrder;
+          }
+          return order;
+      });
       saveOpenOrders(updatedOrders);
+      if (updatedOrder) syncOrderToFirestore(updatedOrder);
       setOrderToEdit(null);
       toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
   }, [toast]);
@@ -238,6 +271,8 @@ export default function OrdersClient() {
     }
     
     saveOpenOrders(updatedOrders);
+    deleteOrderFromFirestore(orderIdToDelete);
+
     setOrderToDelete(null);
     if (currentOrderId === orderIdToDelete) {
       setCurrentOrderId(nextSelectedId);
@@ -271,6 +306,7 @@ export default function OrdersClient() {
         }
 
         saveOpenOrders(updatedOrders);
+        deleteOrderFromFirestore(orderToArchive.id);
         setOrderToArchive(null);
         if (currentOrderId === orderToArchive.id) {
           setCurrentOrderId(nextSelectedId);
@@ -311,6 +347,9 @@ export default function OrdersClient() {
         .map(o => o.id === currentOrderId ? updatedOrder : o);
             
     saveOpenOrders(finalOrders);
+    syncOrderToFirestore(updatedOrder);
+    sourceOrderIds.forEach(id => deleteOrderFromFirestore(id));
+
     setIsMergeDialogOpen(false);
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
   }, [currentOrderId, toast]);
@@ -341,6 +380,7 @@ export default function OrdersClient() {
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
     const newOpenOrders = allOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
     saveOpenOrders(newOpenOrders);
+    syncOrderToFirestore(updatedOrder);
 
     if (source !== 'permuta') {
         const entrySource = source === 'dinheiro' ? 'daily_cash' : 'bank_account';
@@ -366,15 +406,18 @@ export default function OrdersClient() {
         const client = getClients().find(c => c.id === clientId);
         if (!client) return;
 
+        let updatedOrder: ActiveOrder | undefined;
         const allOrders = getOpenOrders();
         const updatedOrders = allOrders.map(order => {
             if (order.id === orderId) {
-                return { ...order, clientId: client.id, name: client.name };
+                updatedOrder = { ...order, clientId: client.id, name: client.name };
+                return updatedOrder;
             }
             return order;
         });
 
         saveOpenOrders(updatedOrders);
+        if (updatedOrder) syncOrderToFirestore(updatedOrder);
         toast({ title: "Cliente Associado", description: `A comanda foi associada a ${client.name}.` });
     }, [toast]);
 
@@ -419,12 +462,14 @@ export default function OrdersClient() {
 
     const newOpenOrders = allOrders.map(order => (order.id === currentOrderId ? updatedOrder : order));
     saveOpenOrders(newOpenOrders);
+    syncOrderToFirestore(updatedOrder);
   }, [currentOrderId, toast]);
   
 
   const updateQuantity = useCallback((lineItemId: string, quantity: number) => {
     if (!currentOrderId) return;
     const allOrders = getOpenOrders();
+    let updatedOrder: ActiveOrder | undefined;
     const updatedOrders = allOrders.map(order => {
         if (order.id === currentOrderId) {
             let updatedItems;
@@ -435,27 +480,30 @@ export default function OrdersClient() {
                     item.lineItemId === lineItemId ? { ...item, quantity } : item
                 );
             }
-            let updatedOrder = { ...order, items: updatedItems };
+            updatedOrder = { ...order, items: updatedItems };
             updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
             return updatedOrder;
         }
         return order;
     });
     saveOpenOrders(updatedOrders);
+    if (updatedOrder) syncOrderToFirestore(updatedOrder);
   }, [currentOrderId]);
 
   const removeFromOrder = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
     const allOrders = getOpenOrders();
+    let updatedOrder: ActiveOrder | undefined;
     const updatedOrders = allOrders.map(order => {
         if (order.id === currentOrderId) {
-            let updatedOrder = { ...order, items: order.items.filter(item => item.lineItemId !== lineItemId) };
+            updatedOrder = { ...order, items: order.items.filter(item => item.lineItemId !== lineItemId) };
             updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
             return updatedOrder;
         }
         return order;
     });
     saveOpenOrders(updatedOrders);
+    if (updatedOrder) syncOrderToFirestore(updatedOrder);
   }, [currentOrderId]);
 
   const handleClaimItem = useCallback((lineItemId: string) => {
@@ -463,6 +511,7 @@ export default function OrdersClient() {
 
     let orderToPotentiallyClose: ActiveOrder | null = null;
     const allOrders = getOpenOrders();
+    let finalUpdatedOrder: ActiveOrder | undefined;
     
     const updatedOrdersList = allOrders.map(order => {
         if (order.id === currentOrderId) {
@@ -478,6 +527,7 @@ export default function OrdersClient() {
             });
             
             const updatedOrder: ActiveOrder = { ...order, items: newItems };
+            finalUpdatedOrder = updatedOrder;
             
             const hasUnclaimedCombos = newItems.some(item => {
                 if (!item.isCombo) return false;
@@ -497,6 +547,7 @@ export default function OrdersClient() {
     }).filter(Boolean) as ActiveOrder[];
 
     if (orderToPotentiallyClose) {
+        deleteOrderFromFirestore(orderToPotentiallyClose.id);
         toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${orderToPotentiallyClose.name}" foram liberados e a comanda foi fechada.`});
         const deletedIndex = allOrders.findIndex(o => o.id === currentOrderId);
         let nextSelectedId: string | null = null;
@@ -504,6 +555,8 @@ export default function OrdersClient() {
             nextSelectedId = updatedOrdersList[deletedIndex]?.id || updatedOrdersList[deletedIndex - 1]?.id || updatedOrdersList[0].id;
         }
         setCurrentOrderId(nextSelectedId);
+    } else if (finalUpdatedOrder) {
+        syncOrderToFirestore(finalUpdatedOrder);
     }
     
     saveOpenOrders(updatedOrdersList);
@@ -552,6 +605,7 @@ export default function OrdersClient() {
         const updatedOrder: ActiveOrder = { ...currentOrderForPayment, items: [...currentOrderForPayment.items, paymentItem] };
         const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
         saveOpenOrders(newOpenOrders);
+        syncOrderToFirestore(updatedOrder);
         toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
     } else {
         // Full payment logic
@@ -567,10 +621,12 @@ export default function OrdersClient() {
             const updatedOrder: ActiveOrder = { ...currentOrderForPayment, status: 'paid', items: sale.items };
             const newOpenOrders = allOrders.map(o => o.id === currentOrderId ? updatedOrder : o);
             saveOpenOrders(newOpenOrders);
+            syncOrderToFirestore(updatedOrder);
             toast({ title: "Comanda Paga!", description: `A comanda foi paga, mas permanece aberta para liberação dos itens do combo.` });
 
         } else {
             // Full payment, close the order
+            deleteOrderFromFirestore(currentOrderForPayment.id);
             const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
             let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
             let nextSelectedOrderId: string | null = null;
@@ -584,6 +640,7 @@ export default function OrdersClient() {
                     }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
                 };
                 nextOrdersState.push(newCreditOrder);
+                syncOrderToFirestore(newCreditOrder);
                 nextSelectedOrderId = newCreditOrder.id;
                 toast({ title: "Comanda de Crédito Criada", description: `Uma nova comanda foi aberta para ${saleName} com um crédito de ${formatCurrency(sale.changeGiven)}.` });
             } else {
