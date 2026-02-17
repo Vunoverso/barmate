@@ -5,6 +5,7 @@ import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, F
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients, getArchivedOrders, saveArchivedOrders } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -86,6 +87,7 @@ export default function OrdersClient() {
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isAssociateClientDialogOpen, setIsAssociateClientDialogOpen] = useState(false);
   const [orderToPrint, setOrderToPrint] = useState<ActiveOrder | null>(null);
+  const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
   const statementRef = useRef<HTMLDivElement>(null);
 
 
@@ -611,6 +613,13 @@ export default function OrdersClient() {
     }
   }, [currentOrder]);
 
+  const handleShareOrder = useCallback(() => {
+    if (currentOrder) {
+        setOrderToShare(currentOrder);
+    }
+  }, [currentOrder]);
+
+
   const handleActualPrint = () => {
     const node = statementRef.current;
     if (!node) {
@@ -777,6 +786,14 @@ export default function OrdersClient() {
               <CardTitle className="flex items-center justify-between">
                 Comandas Abertas
                  <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                       <Button size="icon" variant="outline" className="h-8 w-8" onClick={handleShareOrder} disabled={!currentOrder}>
+                            <LinkIcon className="h-4 w-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Compartilhar Comanda</p></TooltipContent>
+                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
                        <Button size="icon" variant="outline" className="h-8 w-8" onClick={handlePrintOrder} disabled={!currentOrder || currentOrder.items.length === 0}>
@@ -1099,6 +1116,14 @@ export default function OrdersClient() {
         allowCredit={true}
         allowPartialPayment={allowPartialPayment}
       />
+
+      {orderToShare && (
+        <ShareOrderDialog 
+            isOpen={!!orderToShare}
+            onOpenChange={() => setOrderToShare(null)}
+            order={orderToShare}
+        />
+      )}
 
       {orderToDelete && (
         <AlertDialog open={!!orderToDelete} onOpenChange={() => setOrderToDelete(null)}>
@@ -1522,4 +1547,72 @@ function AssociateClientDialog({ isOpen, onOpenChange, orderId, clients, onAssoc
   );
 }
 
-    
+interface ShareOrderDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  order: ActiveOrder;
+}
+
+function ShareOrderDialog({ isOpen, onOpenChange, order }: ShareOrderDialogProps) {
+  const { toast } = useToast();
+  const [pageUrl, setPageUrl] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+
+  useEffect(() => {
+    if (isOpen && order && typeof window !== 'undefined') {
+        const url = `${window.location.origin}/my-order/${order.id}`;
+        setPageUrl(url);
+        setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`);
+    }
+  }, [isOpen, order]);
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(pageUrl).then(() => {
+        toast({ title: "Link copiado!", description: "O link da comanda foi copiado." });
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        toast({ title: "Erro ao copiar", variant: "destructive" });
+    });
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Compartilhar Comanda: {order.name}</DialogTitle>
+          <DialogDescription>
+            O cliente pode escanear o QR Code ou acessar o link para ver a comanda em tempo real.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col items-center justify-center gap-4 py-4">
+          {qrCodeUrl ? (
+              <Image
+                  src={qrCodeUrl}
+                  alt={`QR Code para comanda ${order.name}`}
+                  width={250}
+                  height={250}
+                  className="rounded-lg border"
+                  unoptimized
+              />
+          ) : (
+              <div className="h-[250px] w-[250px] bg-muted rounded-lg flex items-center justify-center">
+                  <p className="text-muted-foreground">Gerando QR Code...</p>
+              </div>
+          )}
+          <div className="w-full space-y-2 text-center">
+              <p className="text-sm font-medium">Ou compartilhe este link:</p>
+              <div className="flex w-full items-center space-x-2">
+                  <Input value={pageUrl} readOnly />
+                  <Button type="button" size="icon" onClick={copyToClipboard}>
+                      <Copy className="h-4 w-4" />
+                  </Button>
+              </div>
+          </div>
+        </div>
+        <DialogFooter>
+            <DialogClose asChild><Button variant="outline">Fechar</Button></DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

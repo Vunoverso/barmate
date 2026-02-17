@@ -12,8 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
 import { migrateOldData } from '@/lib/data-access';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+
 
 interface NavItem {
   href: string;
@@ -28,7 +27,6 @@ const settingsNavItem: NavItem = { href: '/settings', label: 'Configurações', 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
-  const [pendingGuestCount, setPendingGuestCount] = useState(0);
   const version = "1.3.2"; // Version number
 
   useEffect(() => {
@@ -49,17 +47,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     loadBarName();
     window.addEventListener('storage', handleStorageChange);
 
-    // Firebase real-time listener for pending guest requests
-    const q = query(collection(db, "guestRequests"), where("status", "==", "pending"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        setPendingGuestCount(snapshot.size);
-    }, (error) => {
-        console.error("Error listening to guest requests:", error);
-    });
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      unsubscribe();
     };
   }, []);
   
@@ -68,7 +58,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     { href: '/cash-register', label: 'Caixa', icon: Banknote },
     { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
     { href: '/orders', label: 'Comandas', icon: HandCoins },
-    { href: '/qrcode', label: 'Acesso Cliente', icon: QrCode, badge: pendingGuestCount > 0 ? pendingGuestCount : undefined },
     { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
     { href: '/products', label: 'Produtos', icon: Package },
     { href: '/clients', label: 'Clientes', icon: Users },
@@ -77,7 +66,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   
   const allNavItems = [...mainNavItems, settingsNavItem];
 
-  const isGuestView = pathname.startsWith('/guest') || pathname.startsWith('/my-order');
+  const isGuestView = pathname.startsWith('/my-order');
 
   if (isGuestView) {
       return (
