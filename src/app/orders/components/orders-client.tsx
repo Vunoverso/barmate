@@ -842,10 +842,17 @@ export default function OrdersClient() {
             <CardHeader>
               <div className="flex items-center justify-between gap-2">
                 <CardTitle>Comandas Abertas</CardTitle>
-                <Button size="sm" onClick={handleOpenCreateOrderDialog}>
-                  <PlusSquare className="mr-2 h-4 w-4" />
-                  Nova Comanda
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" onClick={handleOpenCreateOrderDialog} className="h-9 w-9 shrink-0">
+                      <PlusSquare className="h-5 w-5" />
+                      <span className="sr-only">Nova Comanda</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Nova Comanda</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="flex items-center gap-2 pt-2">
                 <div className="relative flex-grow">
@@ -1672,3 +1679,5 @@ function ShareOrderDialog({ isOpen, onOpenChange, order }: ShareOrderDialogProps
     </Dialog>
   );
 }
+
+    
