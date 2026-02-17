@@ -878,14 +878,6 @@ export default function OrdersClient() {
                 <div className="flex items-center gap-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleShareOrder} disabled={!currentOrder}>
-                        <LinkIcon className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent><p>Compartilhar Comanda</p></TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
                       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handlePrintOrder} disabled={!currentOrder || currentOrder.items.length === 0}>
                         <Printer className="h-4 w-4" />
                       </Button>
@@ -1042,6 +1034,16 @@ export default function OrdersClient() {
                     <CardTitle className="flex items-center gap-2 truncate">
                       <ShoppingCart className="h-6 w-6 text-primary shrink-0" />
                       <span className="truncate">{currentOrder ? currentOrder.name : "Comanda"}</span>
+                      {currentOrder && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={handleShareOrder}>
+                              <LinkIcon className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Compartilhar Comanda</p></TooltipContent>
+                        </Tooltip>
+                      )}
                     </CardTitle>
                     <div className="text-sm text-muted-foreground pt-1 flex items-center gap-2">
                        {currentOrder ? (
@@ -1679,5 +1681,3 @@ function ShareOrderDialog({ isOpen, onOpenChange, order }: ShareOrderDialogProps
     </Dialog>
   );
 }
-
-    
