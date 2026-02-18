@@ -17,7 +17,7 @@ export default function GuestRegisterPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [requestId, setRequestId] = useState<string | null>(null);
     const [status, setStatus] = useState<'idle' | 'pending' | 'approved'>('idle');
-    const [barInfo, setBarInfo] = useState({ name: 'BarMate', logo: '' });
+    const [barInfo, setBarInfo] = useState({ name: 'BarMate', logo: '', logoScale: 1 });
     
     const router = useRouter();
     const { toast } = useToast();
@@ -30,7 +30,7 @@ export default function GuestRegisterPage() {
         }
     }, []);
 
-    // Fetch real-time bar branding from cloud
+    // Busca marca e logo em tempo real da nuvem
     useEffect(() => {
         if (!db) return;
         const unsubscribe = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
@@ -38,7 +38,8 @@ export default function GuestRegisterPage() {
                 const data = docSnap.data();
                 setBarInfo({
                     name: data.barName || 'BarMate',
-                    logo: data.barLogo || ''
+                    logo: data.barLogo || '',
+                    logoScale: data.barLogoScale || 1
                 });
             }
         });
@@ -59,7 +60,7 @@ export default function GuestRegisterPage() {
                     localStorage.removeItem('barmate_guest_request_id');
                     setRequestId(null);
                     setStatus('idle');
-                    toast({ title: "Solicitação Recusada", description: "Por favor, tente novamente ou fale com um atendente.", variant: "destructive" });
+                    toast({ title: "Solicitação Recusada", description: "Por favor, fale com um atendente.", variant: "destructive" });
                 }
             }
         });
@@ -78,7 +79,7 @@ export default function GuestRegisterPage() {
             const docRef = await addDoc(collection(db, 'guest_requests'), {
                 name: name.trim(),
                 status: 'pending',
-                intent: intent, // 'create' or 'view'
+                intent: intent,
                 requestedAt: serverTimestamp(),
             });
             localStorage.setItem('barmate_guest_request_id', docRef.id);
@@ -102,7 +103,7 @@ export default function GuestRegisterPage() {
                         </div>
                         <CardTitle className="text-2xl">Aguardando Liberação</CardTitle>
                         <CardDescription>
-                            Olá, <strong>{name || 'Cliente'}</strong>! Sua solicitação foi enviada para o balcão. Por favor, aguarde um instante enquanto vinculamos sua comanda.
+                            Olá, <strong>{name || 'Cliente'}</strong>! Sua solicitação foi enviada. Aguarde enquanto vinculamos sua comanda.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -114,7 +115,7 @@ export default function GuestRegisterPage() {
                             localStorage.removeItem('barmate_guest_request_id');
                             setRequestId(null);
                             setStatus('idle');
-                        }}>Cancelar e Voltar</Button>
+                        }}>Cancelar</Button>
                     </CardContent>
                 </Card>
             </div>
@@ -125,9 +126,14 @@ export default function GuestRegisterPage() {
         <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
             <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
                 <CardHeader className="text-center">
-                    <div className="mx-auto mb-4">
+                    <div className="mx-auto mb-4 overflow-hidden h-24 flex items-center justify-center">
                         {barInfo.logo ? (
-                            <img src={barInfo.logo} alt="Logo" className="h-20 w-auto max-w-[240px] object-contain mx-auto rounded-lg" />
+                            <img 
+                                src={barInfo.logo} 
+                                alt="Logo" 
+                                className="h-full w-auto max-w-[240px] object-contain transition-transform duration-200" 
+                                style={{ transform: `scale(${barInfo.logoScale})` }}
+                            />
                         ) : (
                             <div className="bg-primary/10 rounded-full p-4 w-fit mx-auto">
                                 <UserCircle2 className="h-10 w-10 text-primary" />
@@ -135,13 +141,11 @@ export default function GuestRegisterPage() {
                         )}
                     </div>
                     <CardTitle className="text-2xl font-black italic tracking-tighter uppercase">{barInfo.name}</CardTitle>
-                    <CardDescription>
-                        Bem-vindo! Identifique-se para acessar seu consumo.
-                    </CardDescription>
+                    <CardDescription>Identifique-se para acessar seu consumo.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
-                        <Label htmlFor="guestName" className="font-bold text-xs uppercase opacity-70">Seu Nome e Sobrenome</Label>
+                        <Label htmlFor="guestName" className="font-bold text-xs uppercase opacity-70">Nome e Sobrenome</Label>
                         <Input
                             id="guestName"
                             placeholder="Ex: João Silva"
@@ -155,17 +159,17 @@ export default function GuestRegisterPage() {
                     
                     <div className="flex flex-col gap-3">
                         <Button 
-                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center gap-0" 
+                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center" 
                             disabled={isSubmitting || !name.trim()}
                             onClick={() => handleSendRequest('create')}
                         >
                             <span className="flex items-center gap-2"><PlusCircle className="h-5 w-5" /> Solicitar Nova Comanda</span>
-                            <span className="text-[10px] opacity-70 font-normal">Vou começar a consumir agora</span>
+                            <span className="text-[10px] opacity-70 font-normal">Quero começar a consumir</span>
                         </Button>
 
                         <Button 
                             variant="secondary"
-                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center gap-0" 
+                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center" 
                             disabled={isSubmitting || !name.trim()}
                             onClick={() => handleSendRequest('view')}
                         >
@@ -176,7 +180,7 @@ export default function GuestRegisterPage() {
                 </CardContent>
                 <CardFooter className="justify-center border-t pt-4">
                     <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50 text-center">
-                        {isSubmitting ? "Enviando para o balcão..." : "Sua comanda aparecerá automaticamente após o vínculo."}
+                        {isSubmitting ? "Sincronizando..." : "Sua comanda aparecerá automaticamente após o vínculo."}
                     </p>
                 </CardFooter>
             </Card>

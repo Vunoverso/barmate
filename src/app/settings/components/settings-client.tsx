@@ -43,6 +43,7 @@ import { format } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
 import { db } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { Slider } from '@/components/ui/slider';
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -185,6 +186,7 @@ export default function SettingsClient() {
   const [barCnpj, setBarCnpj] = useState('');
   const [barAddress, setBarAddress] = useState('');
   const [barLogo, setBarLogo] = useState('');
+  const [barLogoScale, setBarLogoScale] = useState(1);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
   const [isImporting, setIsImporting] = useState(false);
@@ -200,6 +202,7 @@ export default function SettingsClient() {
     setBarCnpj(localStorage.getItem('barCnpj') || '');
     setBarAddress(localStorage.getItem('barAddress') || '');
     setBarLogo(localStorage.getItem('barLogo') || '');
+    setBarLogoScale(parseFloat(localStorage.getItem('barLogoScale') || '1'));
     setTransactionFees(getTransactionFees());
     setProductCategories(getProductCategories());
   }, []);
@@ -242,13 +245,14 @@ export default function SettingsClient() {
     localStorage.setItem('barCnpj', barCnpj.trim());
     localStorage.setItem('barAddress', barAddress.trim());
     localStorage.setItem('barLogo', barLogo);
+    localStorage.setItem('barLogoScale', barLogoScale.toString());
     
-    // Sync to Firestore for guests
     if (db) {
         try {
             await setDoc(doc(db, 'settings', 'global'), {
                 barName: barName.trim(),
                 barLogo: barLogo,
+                barLogoScale: barLogoScale,
                 updatedAt: new Date().toISOString()
             }, { merge: true });
         } catch (err) {
@@ -313,7 +317,7 @@ export default function SettingsClient() {
 
     const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
     saveProductCategories(updatedCategories);
-    toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso. Produtos que usavam esta categoria podem precisar ser reatribuídos.`, variant: "default" });
+    toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso.`, variant: "default" });
     setCategoryToDelete(null);
   };
 
@@ -325,7 +329,7 @@ export default function SettingsClient() {
             const data = localStorage.getItem(key);
             if (data !== null) {
                 try {
-                  if (['barName', 'barCnpj', 'barAddress', 'barLogo'].includes(key)) {
+                  if (['barName', 'barCnpj', 'barAddress', 'barLogo', 'barLogoScale'].includes(key)) {
                     backupData[key] = data;
                   } else {
                     backupData[key] = JSON.parse(data);
@@ -362,7 +366,7 @@ export default function SettingsClient() {
     if (!file) return;
 
     setIsImporting(true);
-    toast({ title: "Importando dados...", description: "Isso pode levar alguns instantes. Não feche a página." });
+    toast({ title: "Importando dados...", description: "Isso pode levar alguns instantes." });
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -376,7 +380,7 @@ export default function SettingsClient() {
             
             Object.keys(data).forEach(key => {
                 if (DATA_KEYS.includes(key)) {
-                    if (['barName', 'barCnpj', 'barAddress', 'barLogo'].includes(key)) {
+                    if (['barName', 'barCnpj', 'barAddress', 'barLogo', 'barLogoScale'].includes(key)) {
                       localStorage.setItem(key, data[key]);
                     } else {
                       localStorage.setItem(key, JSON.stringify(data[key]));
@@ -385,7 +389,6 @@ export default function SettingsClient() {
             });
             
             toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
-
             setTimeout(() => window.location.reload(), 2000);
         } catch (innerError) {
             console.error("Import processing error:", innerError);
@@ -397,36 +400,16 @@ export default function SettingsClient() {
             }
         }
     };
-    reader.onerror = (error) => {
-      console.error("Import file reading error:", error);
-      toast({ title: "Erro na Importação", description: "Não foi possível ler o arquivo selecionado.", variant: "destructive" });
-      setIsImporting(false);
-    };
     reader.readAsText(file);
   };
   
   const handleClearFinancialHistory = () => {
     clearFinancialData();
     setClearFinancialsAlertOpen(false);
-    toast({
-        title: "Histórico Financeiro Zerado",
-        description: "Todos os dados de vendas e financeiros foram removidos.",
-        variant: "default"
-    });
+    toast({ title: "Histórico Financeiro Zerado" });
   };
 
-
-  if (!isMounted) {
-    return (
-      <div className="space-y-8">
-          <Card>
-            <CardHeader><CardTitle>Dados do Estabelecimento</CardTitle></CardHeader>
-            <CardContent><div className="h-24 w-full bg-muted rounded-md animate-pulse"></div></CardContent>
-          </Card>
-      </div>
-    );
-  }
-
+  if (!isMounted) return null;
 
   return (
     <>
@@ -440,11 +423,16 @@ export default function SettingsClient() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <Label>Logotipo do Bar</Label>
-                <div className="flex items-center gap-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
                     <div className="relative h-32 w-32 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden">
                         {barLogo ? (
                             <>
-                                <img src={barLogo} alt="Logo" className="h-full w-full object-contain" />
+                                <img 
+                                    src={barLogo} 
+                                    alt="Logo" 
+                                    className="h-full w-full object-contain transition-transform duration-200" 
+                                    style={{ transform: `scale(${barLogoScale})` }}
+                                />
                                 <Button 
                                     type="button" 
                                     variant="destructive" 
@@ -462,18 +450,37 @@ export default function SettingsClient() {
                             </div>
                         )}
                     </div>
-                    <div className="space-y-2">
-                        <input
-                            type="file"
-                            ref={logoInputRef}
-                            onChange={handleLogoUpload}
-                            accept="image/*"
-                            className="hidden"
-                        />
-                        <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()}>
-                            Escolher Imagem
-                        </Button>
-                        <p className="text-xs text-muted-foreground">Formato PNG ou JPG. Recomendado: Fundo transparente.</p>
+                    <div className="flex-1 space-y-4 w-full">
+                        <div className="space-y-2">
+                            <input
+                                type="file"
+                                ref={logoInputRef}
+                                onChange={handleLogoUpload}
+                                accept="image/*"
+                                className="hidden"
+                            />
+                            <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()}>
+                                Escolher Imagem
+                            </Button>
+                            <p className="text-xs text-muted-foreground">PNG ou JPG até 1MB.</p>
+                        </div>
+                        
+                        {barLogo && (
+                            <div className="space-y-3 pt-2">
+                                <div className="flex justify-between items-center">
+                                    <Label className="text-xs font-bold uppercase opacity-70">Ajustar Tamanho</Label>
+                                    <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{Math.round(barLogoScale * 100)}%</span>
+                                </div>
+                                <Slider 
+                                    value={[barLogoScale]} 
+                                    min={0.5} 
+                                    max={2.5} 
+                                    step={0.05} 
+                                    onValueChange={([val]) => setBarLogoScale(val)}
+                                    className="w-full max-w-xs"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
               </div>
@@ -481,36 +488,18 @@ export default function SettingsClient() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="barName">Nome do Estabelecimento</Label>
-                  <Input
-                    id="barName"
-                    value={barName}
-                    onChange={(e) => setBarName(e.target.value)}
-                    placeholder="Digite o nome do bar"
-                  />
+                  <Input id="barName" value={barName} onChange={(e) => setBarName(e.target.value)} placeholder="Nome do bar" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="barCnpj">CNPJ</Label>
-                  <Input
-                    id="barCnpj"
-                    value={barCnpj}
-                    onChange={(e) => setBarCnpj(e.target.value)}
-                    placeholder="00.000.000/0001-00"
-                  />
+                  <Input id="barCnpj" value={barCnpj} onChange={(e) => setBarCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
                 </div>
               </div>
               <div className="space-y-2">
                   <Label htmlFor="barAddress">Endereço</Label>
-                  <Textarea
-                    id="barAddress"
-                    value={barAddress}
-                    onChange={(e) => setBarAddress(e.target.value)}
-                    placeholder="Rua Exemplo, 123 - Bairro, Cidade - UF, CEP"
-                  />
+                  <Textarea id="barAddress" value={barAddress} onChange={(e) => setBarAddress(e.target.value)} placeholder="Endereço completo" />
               </div>
-              <Button type="submit">
-                <Save className="mr-2 h-4 w-4" />
-                Salvar Marca e Dados
-              </Button>
+              <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Identidade</Button>
             </CardContent>
           </form>
         </Card>
@@ -519,110 +508,51 @@ export default function SettingsClient() {
           <form onSubmit={handleSaveTransactionFees}>
             <CardHeader>
                 <CardTitle>Taxas de Transação</CardTitle>
-                <CardDescription>Defina as taxas percentuais para transações de débito, crédito e PIX.</CardDescription>
+                <CardDescription>Percentuais descontados em vendas por cartão/PIX.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="debitRate">Taxa de Débito (%)</Label>
-                        <Input
-                            id="debitRate"
-                            type="number"
-                            step="0.01"
-                            value={transactionFees.debitRate}
-                            onChange={(e) => setTransactionFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))}
-                            placeholder="Ex: 1.99"
-                        />
+                        <Input id="debitRate" type="number" step="0.01" value={transactionFees.debitRate} onChange={(e) => setTransactionFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="creditRate">Taxa de Crédito (%)</Label>
-                        <Input
-                            id="creditRate"
-                            type="number"
-                            step="0.01"
-                            value={transactionFees.creditRate}
-                            onChange={(e) => setTransactionFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))}
-                            placeholder="Ex: 4.99"
-                        />
+                        <Input id="creditRate" type="number" step="0.01" value={transactionFees.creditRate} onChange={(e) => setTransactionFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="pixRate">Taxa de PIX (%)</Label>
-                        <Input
-                            id="pixRate"
-                            type="number"
-                            step="0.01"
-                            value={transactionFees.pixRate}
-                            onChange={(e) => setTransactionFees(prev => ({ ...prev, pixRate: parseFloat(e.target.value) || 0 }))}
-                            placeholder="Ex: 0.99"
-                        />
+                        <Input id="pixRate" type="number" step="0.01" value={transactionFees.pixRate} onChange={(e) => setTransactionFees(prev => ({ ...prev, pixRate: parseFloat(e.target.value) || 0 }))} />
                     </div>
                 </div>
-                <Button type="submit">
-                    <Save className="mr-2 h-4 w-4" />
-                    Salvar Taxas
-                </Button>
+                <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Taxas</Button>
             </CardContent>
           </form>
         </Card>
 
         <Card>
-            <CardHeader>
-                <CardTitle>Gerenciamento de Dados</CardTitle>
-                <CardDescription>Exportar ou importar backup completo.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex gap-4">
-                <Button onClick={handleExportData}>
-                    <Download className="mr-2 h-4 w-4" /> Exportar Backup
-                </Button>
-                <Button variant="outline" onClick={handleTriggerImport} disabled={isImporting}>
-                    <Upload className="mr-2 h-4 w-4" /> Importar Backup
-                </Button>
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    accept=".json"
-                    className="hidden"
-                />
-            </CardContent>
-        </Card>
-
-
-        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Gerenciar Categorias de Produtos</CardTitle>
-                  <CardDescription>Organize seus produtos.</CardDescription>
+                  <CardTitle>Categorias de Produtos</CardTitle>
+                  <CardDescription>Gerencie a organização do seu catálogo.</CardDescription>
                 </div>
-                <Button onClick={() => setIsAddCategoryDialogOpen(true)}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Categoria
-                </Button>
+                <Button onClick={() => setIsAddCategoryDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Nova Categoria</Button>
             </div>
           </CardHeader>
           <CardContent>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ícone</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Ícone</TableHead><TableHead>Nome</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
               <TableBody>
                 {productCategories.map((category) => {
-                  const IconComponent = LUCIDE_ICON_MAP[category.iconName] || LUCIDE_ICON_MAP['Package'];
+                  const IconComponent = LUCIDE_ICON_MAP[category.iconName] || Package;
                   return (
                     <TableRow key={category.id}>
-                      <TableCell>{IconComponent && <IconComponent className="h-5 w-5 text-muted-foreground" />}</TableCell>
+                      <TableCell><IconComponent className="h-5 w-5 text-muted-foreground" /></TableCell>
                       <TableCell className="font-medium">{category.name}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>
-                          <Edit3 className="mr-2 h-4 w-4" /> Renomear
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Remover
-                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>Renomear</Button>
+                        <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1}>Remover</Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -632,24 +562,59 @@ export default function SettingsClient() {
           </CardContent>
         </Card>
 
-         <Card className="border-destructive">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-destructive"><AlertTriangle /> Zona de Perigo</CardTitle>
-                <CardDescription>Ações permanentes.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex gap-4">
-                <Button variant="destructive" onClick={() => setClearFinancialsAlertOpen(true)}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Zerar Histórico Financeiro
-                </Button>
+        <Card className="border-destructive">
+            <CardHeader><CardTitle className="text-destructive">Zona de Perigo</CardTitle></CardHeader>
+            <CardContent className="flex flex-wrap gap-4">
+                <Button variant="destructive" onClick={() => setClearFinancialsAlertOpen(true)}><Trash2 className="mr-2 h-4 w-4" /> Zerar Financeiro</Button>
+                <Button variant="outline" onClick={handleExportData}><Download className="mr-2 h-4 w-4" /> Exportar Backup</Button>
+                <Button variant="outline" onClick={handleTriggerImport}><Upload className="mr-2 h-4 w-4" /> Importar Backup</Button>
             </CardContent>
         </Card>
       </div>
 
       {editingCategory && <EditCategoryDialog isOpen={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen} category={editingCategory} onSave={handleSaveCategory} />}
       <AddCategoryDialog isOpen={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen} onSave={handleAddNewCategory} />
-      <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Importar Backup?</AlertDialogTitle><AlertDialogDescription>Substituirá tudo. Recomenda-se exportar antes.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">Continuar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-      <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Zerar Histórico?</AlertDialogTitle><AlertDialogDescription>Vendas e caixa serão apagados. Produtos e clientes permanecem.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">Zerar Agora</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-      {categoryToDelete && <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Remover Categoria?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">Remover</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>}
+      
+      <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar Backup?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação substituirá todos os dados atuais. Recomendamos exportar um backup antes.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">Substituir Dados</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Zerar Histórico Financeiro?</AlertDialogTitle>
+            <AlertDialogDescription>Vendas e registros de caixa serão apagados permanentemente. Produtos e clientes não serão afetados.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">Zerar Agora</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {categoryToDelete && (
+        <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover Categoria?</AlertDialogTitle>
+              <AlertDialogDescription>Deseja remover "{categoryToDelete.name}"? Produtos vinculados precisarão ser reatribuídos.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">Remover</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }

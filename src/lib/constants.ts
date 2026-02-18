@@ -1,3 +1,4 @@
+
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, type LucideIcon } from 'lucide-react';
 
@@ -18,7 +19,8 @@ export const DATA_KEYS = [
     'barName',
     'barCnpj',
     'barAddress',
-    'barLogo'
+    'barLogo',
+    'barLogoScale'
 ];
 export const KEY_PRODUCT_CATEGORIES = 'barmate_productCategories_v2';
 export const KEY_PRODUCTS = 'barmate_products_v2';
