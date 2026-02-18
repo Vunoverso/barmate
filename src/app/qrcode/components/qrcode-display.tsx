@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Copy, Printer, QrCode } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -16,7 +17,15 @@ export default function QRCodeDisplay() {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const url = `${window.location.origin}/guest/register`;
+            // Force origin to reflect the current port (useful for cloud workstations)
+            let origin = window.location.origin;
+            
+            // If in Studio environment and needs to fix port to 9000
+            if (origin.includes('cloudworkstations.dev') && !origin.includes('9000-')) {
+                origin = origin.replace(/\d+-/, '9000-');
+            }
+
+            const url = `${origin}/guest/register`;
             setRegisterUrl(url);
             setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}`);
         }
@@ -59,7 +68,7 @@ export default function QRCodeDisplay() {
                         )}
                     </div>
                     
-                    <div className="w-full space-y-2">
+                    <div className="w-full space-y-2 text-left">
                         <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Link Direto</Label>
                         <div className="flex gap-2">
                             <Input value={registerUrl} readOnly className="bg-muted/50" />
@@ -119,8 +128,4 @@ export default function QRCodeDisplay() {
             `}</style>
         </div>
     );
-}
-
-function Label({ children, className }: { children: React.ReactNode, className?: string }) {
-    return <span className={`text-sm font-medium leading-none ${className}`}>{children}</span>;
 }

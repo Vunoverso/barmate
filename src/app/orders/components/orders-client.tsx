@@ -38,16 +38,7 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from '@/lib/utils';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OrderStatement } from './order-statement';
@@ -76,6 +67,13 @@ const updateOrderNameBasedOnTotal = (order: ActiveOrder): ActiveOrder => {
     return order;
 };
 
+// Helper to sanitize data for Firestore (remove undefined)
+const prepareForFirestore = (data: any) => {
+  return JSON.parse(JSON.stringify(data, (key, value) => {
+      return value === undefined ? null : value;
+  }));
+};
+
 export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
@@ -94,7 +92,6 @@ export default function OrdersClient() {
   const [orderToEdit, setOrderToEdit] = useState<ActiveOrder | null>(null);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
-  const [isAssociateClientDialogOpen, setIsAssociateClientDialogOpen] = useState(false);
   const [orderToPrint, setOrderToPrint] = useState<ActiveOrder | null>(null);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
   const [requestToLink, setRequestToLink] = useState<GuestRequest | null>(null);
@@ -103,12 +100,6 @@ export default function OrdersClient() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
-
-  const prepareForFirestore = (data: any) => {
-    return JSON.parse(JSON.stringify(data, (key, value) => {
-        return value === undefined ? null : value;
-    }));
-  };
 
   const syncOrderToFirestore = async (order: ActiveOrder) => {
     try {
@@ -144,6 +135,7 @@ export default function OrdersClient() {
     return () => unsubscribe();
   }, []);
 
+  // Effect to sync all local orders to Firestore on mount
   useEffect(() => {
     const syncAllOrders = async () => {
         const localOrders = getOpenOrders();
@@ -200,15 +192,6 @@ export default function OrdersClient() {
   const currentOrder = useMemo(() => {
     return openOrders.find(o => o.id === currentOrderId);
   }, [openOrders, currentOrderId]);
-
-  const totalOpenOrdersValue = useMemo(() => {
-    return openOrders
-      .filter(order => order.status !== 'paid')
-      .reduce((total, order) => {
-        const orderTotal = order.items.reduce((orderSum, item) => orderSum + (item.price * item.quantity), 0);
-        return total + orderTotal;
-      }, 0);
-  }, [openOrders]);
 
   const currentOrderItems = useMemo(() => {
     if (!currentOrder) return [];
@@ -397,23 +380,6 @@ export default function OrdersClient() {
     setIsCreditDialogOpen(false);
   }, [currentOrderId, toast]);
 
-    const handleAssociateClient = useCallback((orderId: string, clientId: string) => {
-        const client = getClients().find(c => c.id === clientId);
-        if (!client) return;
-        let updatedOrder: ActiveOrder | undefined;
-        const allOrders = getOpenOrders();
-        const updatedOrders = allOrders.map(order => {
-            if (order.id === orderId) {
-                updatedOrder = { ...order, clientId: client.id, name: client.name };
-                return updatedOrder;
-            }
-            return order;
-        });
-        saveOpenOrders(updatedOrders);
-        if (updatedOrder) syncOrderToFirestore(updatedOrder);
-        toast({ title: "Cliente Associado", description: `A comanda foi associada a ${client.name}.` });
-    }, [toast]);
-
   const addToOrder = useCallback((product: Product) => {
     if (!currentOrderId) return;
     const allOrders = getOpenOrders();
@@ -476,51 +442,9 @@ export default function OrdersClient() {
     if (updatedOrder) syncOrderToFirestore(updatedOrder);
   }, [currentOrderId]);
 
-  const handleClaimItem = useCallback((lineItemId: string) => {
-    if (!currentOrderId) return;
-    let orderToPotentiallyClose: ActiveOrder | null = null;
-    const allOrders = getOpenOrders();
-    let finalUpdatedOrder: ActiveOrder | undefined;
-    const updatedOrdersList = allOrders.map(order => {
-        if (order.id === currentOrderId) {
-            const newItems = order.items.map(item => {
-                if (item.lineItemId === lineItemId && item.isCombo) {
-                    const claimed = item.claimedQuantity || 0;
-                    const totalItems = (item.comboItems || 1) * item.quantity;
-                    if (claimed < totalItems) return { ...item, claimedQuantity: claimed + 1 };
-                }
-                return item;
-            });
-            const updatedOrder: ActiveOrder = { ...order, items: newItems };
-            finalUpdatedOrder = updatedOrder;
-            const hasUnclaimedCombos = newItems.some(item => {
-                if (!item.isCombo) return false;
-                return (item.claimedQuantity || 0) < ((item.comboItems || 1) * item.quantity);
-            });
-            if (updatedOrder.status === 'paid' && !hasUnclaimedCombos) {
-                orderToPotentiallyClose = updatedOrder;
-                return null;
-            }
-            return updatedOrder;
-        }
-        return order;
-    }).filter(Boolean) as ActiveOrder[];
-    if (orderToPotentiallyClose) {
-        deleteOrderFromFirestore(orderToPotentiallyClose.id);
-        toast({ title: "Comanda Finalizada", description: `Todos os itens do combo de "${orderToPotentiallyClose.name}" foram liberados e a comanda foi fechada.`});
-        const deletedIndex = allOrders.findIndex(o => o.id === currentOrderId);
-        let nextSelectedId: string | null = null;
-        if (updatedOrdersList.length > 0) nextSelectedId = updatedOrdersList[deletedIndex]?.id || updatedOrdersList[deletedIndex - 1]?.id || updatedOrdersList[0].id;
-        setCurrentOrderId(nextSelectedId);
-    } else if (finalUpdatedOrder) syncOrderToFirestore(finalUpdatedOrder);
-    saveOpenOrders(updatedOrdersList);
-  }, [currentOrderId, toast]);
-
-  const { orderTotal, consumedTotal } = useMemo(() => {
-    if (!currentOrderItems) return { orderTotal: 0, consumedTotal: 0 };
-    const total = currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
-    const consumed = currentOrderItems.filter(item => item.price > 0).reduce((total, item) => total + item.price * item.quantity, 0);
-    return { orderTotal: total, consumedTotal: consumed };
+  const orderTotal = useMemo(() => {
+    if (!currentOrderItems) return 0;
+    return currentOrderItems.reduce((total, item) => total + item.price * item.quantity, 0);
   }, [currentOrderItems]);
   
   const handlePayment = useCallback((details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, leaveChangeAsCredit: boolean, isPartial: boolean }) => {
@@ -538,33 +462,25 @@ export default function OrdersClient() {
         syncOrderToFirestore(updatedOrder);
         toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
     } else {
-        const hasUnclaimedCombos = currentOrderForPayment.items.some(item => item.isCombo && (item.claimedQuantity || 0) < ((item.comboItems || 1) * item.quantity));
-        if (hasUnclaimedCombos) {
-            const updatedOrder: ActiveOrder = { ...currentOrderForPayment, status: 'paid', items: sale.items };
-            saveOpenOrders(allOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
-            syncOrderToFirestore(updatedOrder);
-            toast({ title: "Comanda Paga!", description: `A comanda foi paga, mas permanece aberta para liberação dos combos.` });
-        } else {
-            deleteOrderFromFirestore(currentOrderForPayment.id);
-            const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
-            let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
-            let nextSelectedOrderId: string | null = null;
-            if (leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
-                const newCreditOrder: ActiveOrder = {
-                    id: `order-credit-${Date.now()}`, name: `${saleName.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
-                        id: `credit-${Date.now()}`, lineItemId: `line-item-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
-                    }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
-                };
-                nextOrdersState.push(newCreditOrder);
-                syncOrderToFirestore(newCreditOrder);
-                nextSelectedOrderId = newCreditOrder.id;
-            } else if (nextOrdersState.length > 0) {
-                nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
-            }
-            saveOpenOrders(nextOrdersState);
-            setCurrentOrderId(nextSelectedOrderId);
-            toast({ title: "Venda Concluída!", description: `Venda registrada com sucesso.`});
+        deleteOrderFromFirestore(currentOrderForPayment.id);
+        const currentIndex = allOrders.findIndex(o => o.id === currentOrderId);
+        let nextOrdersState = allOrders.filter(order => order.id !== currentOrderId);
+        let nextSelectedOrderId: string | null = null;
+        if (leaveChangeAsCredit && sale.changeGiven && sale.changeGiven > 0) {
+            const newCreditOrder: ActiveOrder = {
+                id: `order-credit-${Date.now()}`, name: `${saleName.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
+                    id: `credit-${Date.now()}`, lineItemId: `line-item-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
+                }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
+            };
+            nextOrdersState.push(newCreditOrder);
+            syncOrderToFirestore(newCreditOrder);
+            nextSelectedOrderId = newCreditOrder.id;
+        } else if (nextOrdersState.length > 0) {
+            nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
         }
+        saveOpenOrders(nextOrdersState);
+        setCurrentOrderId(nextSelectedOrderId);
+        toast({ title: "Venda Concluída!", description: `Venda registrada com sucesso.`});
     }
   }, [currentOrderId, toast]);
 
@@ -775,7 +691,46 @@ function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, on
   );
 }
 
-// ... Outros diálogos auxiliares permanecem com a mesma lógica mas visualmente limpos ...
+function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
+  if (products.length === 0) return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
+  if (viewMode === 'grid') return (
+    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
+      {products.map(product => {
+        const category = productCategories.find(c => c.id === product.categoryId);
+        const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+        return (
+          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
+            <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
+              <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+            <CardContent className="p-1.5">
+              <h3 className="font-medium truncate text-[11px] leading-tight">{product.name}</h3>
+              <p className="text-primary font-semibold text-xs sm:text-sm">{formatCurrency(product.price)}</p>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+  return (
+    <div className="space-y-1">
+      {products.map(product => {
+         const category = productCategories.find(c => c.id === product.categoryId);
+         const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+        return (
+          <Card key={product.id} className="flex items-center p-1.5 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-muted rounded-md flex items-center justify-center mr-2 group-hover:bg-muted/80 transition-colors">
+              <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+            <div className="flex-grow"><h3 className="font-medium text-xs sm:text-sm">{product.name}</h3><p className="text-xs text-muted-foreground">{category?.name}</p></div>
+            <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: any) {
     const [n, setN] = useState('');
     useEffect(() => { if (order) setN(order.name); }, [order]);
@@ -785,7 +740,7 @@ function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: any) {
 function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMerge }: any) {
     const [sel, setSel] = useState<any>({});
     const other = allOrders.filter((o: any) => o.id !== currentOrder.id);
-    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Juntar Comandas</DialogTitle></DialogHeader><ScrollArea className="h-48">{other.map((o: any) => (<div key={o.id} className="flex gap-2 p-2"><Checkbox checked={!!sel[o.id]} onCheckedChange={() => setSel({...sel, [o.id]: !sel[o.id]})} /> {o.name}</div>))}</ScrollArea><DialogFooter><Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))}>Juntar</Button></DialogFooter></DialogContent></Dialog>);
+    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Juntar Comandas</DialogTitle></DialogHeader><ScrollArea className="h-48">{other.map((o: any) => (<div key={o.id} className="flex gap-2 p-2"><Checkbox id={o.id} checked={!!sel[o.id]} onCheckedChange={() => setSel({...sel, [o.id]: !sel[o.id]})} /> <Label htmlFor={o.id}>{o.name}</Label></div>))}</ScrollArea><DialogFooter><Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))}>Juntar</Button></DialogFooter></DialogContent></Dialog>);
 }
 
 function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
@@ -798,4 +753,8 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
 function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink, onCreateAndLink }: any) {
     const [sid, setSid] = useState('');
     return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Vincular {request.name}</DialogTitle></DialogHeader><div className="space-y-4"><Select onValueChange={setSid}><SelectTrigger><SelectValue placeholder="Escolha uma comanda..." /></SelectTrigger><SelectContent>{orders.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent></Select><Button className="w-full" disabled={!sid} onClick={() => onLink(sid)}>Vincular à Selecionada</Button><Separator /><Button variant="outline" className="w-full" onClick={() => onCreateAndLink({ name: request.name, clientId: null })}>Abrir Nova Comanda</Button></div></DialogContent></Dialog>);
+}
+
+function Checkbox({ id, checked, onCheckedChange }: any) {
+    return <input type="checkbox" id={id} checked={checked} onChange={onCheckedChange} className="h-4 w-4 rounded border-gray-300" />;
 }

@@ -21,7 +21,7 @@ export default function GuestRegisterPage() {
     const { toast } = useToast();
 
     useEffect(() => {
-        const savedId = localStorage.getItem('barmate_guest_request_id');
+        const savedId = typeof window !== 'undefined' ? localStorage.getItem('barmate_guest_request_id') : null;
         if (savedId) {
             setRequestId(savedId);
             setStatus('pending');
