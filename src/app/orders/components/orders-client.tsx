@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package, Edit, Merge, Wallet, Printer, Link as LinkIcon, Copy, Plus, Users, UserCheck, X } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package, Edit, Merge, Wallet, Printer, Link as LinkIcon, Copy, Plus, Users, UserCheck, X, Unlink, Wifi } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -42,7 +42,6 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OrderStatement } from './order-statement';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, writeBatch, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
@@ -292,8 +291,13 @@ export default function OrdersClient() {
     try {
         if (!db) return;
         const orderRef = doc(db, 'open_orders', order.id);
-        const plainOrder = prepareForFirestore(order);
+        const plainOrder = prepareForFirestore({ ...order, isShared: true });
         await setDoc(orderRef, plainOrder, { merge: true });
+        
+        // Atualiza estado local para refletir que foi compartilhada
+        const localOrders = getOpenOrders().map(o => o.id === order.id ? { ...o, isShared: true } : o);
+        saveOpenOrders(localOrders);
+        setOpenOrders(localOrders);
     } catch (error) {
         console.error("Firestore sync error", error);
     }
@@ -304,10 +308,38 @@ export default function OrdersClient() {
         if (!db) return;
         const orderRef = doc(db, 'open_orders', orderId);
         await deleteDoc(orderRef);
+        
+        // Atualiza estado local
+        const localOrders = getOpenOrders().map(o => o.id === orderId ? { ...o, isShared: false } : o);
+        saveOpenOrders(localOrders);
+        setOpenOrders(localOrders);
     } catch (error) {
         console.error("Firestore delete error", error);
     }
   };
+
+  // Escuta mudanças nas comandas em tempo real (para status de conexão)
+  useEffect(() => {
+    if (!db) return;
+    const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
+        const cloudData = snapshot.docs.reduce((acc, doc) => {
+            acc[doc.id] = doc.data();
+            return acc;
+        }, {} as any);
+
+        setOpenOrders(prev => prev.map(order => {
+            if (cloudData[order.id]) {
+                return { 
+                    ...order, 
+                    isShared: true, 
+                    viewerCount: cloudData[order.id].viewerCount || 0 
+                };
+            }
+            return { ...order, isShared: false, viewerCount: 0 };
+        }));
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!db) return;
@@ -323,12 +355,13 @@ export default function OrdersClient() {
   }, []);
 
   useEffect(() => {
-    const syncAllOrders = async () => {
+    const syncAllSharedOrders = async () => {
         const localOrders = getOpenOrders();
-        if (localOrders.length > 0 && db) {
+        const sharedOrders = localOrders.filter(o => o.isShared);
+        if (sharedOrders.length > 0 && db) {
             try {
                 const batch = writeBatch(db);
-                localOrders.forEach(order => {
+                sharedOrders.forEach(order => {
                     const orderRef = doc(db, 'open_orders', order.id);
                     batch.set(orderRef, prepareForFirestore(order), { merge: true });
                 });
@@ -339,7 +372,7 @@ export default function OrdersClient() {
         }
     };
     if (!isLoading) {
-        syncAllOrders();
+        syncAllSharedOrders();
     }
   }, [isLoading]);
 
@@ -429,10 +462,10 @@ export default function OrdersClient() {
       clientId: details.clientId,
       items: [],
       createdAt: new Date(),
+      isShared: false
     };
     const updatedOrders = [...getOpenOrders(), newOrder];
     saveOpenOrders(updatedOrders);
-    syncOrderToFirestore(newOrder);
     setCurrentOrderId(newOrderId); 
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
     return newOrderId;
@@ -457,7 +490,7 @@ export default function OrdersClient() {
           return order;
       });
       saveOpenOrders(updatedOrders);
-      if (updatedOrder) syncOrderToFirestore(updatedOrder);
+      if (updatedOrder && updatedOrder.isShared) syncOrderToFirestore(updatedOrder);
       setOrderToEdit(null);
       toast({ title: "Comanda Atualizada", description: `O nome foi alterado para "${newName}".` });
   }, [toast]);
@@ -534,7 +567,7 @@ export default function OrdersClient() {
     const updatedOrder: ActiveOrder = { ...destinationOrder, items: mergedItems };
     const finalOrders = allOrders.filter(o => !sourceOrderIds.includes(o.id)).map(o => o.id === currentOrderId ? updatedOrder : o);
     saveOpenOrders(finalOrders);
-    syncOrderToFirestore(updatedOrder);
+    if (updatedOrder.isShared) syncOrderToFirestore(updatedOrder);
     sourceOrderIds.forEach(id => deleteOrderFromFirestore(id));
     setIsMergeDialogOpen(false);
     toast({ title: "Comandas Juntadas!", description: `${sourceOrderIds.length} comandas foram juntadas em "${destinationOrder.name}".`});
@@ -559,7 +592,7 @@ export default function OrdersClient() {
     const updatedOrder = { ...orderToUpdate, items: [...orderToUpdate.items, creditItem], name: newName };
     const newOpenOrders = allOrders.map(order => order.id === currentOrderId ? updatedOrder : order);
     saveOpenOrders(newOpenOrders);
-    syncOrderToFirestore(updatedOrder);
+    if (updatedOrder.isShared) syncOrderToFirestore(updatedOrder);
     if (source !== 'permuta') {
         const entrySource = source === 'dinheiro' ? 'daily_cash' : 'bank_account';
         const entry: Omit<FinancialEntry, 'id' | 'timestamp'> = {
@@ -599,14 +632,13 @@ export default function OrdersClient() {
     let updatedOrder: ActiveOrder = { ...orderToUpdate, items: updatedItems };
     const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     
-    // Reset status if item added to a paid order
     if (updatedOrder.status === 'paid' && currentTotal > 0) {
       const { status, ...orderWithoutStatus } = updatedOrder;
       updatedOrder = orderWithoutStatus as ActiveOrder;
     }
     
     saveOpenOrders(allOrders.map(order => (order.id === currentOrderId ? updatedOrder : order)));
-    syncOrderToFirestore(updatedOrder);
+    if (updatedOrder.isShared) syncOrderToFirestore(updatedOrder);
   }, [currentOrderId]);
   
   const updateQuantity = useCallback((lineItemId: string, quantity: number) => {
@@ -622,7 +654,7 @@ export default function OrdersClient() {
         return order;
     });
     saveOpenOrders(updatedOrders);
-    if (updatedOrder) syncOrderToFirestore(updatedOrder);
+    if (updatedOrder && updatedOrder.isShared) syncOrderToFirestore(updatedOrder);
   }, [currentOrderId]);
 
   const removeFromOrder = useCallback((lineItemId: string) => {
@@ -637,7 +669,7 @@ export default function OrdersClient() {
         return order;
     });
     saveOpenOrders(updatedOrders);
-    if (updatedOrder) syncOrderToFirestore(updatedOrder);
+    if (updatedOrder && updatedOrder.isShared) syncOrderToFirestore(updatedOrder);
   }, [currentOrderId]);
 
   const orderTotal = useMemo(() => {
@@ -657,7 +689,7 @@ export default function OrdersClient() {
         const paymentItem: OrderItem = { id: `payment-${Date.now()}`, lineItemId: `line-item-${Date.now()}`, name: `Pagamento Parcial`, price: -totalPaid, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null };
         const updatedOrder: ActiveOrder = { ...currentOrderForPayment, items: [...currentOrderForPayment.items, paymentItem] };
         saveOpenOrders(allOrders.map(o => o.id === currentOrderId ? updatedOrder : o));
-        syncOrderToFirestore(updatedOrder);
+        if (updatedOrder.isShared) syncOrderToFirestore(updatedOrder);
         toast({ title: "Pagamento Parcial Recebido!", description: `${formatCurrency(totalPaid)} foi abatido da comanda.` });
     } else {
         deleteOrderFromFirestore(currentOrderForPayment.id);
@@ -668,10 +700,9 @@ export default function OrdersClient() {
             const newCreditOrder: ActiveOrder = {
                 id: `order-credit-${Date.now()}`, name: `${saleName.replace(/ \((Com Crédito|Crédito de Troco)\)/, '')} (Crédito de Troco)`, items: [{
                     id: `credit-${Date.now()}`, lineItemId: `line-item-${Date.now()}`, name: `Crédito de Troco`, price: -sale.changeGiven, quantity: 1, categoryId: 'cat_outros', isCombo: false, comboItems: null,
-                }], createdAt: new Date(), clientId: currentOrderForPayment.clientId,
+                }], createdAt: new Date(), clientId: currentOrderForPayment.clientId, isShared: false
             };
             nextOrdersState.push(newCreditOrder);
-            syncOrderToFirestore(newCreditOrder);
             nextSelectedOrderId = newCreditOrder.id;
         } else if (nextOrdersState.length > 0) {
             nextSelectedOrderId = nextOrdersState[currentIndex] ? nextOrdersState[currentIndex].id : nextOrdersState[nextOrdersState.length - 1].id;
@@ -683,7 +714,18 @@ export default function OrdersClient() {
   }, [currentOrderId, toast]);
 
   const handlePrintOrder = useCallback(() => { if (currentOrder) setOrderToPrint(currentOrder); }, [currentOrder]);
-  const handleShareOrder = useCallback(() => { if (currentOrder) setOrderToShare(currentOrder); }, [currentOrder]);
+  const handleShareOrder = useCallback(() => { 
+    if (currentOrder) {
+        syncOrderToFirestore(currentOrder);
+        setOrderToShare(currentOrder); 
+    }
+  }, [currentOrder]);
+
+  const handleRevokeSharing = useCallback(async () => {
+      if (!currentOrderId) return;
+      await deleteOrderFromFirestore(currentOrderId);
+      toast({ title: "Compartilhamento Encerrado", description: "O cliente não tem mais acesso em tempo real." });
+  }, [currentOrderId, toast]);
 
   const handleActualPrint = () => {
     const node = statementRef.current;
@@ -702,6 +744,8 @@ export default function OrdersClient() {
   const handleLinkRequestToOrder = async (orderId: string) => {
       if (!requestToLink || !db) return;
       try {
+          const selectedOrder = openOrders.find(o => o.id === orderId);
+          if (selectedOrder) syncOrderToFirestore(selectedOrder);
           await updateDoc(doc(db, 'guest_requests', requestToLink.id), { status: 'approved', associatedOrderId: orderId });
           setRequestToLink(null);
           toast({ title: "Cliente Vinculado!" });
@@ -772,10 +816,15 @@ export default function OrdersClient() {
                 <div className="space-y-2">
                     {filteredOpenOrders.map(order => {
                        const total = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+                       const isOnline = (order.viewerCount || 0) > 0;
                        return (
                       <div key={order.id} role="button" onClick={() => handleSelectOrder(order.id)} className={cn(buttonVariants({ variant: currentOrderId === order.id ? "secondary" : "outline" }), "w-full h-auto py-1.5 px-3 cursor-pointer flex items-center justify-between", total < 0 && "border-amber-500 bg-amber-50 dark:bg-amber-900/20")}>
                         <div className="flex-1 min-w-0">
-                           <div className="font-semibold text-xs truncate">{order.name}</div>
+                           <div className="flex items-center gap-1">
+                               <div className="font-semibold text-xs truncate">{order.name}</div>
+                               {order.isShared && <LinkIcon className="h-2.5 w-2.5 text-blue-500 shrink-0" />}
+                               {isOnline && <Wifi className="h-2.5 w-2.5 text-green-500 animate-pulse shrink-0" />}
+                           </div>
                            <div className="text-[0.65rem] text-muted-foreground">{order.items.length} item(s) • {format(new Date(order.createdAt), "HH:mm", { locale: ptBR })}</div>
                         </div>
                         <div className="flex-shrink-0 text-right font-semibold text-xs">{formatCurrency(total)}</div>
@@ -826,9 +875,9 @@ export default function OrdersClient() {
                       <div className="flex items-center gap-2">
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <LinkIcon className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handleShareOrder} />
+                                <LinkIcon className={cn("h-5 w-5 cursor-pointer hover:scale-110 transition-transform", currentOrder.isShared ? "text-blue-500" : "text-primary")} onClick={handleShareOrder} />
                             </TooltipTrigger>
-                            <TooltipContent><p>Compartilhar</p></TooltipContent>
+                            <TooltipContent><p>{currentOrder.isShared ? 'Ver Link de Compartilhamento' : 'Compartilhar'}</p></TooltipContent>
                         </Tooltip>
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -848,15 +897,30 @@ export default function OrdersClient() {
                             </TooltipTrigger>
                             <TooltipContent><p>Imprimir</p></TooltipContent>
                         </Tooltip>
+                        {currentOrder.isShared && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Unlink className="h-5 w-5 cursor-pointer text-destructive hover:scale-110 transition-transform" onClick={handleRevokeSharing} />
+                                </TooltipTrigger>
+                                <TooltipContent><p>Encerrar Compartilhamento</p></TooltipContent>
+                            </Tooltip>
+                        )}
                       </div>
                       <div className="text-2xl font-black text-primary">
                         {formatCurrency(orderTotal)}
                       </div>
                   </div>
-                  <div className="text-[10px] text-muted-foreground flex gap-2 font-bold uppercase tracking-wider">
-                    <span>{currentOrder.items.length} itens</span>
-                    <span>•</span>
-                    <span>Abertura: {format(new Date(currentOrder.createdAt), "HH:mm", { locale: ptBR })}</span>
+                  <div className="flex items-center justify-between">
+                      <div className="text-[10px] text-muted-foreground flex gap-2 font-bold uppercase tracking-wider">
+                        <span>{currentOrder.items.length} itens</span>
+                        <span>•</span>
+                        <span>Abertura: {format(new Date(currentOrder.createdAt), "HH:mm", { locale: ptBR })}</span>
+                      </div>
+                      {(currentOrder.viewerCount || 0) > 0 && (
+                          <Badge variant="outline" className="text-[9px] uppercase h-5 bg-green-50 text-green-700 border-green-200 animate-pulse">
+                              <Wifi className="h-2.5 w-2.5 mr-1" /> {currentOrder.viewerCount} Conectado(s)
+                          </Badge>
+                      )}
                   </div>
                 </div>
               )}

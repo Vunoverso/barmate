@@ -66,6 +66,8 @@ export interface ActiveOrder {
   clientId?: string | null;
   clientName?: string | null;
   user_id?: string;
+  isShared?: boolean;
+  viewerCount?: number;
 }
 
 export interface CashAdjustment {
@@ -118,5 +120,6 @@ export interface GuestRequest {
   name: string;
   status: 'pending' | 'approved' | 'rejected';
   associatedOrderId?: string | null;
+  intent?: 'create' | 'view';
   requestedAt: any; // Firestore Timestamp
 }

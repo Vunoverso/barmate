@@ -13,7 +13,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
 
 export default function MyOrderClient({ orderId }: { orderId: string }) {
     const [order, setOrder] = useState<ActiveOrder | null>(null);
@@ -30,10 +30,12 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
         setIsLoading(true);
         const docRef = doc(db, 'open_orders', orderId);
 
+        // Incrementar contador de visualização ao abrir
+        updateDoc(docRef, { viewerCount: increment(1) }).catch(() => {});
+
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                // Firestore timestamps might need conversion
                 const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
                 
                 setOrder({
@@ -43,12 +45,11 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                 } as ActiveOrder);
                 setError(null);
             } else {
-                // Se não estiver na nuvem, tenta no arquivo local (útil para testes ou históricos)
                 const archivedOrders = getArchivedOrders();
                 const foundArchived = archivedOrders.find(o => o.id === orderId);
                 setOrder(foundArchived || null);
                 if (!foundArchived) {
-                    setError("Comanda não encontrada.");
+                    setError("Acesso encerrado ou comanda não encontrada.");
                 }
             }
             setIsLoading(false);
@@ -58,8 +59,17 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             setIsLoading(false);
         });
 
-        // Cleanup subscription on unmount
-        return () => unsubscribe();
+        // Decrementar ao sair (tentativa melhorada)
+        const handleBeforeUnload = () => {
+            updateDoc(docRef, { viewerCount: increment(-1) }).catch(() => {});
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            unsubscribe();
+            handleBeforeUnload();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
     }, [orderId]);
 
 
@@ -85,9 +95,9 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                         <div className="mx-auto bg-muted rounded-full p-4 w-fit mb-4">
                             <FileX className="h-12 w-12 text-destructive" />
                         </div>
-                        <CardTitle>Comanda não encontrada</CardTitle>
+                        <CardTitle>Comanda Indisponível</CardTitle>
                         <CardDescription>
-                            {error || "Não conseguimos encontrar sua comanda. Ela pode ter sido fechada ou o link é inválido."}
+                            {error || "O acesso a esta comanda foi encerrado pelo estabelecimento ou ela foi fechada."}
                         </CardDescription>
                     </CardHeader>
                 </Card>
