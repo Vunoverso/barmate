@@ -17,6 +17,8 @@ export default function GuestRegisterPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [requestId, setRequestId] = useState<string | null>(null);
     const [status, setStatus] = useState<'idle' | 'pending' | 'approved'>('idle');
+    const [barInfo, setBarInfo] = useState({ name: 'BarMate', logo: '' });
+    
     const router = useRouter();
     const { toast } = useToast();
 
@@ -26,6 +28,21 @@ export default function GuestRegisterPage() {
             setRequestId(savedId);
             setStatus('pending');
         }
+    }, []);
+
+    // Fetch real-time bar branding from cloud
+    useEffect(() => {
+        if (!db) return;
+        const unsubscribe = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setBarInfo({
+                    name: data.barName || 'BarMate',
+                    logo: data.barLogo || ''
+                });
+            }
+        });
+        return () => unsubscribe();
     }, []);
 
     useEffect(() => {
@@ -108,23 +125,29 @@ export default function GuestRegisterPage() {
         <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
             <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
                 <CardHeader className="text-center">
-                    <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit mb-4">
-                        <UserCircle2 className="h-10 w-10 text-primary" />
+                    <div className="mx-auto mb-4">
+                        {barInfo.logo ? (
+                            <img src={barInfo.logo} alt="Logo" className="h-20 w-auto max-w-[240px] object-contain mx-auto rounded-lg" />
+                        ) : (
+                            <div className="bg-primary/10 rounded-full p-4 w-fit mx-auto">
+                                <UserCircle2 className="h-10 w-10 text-primary" />
+                            </div>
+                        )}
                     </div>
-                    <CardTitle className="text-2xl font-black italic tracking-tighter">BarMate</CardTitle>
+                    <CardTitle className="text-2xl font-black italic tracking-tighter uppercase">{barInfo.name}</CardTitle>
                     <CardDescription>
                         Bem-vindo! Identifique-se para acessar seu consumo.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
-                        <Label htmlFor="guestName">Seu Nome e Sobrenome</Label>
+                        <Label htmlFor="guestName" className="font-bold text-xs uppercase opacity-70">Seu Nome e Sobrenome</Label>
                         <Input
                             id="guestName"
                             placeholder="Ex: João Silva"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="h-12 text-lg"
+                            className="h-12 text-lg font-semibold"
                             required
                             autoFocus
                         />
@@ -136,7 +159,7 @@ export default function GuestRegisterPage() {
                             disabled={isSubmitting || !name.trim()}
                             onClick={() => handleSendRequest('create')}
                         >
-                            <span className="flex items-center gap-2"><PlusCircle className="h-5 w-5" /> Solicitar Criação de Comanda</span>
+                            <span className="flex items-center gap-2"><PlusCircle className="h-5 w-5" /> Solicitar Nova Comanda</span>
                             <span className="text-[10px] opacity-70 font-normal">Vou começar a consumir agora</span>
                         </Button>
 
@@ -146,7 +169,7 @@ export default function GuestRegisterPage() {
                             disabled={isSubmitting || !name.trim()}
                             onClick={() => handleSendRequest('view')}
                         >
-                            <span className="flex items-center gap-2"><Search className="h-5 w-5" /> Ver Comanda Aberta</span>
+                            <span className="flex items-center gap-2"><Search className="h-5 w-5" /> Ver Minha Comanda Aberta</span>
                             <span className="text-[10px] opacity-70 font-normal">Já tenho uma conta ativa</span>
                         </Button>
                     </div>

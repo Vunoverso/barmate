@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Edit3, Trash2, PlusCircle, Download, Upload, AlertTriangle } from 'lucide-react';
+import { Save, Edit3, Trash2, PlusCircle, Download, Upload, AlertTriangle, ImagePlus, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
+import { db } from '@/lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface EditCategoryDialogProps {
   isOpen: boolean;
@@ -182,12 +184,14 @@ export default function SettingsClient() {
   const [barName, setBarName] = useState('');
   const [barCnpj, setBarCnpj] = useState('');
   const [barAddress, setBarAddress] = useState('');
+  const [barLogo, setBarLogo] = useState('');
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
   const [isImporting, setIsImporting] = useState(false);
   const [importAlertOpen, setImportAlertOpen] = useState(false);
   const [clearFinancialsAlertOpen, setClearFinancialsAlertOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
 
@@ -195,6 +199,7 @@ export default function SettingsClient() {
     setBarName(localStorage.getItem('barName') || 'BarMate');
     setBarCnpj(localStorage.getItem('barCnpj') || '');
     setBarAddress(localStorage.getItem('barAddress') || '');
+    setBarLogo(localStorage.getItem('barLogo') || '');
     setTransactionFees(getTransactionFees());
     setProductCategories(getProductCategories());
   }, []);
@@ -208,7 +213,22 @@ export default function SettingsClient() {
     }
   }, [loadData]);
 
-  const handleSaveCompanyDetails = (e?: React.FormEvent) => {
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        if (file.size > 1024 * 1024) {
+            toast({ title: "Arquivo muito grande", description: "O logotipo deve ter menos de 1MB.", variant: "destructive" });
+            return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setBarLogo(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveCompanyDetails = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (barName.trim() === '') {
       toast({
@@ -221,10 +241,25 @@ export default function SettingsClient() {
     localStorage.setItem('barName', barName.trim());
     localStorage.setItem('barCnpj', barCnpj.trim());
     localStorage.setItem('barAddress', barAddress.trim());
+    localStorage.setItem('barLogo', barLogo);
+    
+    // Sync to Firestore for guests
+    if (db) {
+        try {
+            await setDoc(doc(db, 'settings', 'global'), {
+                barName: barName.trim(),
+                barLogo: barLogo,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+        } catch (err) {
+            console.error("Erro ao sincronizar marca com a nuvem:", err);
+        }
+    }
+
     window.dispatchEvent(new Event('storage'));
     toast({
       title: "Sucesso!",
-      description: "Dados do estabelecimento atualizados.",
+      description: "Dados do estabelecimento e marca atualizados.",
       action: <Save className="text-green-500" />,
     });
   };
@@ -290,8 +325,7 @@ export default function SettingsClient() {
             const data = localStorage.getItem(key);
             if (data !== null) {
                 try {
-                  // Handle non-JSON string values correctly
-                  if (key === 'barName' || key === 'barCnpj' || key === 'barAddress') {
+                  if (['barName', 'barCnpj', 'barAddress', 'barLogo'].includes(key)) {
                     backupData[key] = data;
                   } else {
                     backupData[key] = JSON.parse(data);
@@ -342,7 +376,7 @@ export default function SettingsClient() {
             
             Object.keys(data).forEach(key => {
                 if (DATA_KEYS.includes(key)) {
-                    if (key === 'barName' || key === 'barCnpj' || key === 'barAddress') {
+                    if (['barName', 'barCnpj', 'barAddress', 'barLogo'].includes(key)) {
                       localStorage.setItem(key, data[key]);
                     } else {
                       localStorage.setItem(key, JSON.stringify(data[key]));
@@ -379,7 +413,6 @@ export default function SettingsClient() {
         description: "Todos os dados de vendas e financeiros foram removidos.",
         variant: "default"
     });
-    // We don't need a full page reload, components should update via 'storage' event listener
   };
 
 
@@ -389,18 +422,6 @@ export default function SettingsClient() {
           <Card>
             <CardHeader><CardTitle>Dados do Estabelecimento</CardTitle></CardHeader>
             <CardContent><div className="h-24 w-full bg-muted rounded-md animate-pulse"></div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>Taxas de Transação</CardTitle></CardHeader>
-            <CardContent><div className="h-24 w-full bg-muted rounded-md animate-pulse"></div></CardContent>
-          </Card>
-           <Card>
-            <CardHeader><CardTitle>Gerenciamento de Dados</CardTitle></CardHeader>
-            <CardContent><div className="h-10 w-1/3 bg-muted rounded-md animate-pulse"></div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>Gerenciar Categorias de Produtos</CardTitle></CardHeader>
-            <CardContent><div className="h-48 w-full bg-muted rounded-md animate-pulse"></div></CardContent>
           </Card>
       </div>
     );
@@ -413,10 +434,50 @@ export default function SettingsClient() {
         <Card>
           <form onSubmit={handleSaveCompanyDetails}>
             <CardHeader>
-              <CardTitle>Dados do Estabelecimento</CardTitle>
-              <CardDescription>Insira os dados da sua empresa que aparecerão nos recibos.</CardDescription>
+              <CardTitle>Identidade do Estabelecimento</CardTitle>
+              <CardDescription>Defina sua marca e os dados que aparecerão nos recibos e no celular dos clientes.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <Label>Logotipo do Bar</Label>
+                <div className="flex items-center gap-6">
+                    <div className="relative h-32 w-32 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden">
+                        {barLogo ? (
+                            <>
+                                <img src={barLogo} alt="Logo" className="h-full w-full object-contain" />
+                                <Button 
+                                    type="button" 
+                                    variant="destructive" 
+                                    size="icon" 
+                                    className="absolute top-1 right-1 h-6 w-6 rounded-full"
+                                    onClick={() => setBarLogo('')}
+                                >
+                                    <X className="h-3 w-3" />
+                                </Button>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                <ImagePlus className="h-8 w-8" />
+                                <span className="text-[10px] uppercase font-bold text-center px-2">Subir Logo</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        <input
+                            type="file"
+                            ref={logoInputRef}
+                            onChange={handleLogoUpload}
+                            accept="image/*"
+                            className="hidden"
+                        />
+                        <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()}>
+                            Escolher Imagem
+                        </Button>
+                        <p className="text-xs text-muted-foreground">Formato PNG ou JPG. Recomendado: Fundo transparente.</p>
+                    </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="barName">Nome do Estabelecimento</Label>
@@ -448,7 +509,7 @@ export default function SettingsClient() {
               </div>
               <Button type="submit">
                 <Save className="mr-2 h-4 w-4" />
-                Salvar Dados
+                Salvar Marca e Dados
               </Button>
             </CardContent>
           </form>
@@ -458,7 +519,7 @@ export default function SettingsClient() {
           <form onSubmit={handleSaveTransactionFees}>
             <CardHeader>
                 <CardTitle>Taxas de Transação</CardTitle>
-                <CardDescription>Defina as taxas percentuais para transações de débito, crédito e PIX. O sistema descontará esses valores das entradas na conta bancária.</CardDescription>
+                <CardDescription>Defina as taxas percentuais para transações de débito, crédito e PIX.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -507,9 +568,7 @@ export default function SettingsClient() {
         <Card>
             <CardHeader>
                 <CardTitle>Gerenciamento de Dados</CardTitle>
-                <CardDescription>
-                Exporte todos os dados do seu aplicativo para um arquivo de backup ou importe um backup para restaurar seus dados.
-                </CardDescription>
+                <CardDescription>Exportar ou importar backup completo.</CardDescription>
             </CardHeader>
             <CardContent className="flex gap-4">
                 <Button onClick={handleExportData}>
@@ -534,7 +593,7 @@ export default function SettingsClient() {
             <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Gerenciar Categorias de Produtos</CardTitle>
-                  <CardDescription>Renomeie, remova ou adicione novas categorias de produtos.</CardDescription>
+                  <CardDescription>Organize seus produtos.</CardDescription>
                 </div>
                 <Button onClick={() => setIsAddCategoryDialogOpen(true)}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Categoria
@@ -546,8 +605,7 @@ export default function SettingsClient() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Ícone</TableHead>
-                  <TableHead>Nome Atual da Categoria</TableHead>
-                  <TableHead>ID (interno)</TableHead>
+                  <TableHead>Nome</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -558,7 +616,6 @@ export default function SettingsClient() {
                     <TableRow key={category.id}>
                       <TableCell>{IconComponent && <IconComponent className="h-5 w-5 text-muted-foreground" />}</TableCell>
                       <TableCell className="font-medium">{category.name}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{category.id}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>
                           <Edit3 className="mr-2 h-4 w-4" /> Renomear
@@ -578,9 +635,7 @@ export default function SettingsClient() {
          <Card className="border-destructive">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-destructive"><AlertTriangle /> Zona de Perigo</CardTitle>
-                <CardDescription>
-                Ações nesta seção são permanentes e não podem ser desfeitas. Tenha cuidado.
-                </CardDescription>
+                <CardDescription>Ações permanentes.</CardDescription>
             </CardHeader>
             <CardContent className="flex gap-4">
                 <Button variant="destructive" onClick={() => setClearFinancialsAlertOpen(true)}>
@@ -590,91 +645,11 @@ export default function SettingsClient() {
         </Card>
       </div>
 
-      {editingCategory && (
-        <EditCategoryDialog
-          isOpen={isEditCategoryDialogOpen}
-          onOpenChange={setIsEditCategoryDialogOpen}
-          category={editingCategory}
-          onSave={handleSaveCategory}
-        />
-      )}
-
-      <AddCategoryDialog 
-        isOpen={isAddCategoryDialogOpen}
-        onOpenChange={setIsAddCategoryDialogOpen}
-        onSave={handleAddNewCategory}
-      />
-
-       <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Atenção: Importar Backup</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Esta ação irá **substituir todos os dados atuais** (produtos, vendas, caixa, etc.) pelos dados do arquivo de backup. 
-                        Esta operação não pode ser desfeita. Exporte um backup dos seus dados atuais antes de continuar.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction
-                        onClick={() => {
-                            setImportAlertOpen(false);
-                            fileInputRef.current?.click();
-                        }}
-                        className="bg-destructive hover:bg-destructive/90"
-                    >
-                        Entendi, continuar com a importação
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-
-        <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Confirmar Ação Irreversível</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Tem certeza que deseja zerar **todo o histórico financeiro**? Isso inclui todas as vendas, despesas, entradas, saídas e o estado dos caixas. 
-                        Seus produtos, clientes e comandas abertas **não** serão afetados.
-                        <br/><br/>
-                        <strong>Esta ação não pode ser desfeita.</strong>
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction
-                        onClick={handleClearFinancialHistory}
-                        className="bg-destructive hover:bg-destructive/90"
-                    >
-                        Sim, zerar o histórico financeiro
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-
-      {categoryToDelete && (
-        <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar Remoção de Categoria</AlertDialogTitle>
-              <AlertDialogDescription>
-                Tem certeza que deseja remover la categoria "{categoryToDelete.name}"? 
-                Produtos que utilizam esta categoria podem precisar ser reatribuídos manualmente a uma nova categoria.
-                Esta ação não pode ser desfeita.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setCategoryToDelete(null)}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteCategory}
-                className="bg-destructive hover:bg-destructive/90"
-              >
-                Remover Categoria
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      {editingCategory && <EditCategoryDialog isOpen={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen} category={editingCategory} onSave={handleSaveCategory} />}
+      <AddCategoryDialog isOpen={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen} onSave={handleAddNewCategory} />
+      <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Importar Backup?</AlertDialogTitle><AlertDialogDescription>Substituirá tudo. Recomenda-se exportar antes.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">Continuar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Zerar Histórico?</AlertDialogTitle><AlertDialogDescription>Vendas e caixa serão apagados. Produtos e clientes permanecem.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">Zerar Agora</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      {categoryToDelete && <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Remover Categoria?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">Remover</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>}
     </>
   );
 }

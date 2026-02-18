@@ -17,7 +17,8 @@ export const DATA_KEYS = [
     'barmate_guestSession_v2',
     'barName',
     'barCnpj',
-    'barAddress'
+    'barAddress',
+    'barLogo'
 ];
 export const KEY_PRODUCT_CATEGORIES = 'barmate_productCategories_v2';
 export const KEY_PRODUCTS = 'barmate_products_v2';
