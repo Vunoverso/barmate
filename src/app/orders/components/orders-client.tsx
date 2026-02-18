@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy, MoreHorizontal, Plus } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -104,7 +104,6 @@ export default function OrdersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
 
-  // Função para limpar dados antes de enviar ao Firestore (evita erro de 'undefined')
   const prepareForFirestore = (data: any) => {
     return JSON.parse(JSON.stringify(data, (key, value) => {
         return value === undefined ? null : value;
@@ -132,7 +131,6 @@ export default function OrdersClient() {
     }
   };
 
-  // Efeito para sincronizar TODAS as comandas locais com a nuvem ao carregar
   useEffect(() => {
     const syncAllOrders = async () => {
         const localOrders = getOpenOrders();
@@ -144,7 +142,6 @@ export default function OrdersClient() {
                     batch.set(orderRef, prepareForFirestore(order), { merge: true });
                 });
                 await batch.commit();
-                console.log("Todas as comandas sincronizadas com a nuvem.");
             } catch (error) {
                 console.error("Erro ao sincronizar comandas em lote:", error);
             }
@@ -956,16 +953,7 @@ export default function OrdersClient() {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
-                                    <DropdownMenuLabel>Ações da Comanda</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => { handleSelectOrder(order.id); handleEditOrder(); }}>
-                                        <Edit className="mr-2 h-4 w-4" /> Editar Nome
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => { handleSelectOrder(order.id); setIsMergeDialogOpen(true); }} disabled={openOrders.length < 2}>
-                                        <Merge className="mr-2 h-4 w-4" /> Juntar Comandas
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => { handleSelectOrder(order.id); handlePrintOrder(); }}>
-                                        <Printer className="mr-2 h-4 w-4" /> Imprimir Extrato
-                                    </DropdownMenuItem>
+                                    <DropdownMenuLabel>Ações Rápidas</DropdownMenuLabel>
                                     <DropdownMenuItem className="text-destructive" onClick={() => confirmDeleteOrder(order)}>
                                         <Trash2 className="mr-2 h-4 w-4" /> Cancelar Comanda
                                     </DropdownMenuItem>
@@ -1049,18 +1037,47 @@ export default function OrdersClient() {
             <CardHeader>
               <div className="flex justify-between items-start">
                   <div className="flex-grow min-w-0">
-                    <CardTitle className="flex items-center gap-2 truncate">
+                    <CardTitle className="flex items-center gap-2">
                       <ShoppingCart className="h-6 w-6 text-primary shrink-0" />
                       <span className="truncate">{currentOrder ? currentOrder.name : "Comanda"}</span>
                       {currentOrder && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleShareOrder}>
-                              <LinkIcon className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p>Compartilhar Comanda</p></TooltipContent>
-                        </Tooltip>
+                        <div className="flex items-center gap-0.5 ml-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleShareOrder}>
+                                <LinkIcon className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Compartilhar</p></TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleEditOrder}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Editar Nome</p></TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={() => setIsMergeDialogOpen(true)} disabled={openOrders.length < 2}>
+                                <Merge className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Juntar Comandas</p></TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handlePrintOrder}>
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Imprimir Extrato</p></TooltipContent>
+                          </Tooltip>
+                        </div>
                       )}
                     </CardTitle>
                     <div className="text-sm text-muted-foreground pt-1 flex items-center gap-2">
