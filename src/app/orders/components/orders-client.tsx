@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client } from '@/types';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client, GuestRequest } from '@/types';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients, getArchivedOrders, saveArchivedOrders } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy, MoreHorizontal, Plus } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy, MoreHorizontal, Plus, Users, UserCheck, X } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -52,7 +52,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OrderStatement } from './order-statement';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { doc, setDoc, deleteDoc, writeBatch, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
 
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   if (!categories.length) return {};
@@ -82,6 +82,7 @@ export default function OrdersClient() {
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [guestRequests, setGuestRequests] = useState<GuestRequest[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -97,6 +98,7 @@ export default function OrdersClient() {
   const [isAssociateClientDialogOpen, setIsAssociateClientDialogOpen] = useState(false);
   const [orderToPrint, setOrderToPrint] = useState<ActiveOrder | null>(null);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
+  const [requestToLink, setRequestToLink] = useState<GuestRequest | null>(null);
   const statementRef = useRef<HTMLDivElement>(null);
 
 
@@ -130,6 +132,22 @@ export default function OrdersClient() {
         console.error("Firestore delete error", error);
     }
   };
+
+  useEffect(() => {
+    if (!db) return;
+
+    // Escutar solicitações de hóspedes pendentes
+    const q = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const requests = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as GuestRequest));
+        setGuestRequests(requests);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const syncAllOrders = async () => {
@@ -250,6 +268,7 @@ export default function OrdersClient() {
     syncOrderToFirestore(newOrder);
     setCurrentOrderId(newOrderId); 
     toast({ title: "Nova Comanda Criada", description: `${newOrder.name} pronta para itens.`});
+    return newOrderId;
   }, [toast]);
 
   const handleSelectOrder = useCallback((orderId: string) => {
@@ -603,7 +622,7 @@ export default function OrdersClient() {
     return { orderTotal: total, consumedTotal: consumed };
   }, [currentOrderItems]);
   
- const handlePayment = useCallback((details: { 
+  const handlePayment = useCallback((details: { 
     sale: Omit<Sale, 'id' | 'timestamp' | 'name'>, 
     leaveChangeAsCredit: boolean,
     isPartial: boolean
@@ -749,6 +768,34 @@ export default function OrdersClient() {
     } else {
         toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
     }
+  };
+
+  const handleLinkRequestToOrder = async (orderId: string) => {
+      if (!requestToLink || !db) return;
+
+      try {
+          await updateDoc(doc(db, 'guest_requests', requestToLink.id), {
+              status: 'approved',
+              associatedOrderId: orderId
+          });
+          setRequestToLink(null);
+          toast({ title: "Cliente Vinculado!", description: "O celular do cliente agora exibe a comanda em tempo real." });
+      } catch (error) {
+          console.error("Erro ao vincular:", error);
+          toast({ title: "Erro no Vínculo", variant: "destructive" });
+      }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+      if (!db) return;
+      try {
+          await updateDoc(doc(db, 'guest_requests', requestId), {
+              status: 'rejected'
+          });
+          toast({ title: "Solicitação Recusada" });
+      } catch (error) {
+          console.error("Erro ao recusar:", error);
+      }
   };
 
 
@@ -898,6 +945,31 @@ export default function OrdersClient() {
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">
+                {guestRequests.length > 0 && (
+                    <div className="mb-4 space-y-2">
+                        <p className="text-[10px] font-bold uppercase text-primary px-2 flex items-center gap-1">
+                            <Users className="h-3 w-3" /> Clientes aguardando vínculo
+                        </p>
+                        {guestRequests.map(req => (
+                            <div key={req.id} className="bg-primary/5 border border-primary/20 rounded-lg p-2 flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="text-xs font-bold truncate">{req.name}</p>
+                                    <p className="text-[10px] text-muted-foreground italic">Solicitou acesso</p>
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleRejectRequest(req.id)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="sm" className="h-7 px-2 text-[10px]" onClick={() => setRequestToLink(req)}>
+                                        Vincular
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                        <Separator className="!my-4" />
+                    </div>
+                )}
+
                 {filteredOpenOrders.length === 0 ? (
                   <p className="text-muted-foreground text-center py-10">Nenhuma comanda encontrada.</p>
                 ) : (
@@ -1291,8 +1363,76 @@ export default function OrdersClient() {
               </DialogFooter>
           </DialogContent>
       </Dialog>
+
+      {requestToLink && (
+          <LinkGuestRequestDialog
+            isOpen={!!requestToLink}
+            onOpenChange={() => setRequestToLink(null)}
+            request={requestToLink}
+            orders={openOrders}
+            onLink={handleLinkRequestToOrder}
+            onCreateAndLink={(details) => {
+                const newId = handleCreateNewOrder(details);
+                if (newId) handleLinkRequestToOrder(newId);
+            }}
+          />
+      )}
     </TooltipProvider>
   );
+}
+
+interface LinkGuestRequestDialogProps {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    request: GuestRequest;
+    orders: ActiveOrder[];
+    onLink: (orderId: string) => void;
+    onCreateAndLink: (details: { name: string; clientId: string | null; }) => void;
+}
+
+function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink, onCreateAndLink }: LinkGuestRequestDialogProps) {
+    const [selectedOrderId, setSelectedOrderId] = useState('');
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Vincular Cliente: {request.name}</DialogTitle>
+                    <DialogDescription>
+                        Escolha uma comanda existente ou crie uma nova para este cliente.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label>Vincular a Comanda Existente</Label>
+                        <Select onValueChange={setSelectedOrderId} value={selectedOrderId}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione uma comanda..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {orders.map(o => (
+                                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button className="w-full" disabled={!selectedOrderId} onClick={() => onLink(selectedOrderId)}>
+                            <UserCheck className="mr-2 h-4 w-4" /> Vincular a Selecionada
+                        </Button>
+                    </div>
+                    <Separator />
+                    <div className="space-y-2 text-center">
+                        <p className="text-sm font-medium">Ou comece do zero</p>
+                        <Button variant="outline" className="w-full" onClick={() => onCreateAndLink({ name: request.name, clientId: null })}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Abrir Nova Comanda com este Nome
+                        </Button>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }
 
 interface ProductDisplayProps {
@@ -1568,7 +1708,7 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
                             id="credit-description"
                             placeholder="Ex: Troca de produto, adiantamento"
                             value={description}
-                            onChange={e => description(e.target.value)}
+                            onChange={e => setDescription(e.target.value)}
                         />
                     </div>
                 </div>

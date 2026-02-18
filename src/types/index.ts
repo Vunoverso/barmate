@@ -1,5 +1,4 @@
 
-
 import type { LucideIcon } from 'lucide-react';
 
 export type ProductCategory = {
@@ -119,5 +118,5 @@ export interface GuestRequest {
   name: string;
   status: 'pending' | 'approved' | 'rejected';
   associatedOrderId?: string | null;
-  requestedAt: string;
+  requestedAt: any; // Firestore Timestamp
 }
