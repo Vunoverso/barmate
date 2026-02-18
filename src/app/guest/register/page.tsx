@@ -125,13 +125,13 @@ export default function GuestRegisterPage() {
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
             <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
-                <CardHeader className="text-center">
-                    <div className="mx-auto mb-4 overflow-hidden h-24 flex items-center justify-center">
+                <CardHeader className="text-center pb-2">
+                    <div className="mx-auto mb-6 flex items-center justify-center min-h-[140px] w-full">
                         {barInfo.logo ? (
                             <img 
                                 src={barInfo.logo} 
                                 alt="Logo" 
-                                className="h-full w-auto max-w-[240px] object-contain transition-transform duration-200" 
+                                className="h-32 w-auto max-w-full object-contain transition-transform duration-200" 
                                 style={{ transform: `scale(${barInfo.logoScale})` }}
                             />
                         ) : (
@@ -140,7 +140,7 @@ export default function GuestRegisterPage() {
                             </div>
                         )}
                     </div>
-                    <CardTitle className="text-2xl font-black italic tracking-tighter uppercase">{barInfo.name}</CardTitle>
+                    <CardTitle className="text-2xl font-black italic tracking-tighter uppercase mb-1">{barInfo.name}</CardTitle>
                     <CardDescription>Identifique-se para acessar seu consumo.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">

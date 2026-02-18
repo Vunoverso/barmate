@@ -424,7 +424,7 @@ export default function SettingsClient() {
               <div className="space-y-4">
                 <Label>Logotipo do Bar</Label>
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-                    <div className="relative h-32 w-32 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden">
+                    <div className="relative h-32 w-32 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/30">
                         {barLogo ? (
                             <>
                                 <img 
