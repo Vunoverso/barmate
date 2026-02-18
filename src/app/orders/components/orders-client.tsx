@@ -47,33 +47,7 @@ import { OrderStatement } from './order-statement';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, writeBatch, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
 
-const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
-  if (!categories.length) return {};
-  return products.reduce((acc, product) => {
-    const category = categories.find(c => c.id === product.categoryId);
-    const categoryName = category ? category.name : 'Outros';
-    if (!acc[categoryName]) {
-      acc[categoryName] = [];
-    }
-    acc[categoryName].push(product);
-    return acc;
-  }, {} as Record<string, Product[]>);
-};
-
-const updateOrderNameBasedOnTotal = (order: ActiveOrder): ActiveOrder => {
-    const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    if (total >= 0) {
-        const newName = order.name.replace(/ \((Com Crédito|Crédito de Troco)\)/, '');
-        return { ...order, name: newName };
-    }
-    return order;
-};
-
-const prepareForFirestore = (data: any) => {
-  return JSON.parse(JSON.stringify(data, (key, value) => {
-      return value === undefined ? null : value;
-  }));
-};
+// --- Sub-componentes auxiliares ---
 
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
@@ -213,24 +187,53 @@ function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink,
     const [sid, setSid] = useState('');
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader><DialogTitle>Vincular {request.name}</DialogTitle></DialogHeader>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Vincular {request?.name}</DialogTitle>
+                    <DialogDescription>Escolha uma comanda existente para este cliente ou abra uma nova.</DialogDescription>
+                </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <Label>Escolher Comanda Aberta</Label>
-                        <Select onValueChange={setSid} value={sid}>
-                            <SelectTrigger><SelectValue placeholder="Escolha uma comanda..." /></SelectTrigger>
-                            <SelectContent>{orders.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
-                        </Select>
+                        <ScrollArea className="h-[300px] border rounded-md p-2">
+                            <div className="space-y-1">
+                                {orders.length > 0 ? orders.map((o: any) => (
+                                    <Button
+                                        key={o.id}
+                                        variant={sid === o.id ? "secondary" : "ghost"}
+                                        className="w-full justify-start font-normal h-auto py-2"
+                                        onClick={() => setSid(o.id)}
+                                    >
+                                        <div className="flex flex-col items-start min-w-0">
+                                            <span className="font-bold truncate w-full text-left uppercase text-xs">{o.name}</span>
+                                            <span className="text-[10px] opacity-70">
+                                                {o.items.length} itens • {formatCurrency(o.items.reduce((acc: number, i: any) => acc + i.price * i.quantity, 0))}
+                                            </span>
+                                        </div>
+                                    </Button>
+                                )) : (
+                                    <p className="text-center text-muted-foreground py-10 text-xs">Nenhuma comanda aberta.</p>
+                                )}
+                            </div>
+                        </ScrollArea>
                     </div>
-                    <Button className="w-full" disabled={!sid} onClick={() => onLink(sid)}>Vincular à Selecionada</Button>
-                    <Separator />
-                    <Button variant="outline" className="w-full" onClick={() => onCreateAndLink({ name: request.name, clientId: null })}>Abrir Nova Comanda para o Cliente</Button>
+                    <Button className="w-full h-12 font-bold" disabled={!sid} onClick={() => onLink(sid)}>
+                        <UserCheck className="mr-2 h-5 w-5" /> Vincular à Comanda Selecionada
+                    </Button>
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground font-bold">Ou</span></div>
+                    </div>
+                    <Button variant="outline" className="w-full" onClick={() => onCreateAndLink({ name: request?.name, clientId: null })}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Abrir Nova Comanda para o Cliente
+                    </Button>
                 </div>
             </DialogContent>
         </Dialog>
     );
 }
+
+// --- Componente Principal ---
 
 export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -258,6 +261,12 @@ export default function OrdersClient() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
+
+  const prepareForFirestore = (data: any) => {
+    return JSON.parse(JSON.stringify(data, (key, value) => {
+        return value === undefined ? null : value;
+    }));
+  };
 
   const syncOrderToFirestore = async (order: ActiveOrder) => {
     try {
@@ -364,7 +373,19 @@ export default function OrdersClient() {
     return products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
   }, [products, productSearchTerm]);
   
-  const productsByCategoryDisplay = useMemo(() => groupProductsByCategoryId(filteredProducts, productCategories), [filteredProducts, productCategories]);
+  const productsByCategoryDisplay = useMemo(() => {
+    if (!productCategories.length) return {};
+    return filteredProducts.reduce((acc, product) => {
+      const category = productCategories.find(c => c.id === product.categoryId);
+      const categoryName = category ? category.name : 'Outros';
+      if (!acc[categoryName]) {
+        acc[categoryName] = [];
+      }
+      acc[categoryName].push(product);
+      return acc;
+    }, {} as Record<string, Product[]>);
+  }, [filteredProducts, productCategories]);
+
   const displayCategories = useMemo(() => {
       if (!productCategories.length) return [];
       return Object.keys(productsByCategoryDisplay).sort();
@@ -557,11 +578,13 @@ export default function OrdersClient() {
     }
     let updatedOrder: ActiveOrder = { ...orderToUpdate, items: updatedItems };
     const currentTotal = updatedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    
+    // Reset status if item added to a paid order
     if (updatedOrder.status === 'paid' && currentTotal > 0) {
       const { status, ...orderWithoutStatus } = updatedOrder;
       updatedOrder = orderWithoutStatus as ActiveOrder;
     }
-    updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
+    
     saveOpenOrders(allOrders.map(order => (order.id === currentOrderId ? updatedOrder : order)));
     syncOrderToFirestore(updatedOrder);
   }, [currentOrderId]);
@@ -574,7 +597,6 @@ export default function OrdersClient() {
         if (order.id === currentOrderId) {
             let updatedItems = quantity <= 0 ? order.items.filter(item => item.lineItemId !== lineItemId) : order.items.map(item => item.lineItemId === lineItemId ? { ...item, quantity } : item);
             updatedOrder = { ...order, items: updatedItems };
-            updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
             return updatedOrder;
         }
         return order;
@@ -590,7 +612,6 @@ export default function OrdersClient() {
     const updatedOrders = allOrders.map(order => {
         if (order.id === currentOrderId) {
             updatedOrder = { ...order, items: order.items.filter(item => item.lineItemId !== lineItemId) };
-            updatedOrder = updateOrderNameBasedOnTotal(updatedOrder);
             return updatedOrder;
         }
         return order;
@@ -770,19 +791,50 @@ export default function OrdersClient() {
           <Card className="flex-grow flex flex-col">
             <CardHeader className="pb-3 border-b bg-muted/10">
               {currentOrder && (
-                <div className="space-y-3">
-                  <h2 className="text-2xl font-black text-foreground truncate uppercase">{currentOrder.name}</h2>
+                <div className="space-y-2">
+                  {/* NOME NO TOPO EM DESTAQUE */}
+                  <h2 className="text-2xl font-black text-foreground truncate uppercase leading-tight">
+                    {currentOrder.name}
+                  </h2>
+                  
+                  {/* ÍCONES E TOTAL NA MESMA LINHA */}
                   <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-1">
-                        <LinkIcon className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handleShareOrder} title="Compartilhar" />
-                        <Edit className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handleEditOrder} title="Editar Nome" />
-                        <Merge className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={() => setIsMergeDialogOpen(true)} title="Juntar Comandas" />
-                        <Printer className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handlePrintOrder} title="Imprimir" />
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <LinkIcon className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handleShareOrder} />
+                            </TooltipTrigger>
+                            <TooltipContent><p>Compartilhar</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Edit className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handleEditOrder} />
+                            </TooltipTrigger>
+                            <TooltipContent><p>Editar Nome</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Merge className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={() => setIsMergeDialogOpen(true)} />
+                            </TooltipTrigger>
+                            <TooltipContent><p>Juntar Comandas</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Printer className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handlePrintOrder} />
+                            </TooltipTrigger>
+                            <TooltipContent><p>Imprimir</p></TooltipContent>
+                        </Tooltip>
                       </div>
-                      <div className="text-xl font-bold text-primary">{formatCurrency(orderTotal)}</div>
+                      <div className="text-2xl font-black text-primary">
+                        {formatCurrency(orderTotal)}
+                      </div>
                   </div>
-                  <div className="text-[10px] text-muted-foreground flex gap-2">
-                    <span>{currentOrderItems.length} itens</span><span>•</span><span>{format(new Date(currentOrder.createdAt), "HH:mm", { locale: ptBR })}</span>
+                  
+                  {/* INFO EXTRA */}
+                  <div className="text-[10px] text-muted-foreground flex gap-2 font-bold uppercase tracking-wider">
+                    <span>{currentOrder.items.length} itens</span>
+                    <span>•</span>
+                    <span>Abertura: {format(new Date(currentOrder.createdAt), "HH:mm", { locale: ptBR })}</span>
                   </div>
                 </div>
               )}
@@ -806,7 +858,7 @@ export default function OrdersClient() {
               </ScrollArea>
             </CardContent>
             <CardFooter className="flex flex-col gap-2 p-3 border-t">
-               <Button size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold" disabled={orderTotal === 0 || !currentOrderId} onClick={() => setIsPaymentDialogOpen(true)}>PAGAR {formatCurrency(orderTotal)}</Button>
+               <Button size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold h-12" disabled={orderTotal === 0 || !currentOrderId} onClick={() => setIsPaymentDialogOpen(true)}>PAGAR {formatCurrency(orderTotal)}</Button>
                <div className="grid grid-cols-2 gap-2 w-full">
                 <Button variant="outline" size="sm" disabled={!currentOrder?.clientId || orderTotal <= 0} onClick={() => currentOrder && confirmArchiveOrder(currentOrder)}>Arquivar</Button>
                 <Button variant="destructive" size="sm" disabled={!currentOrderId} onClick={() => currentOrder && confirmDeleteOrder(currentOrder)}>Cancelar</Button>
