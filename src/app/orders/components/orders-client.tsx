@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, PlusSquare, FileText, XCircle, Package, Edit, Merge, Wallet, Archive, UserPlus, Printer, Link as LinkIcon, Copy, MoreHorizontal, Plus, Users, UserCheck, X } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package, Edit, Merge, Wallet, Printer, Link as LinkIcon, Copy, Plus, Users, UserCheck, X } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -781,7 +781,7 @@ export default function OrdersClient() {
                     <TabsContent value="Todos" className="mt-0"><ProductDisplay products={filteredProducts} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} /></TabsContent>
                     {displayCategories.map(c => <TabsContent key={c} value={c} className="mt-0"><ProductDisplay products={productsByCategoryDisplay[c] || []} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} /></TabsContent>)}
                   </>
-                ) : <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50"><FileText className="h-16 w-16 mb-2" /><p>Selecione uma comanda</p></div>}
+                ) : <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50"><ShoppingCart className="h-16 w-16 mb-2" /><p>Selecione uma comanda</p></div>}
               </ScrollArea>
             </Tabs>
           </Card>
