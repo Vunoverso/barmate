@@ -1034,79 +1034,84 @@ export default function OrdersClient() {
 
         <div className="md:col-span-4 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                  <div className="flex-grow min-w-0">
-                    <CardTitle className="flex items-center gap-2">
-                      <ShoppingCart className="h-6 w-6 text-primary shrink-0" />
-                      <span className="truncate">{currentOrder ? currentOrder.name : "Comanda"}</span>
-                      {currentOrder && (
-                        <div className="flex items-center gap-0.5 ml-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleShareOrder}>
-                                <LinkIcon className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Compartilhar</p></TooltipContent>
-                          </Tooltip>
-                          
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleEditOrder}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Editar Nome</p></TooltipContent>
-                          </Tooltip>
+            <CardHeader className="pb-3">
+              {currentOrder && (
+                <div className="mb-1">
+                  <h2 className="text-lg font-bold text-foreground truncate uppercase tracking-tight">
+                    {currentOrder.name}
+                  </h2>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1">
+                    <ShoppingCart className="h-5 w-5 text-primary shrink-0 mr-1" />
+                    {currentOrder && (
+                      <div className="flex items-center gap-0.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleShareOrder}>
+                              <LinkIcon className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Compartilhar</p></TooltipContent>
+                        </Tooltip>
+                        
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handleEditOrder}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Editar Nome</p></TooltipContent>
+                        </Tooltip>
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={() => setIsMergeDialogOpen(true)} disabled={openOrders.length < 2}>
-                                <Merge className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Juntar Comandas</p></TooltipContent>
-                          </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={() => setIsMergeDialogOpen(true)} disabled={openOrders.length < 2}>
+                              <Merge className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Juntar Comandas</p></TooltipContent>
+                        </Tooltip>
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handlePrintOrder}>
-                                <Printer className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Imprimir Extrato</p></TooltipContent>
-                          </Tooltip>
-                        </div>
-                      )}
-                    </CardTitle>
-                    <div className="text-sm text-muted-foreground pt-1 flex items-center gap-2">
-                       {currentOrder ? (
-                        <>
-                          <span>{currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'}</span>
-                          <span className="text-xs">&bull;</span>
-                          <span>{format(new Date(currentOrder.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
-                        </>
-                       ) : ( <span>Nenhum item na comanda.</span> )}
-                    </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-primary" onClick={handlePrintOrder}>
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Imprimir Extrato</p></TooltipContent>
+                        </Tooltip>
+                      </div>
+                    )}
                   </div>
-                   <div className="flex flex-col items-end shrink-0 ml-2">
+                   <div className="flex flex-col items-end">
                         {currentOrder && orderTotal < 0 ? (
                           <div className="text-right">
                            <Badge variant="secondary" className="bg-amber-400 dark:bg-amber-600 text-black dark:text-white text-base">Em Crédito: {formatCurrency(Math.abs(orderTotal))}</Badge>
-                           <p className="text-xs text-muted-foreground mt-1">Consumo: {formatCurrency(consumedTotal)}</p>
                           </div>
                         ) : (
                           currentOrder && <span className="text-primary font-bold text-xl">{formatCurrency(orderTotal)}</span>
                         )}
-                        {currentOrder?.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 mt-1">PAGA</Badge>}
-                        {currentOrder && !currentOrder.clientId && (
-                            <Button variant="outline" size="sm" className="mt-2" onClick={() => setIsAssociateClientDialogOpen(true)}>
-                                <UserPlus className="mr-2 h-4 w-4" />
-                                Associar Cliente
-                            </Button>
-                        )}
                     </div>
+              </div>
+              <div className="text-[10px] text-muted-foreground pt-1 flex items-center gap-2">
+                 {currentOrder ? (
+                  <>
+                    <span>{currentOrderItems.length} {currentOrderItems.length === 1 ? 'item' : 'itens'}</span>
+                    <span className="text-[10px] opacity-50">&bull;</span>
+                    <span>{format(new Date(currentOrder.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
+                  </>
+                 ) : ( <span>Nenhum item na comanda.</span> )}
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                {currentOrder?.status === 'paid' && <Badge variant="default" className="bg-green-600 hover:bg-green-700 h-6">PAGA</Badge>}
+                {currentOrder && !currentOrder.clientId && (
+                    <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => setIsAssociateClientDialogOpen(true)}>
+                        <UserPlus className="mr-1 h-3 w-3" />
+                        Associar Cliente
+                    </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
@@ -1563,7 +1568,7 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: AddCreditDialogProps)
                             id="credit-description"
                             placeholder="Ex: Troca de produto, adiantamento"
                             value={description}
-                            onChange={e => setDescription(e.target.value)}
+                            onChange={e => description(e.target.value)}
                         />
                     </div>
                 </div>
