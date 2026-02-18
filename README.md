@@ -39,15 +39,15 @@ Após a instalação ser concluída, inicie o servidor local com o comando:
 npm run dev
 ```
 
-Este comando iniciará a aplicação em modo de desenvolvimento.
+Este comando iniciará a aplicação em modo de desenvolvimento na porta 9000.
 
 ### Passo 3: Acessar o Aplicativo
 
-O terminal mostrará uma mensagem indicando que o servidor está rodando, geralmente em `http://localhost:9002`.
+O terminal mostrará uma mensagem indicando que o servidor está rodando, geralmente em `http://localhost:9000`.
 
 Abra seu navegador de preferência e acesse:
 
-[**http://localhost:9002**](http://localhost:9002)
+[**http://localhost:9000**](http://localhost:9000)
 
 Pronto! Agora o sistema está rodando localmente na sua máquina e todas as suas interações serão salvas no seu navegador.
 
@@ -64,4 +64,4 @@ Ao adicionar novas páginas (como a de "Verificar Saídas"), o Next.js pode, às
 ```bash
 npm run dev:clean
 ```
-3.  Acesse `http://localhost:9002` novamente. A nova página agora deve estar acessível.
+3.  Acesse `http://localhost:9000` novamente. A nova página agora deve estar acessível.
