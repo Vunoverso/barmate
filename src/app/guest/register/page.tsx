@@ -21,7 +21,6 @@ export default function GuestRegisterPage() {
     const { toast } = useToast();
 
     useEffect(() => {
-        // Recuperar ID da solicitação se já existir no dispositivo
         const savedId = localStorage.getItem('barmate_guest_request_id');
         if (savedId) {
             setRequestId(savedId);
@@ -137,7 +136,7 @@ export default function GuestRegisterPage() {
                         </Button>
                     </form>
                 </CardContent>
-                <CardFooter className="justify-center">
+                <CardFooter className="justify-center border-t pt-4">
                     <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50">Sua comanda aparecerá automaticamente aqui.</p>
                 </CardFooter>
             </Card>
