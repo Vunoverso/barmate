@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, UserCircle2, Clock } from 'lucide-react';
+import { Loader2, UserCircle2, Clock, PlusCircle, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function GuestRegisterPage() {
@@ -50,15 +50,18 @@ export default function GuestRegisterPage() {
         return () => unsubscribe();
     }, [requestId, router, toast]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!name.trim() || !db) return;
+    const handleSendRequest = async (intent: 'create' | 'view') => {
+        if (!name.trim() || !db) {
+            toast({ title: "Atenção", description: "Por favor, digite seu Nome e Sobrenome.", variant: "destructive" });
+            return;
+        }
 
         setIsSubmitting(true);
         try {
             const docRef = await addDoc(collection(db, 'guest_requests'), {
                 name: name.trim(),
                 status: 'pending',
+                intent: intent, // 'create' or 'view'
                 requestedAt: serverTimestamp(),
             });
             localStorage.setItem('barmate_guest_request_id', docRef.id);
@@ -110,34 +113,48 @@ export default function GuestRegisterPage() {
                     </div>
                     <CardTitle className="text-2xl font-black italic tracking-tighter">BarMate</CardTitle>
                     <CardDescription>
-                        Bem-vindo! Digite seu nome ou o número da sua mesa para ver sua comanda.
+                        Bem-vindo! Identifique-se para acessar seu consumo.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="guestName">Como podemos te chamar?</Label>
-                            <Input
-                                id="guestName"
-                                placeholder="Ex: João - Mesa 5"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                className="h-12 text-lg"
-                                required
-                                autoFocus
-                            />
-                        </div>
+                <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="guestName">Seu Nome e Sobrenome</Label>
+                        <Input
+                            id="guestName"
+                            placeholder="Ex: João Silva"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="h-12 text-lg"
+                            required
+                            autoFocus
+                        />
+                    </div>
+                    
+                    <div className="flex flex-col gap-3">
                         <Button 
-                            type="submit" 
-                            className="w-full h-12 text-lg font-bold" 
+                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center gap-0" 
                             disabled={isSubmitting || !name.trim()}
+                            onClick={() => handleSendRequest('create')}
                         >
-                            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Entrar na Comanda"}
+                            <span className="flex items-center gap-2"><PlusCircle className="h-5 w-5" /> Solicitar Criação de Comanda</span>
+                            <span className="text-[10px] opacity-70 font-normal">Vou começar a consumir agora</span>
                         </Button>
-                    </form>
+
+                        <Button 
+                            variant="secondary"
+                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center gap-0" 
+                            disabled={isSubmitting || !name.trim()}
+                            onClick={() => handleSendRequest('view')}
+                        >
+                            <span className="flex items-center gap-2"><Search className="h-5 w-5" /> Ver Comanda Aberta</span>
+                            <span className="text-[10px] opacity-70 font-normal">Já tenho uma conta ativa</span>
+                        </Button>
+                    </div>
                 </CardContent>
                 <CardFooter className="justify-center border-t pt-4">
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50">Sua comanda aparecerá automaticamente aqui.</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50 text-center">
+                        {isSubmitting ? "Enviando para o balcão..." : "Sua comanda aparecerá automaticamente após o vínculo."}
+                    </p>
                 </CardFooter>
             </Card>
         </div>

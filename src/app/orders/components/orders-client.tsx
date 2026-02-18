@@ -118,7 +118,20 @@ function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, on
 function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: any) {
     const [n, setN] = useState('');
     useEffect(() => { if (order) setN(order.name); }, [order]);
-    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Editar Nome</DialogTitle></DialogHeader><Input value={n} onChange={e => setN(e.target.value)} /><DialogFooter><Button onClick={() => {onSave(order.id, n); onOpenChange(false);}}>Salvar</Button></DialogFooter></DialogContent></Dialog>);
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader><DialogTitle>Editar Nome</DialogTitle></DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label>Nome da Comanda</Label>
+                    <Input value={n} onChange={e => setN(e.target.value)} autoFocus />
+                </div>
+                <DialogFooter>
+                    <Button onClick={() => {onSave(order.id, n); onOpenChange(false);}}>Salvar Alterações</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }
 
 function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMerge }: any) {
@@ -128,20 +141,23 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader><DialogTitle>Juntar Comandas</DialogTitle></DialogHeader>
-                <ScrollArea className="h-48">
-                    {other.map((o: any) => (
-                        <div key={o.id} className="flex items-center gap-2 p-2">
-                            <Checkbox 
-                                id={o.id} 
-                                checked={!!sel[o.id]} 
-                                onCheckedChange={(checked) => setSel(prev => ({...prev, [o.id]: !!checked}))} 
-                            /> 
-                            <Label htmlFor={o.id} className="cursor-pointer">{o.name}</Label>
-                        </div>
-                    ))}
-                </ScrollArea>
+                <div className="py-2">
+                    <Label className="text-xs text-muted-foreground mb-2 block">Selecione as comandas que serão movidas para "{currentOrder?.name}"</Label>
+                    <ScrollArea className="h-48 border rounded-md p-2">
+                        {other.length > 0 ? other.map((o: any) => (
+                            <div key={o.id} className="flex items-center gap-2 p-2 hover:bg-muted/50 rounded-md">
+                                <Checkbox 
+                                    id={o.id} 
+                                    checked={!!sel[o.id]} 
+                                    onCheckedChange={(checked) => setSel(prev => ({...prev, [o.id]: !!checked}))} 
+                                /> 
+                                <Label htmlFor={o.id} className="cursor-pointer flex-grow">{o.name}</Label>
+                            </div>
+                        )) : <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma outra comanda aberta.</p>}
+                    </ScrollArea>
+                </div>
                 <DialogFooter>
-                    <Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))}>Juntar</Button>
+                    <Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))} disabled={!Object.values(sel).some(v => v)}>Juntar Comandas Selecionadas</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -190,12 +206,16 @@ function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink,
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Vincular {request?.name}</DialogTitle>
-                    <DialogDescription>Escolha uma comanda existente para este cliente ou abra uma nova.</DialogDescription>
+                    <DialogDescription>
+                        {request?.intent === 'create' 
+                            ? "O cliente solicitou a abertura de uma NOVA comanda." 
+                            : "O cliente já tem uma comanda e quer visualizá-la."}
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <Label>Escolher Comanda Aberta</Label>
-                        <ScrollArea className="h-[300px] border rounded-md p-2">
+                        <ScrollArea className="h-[250px] border rounded-md p-2">
                             <div className="space-y-1">
                                 {orders.length > 0 ? orders.map((o: any) => (
                                     <Button
@@ -212,7 +232,7 @@ function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink,
                                         </div>
                                     </Button>
                                 )) : (
-                                    <p className="text-center text-muted-foreground py-10 text-xs">Nenhuma comanda aberta.</p>
+                                    <p className="text-center text-muted-foreground py-10 text-xs italic">Nenhuma comanda aberta.</p>
                                 )}
                             </div>
                         </ScrollArea>
@@ -224,7 +244,7 @@ function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink,
                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
                         <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground font-bold">Ou</span></div>
                     </div>
-                    <Button variant="outline" className="w-full" onClick={() => onCreateAndLink({ name: request?.name, clientId: null })}>
+                    <Button variant="outline" className="w-full h-12" onClick={() => onCreateAndLink({ name: request?.name, clientId: null })}>
                         <PlusCircle className="mr-2 h-4 w-4" /> Abrir Nova Comanda para o Cliente
                     </Button>
                 </div>
@@ -731,11 +751,18 @@ export default function OrdersClient() {
                     <div className="mb-4 space-y-2">
                         <p className="text-[10px] font-bold uppercase text-primary px-2 flex items-center gap-1"><Users className="h-3 w-3" /> Aguardando vínculo</p>
                         {guestRequests.map(req => (
-                            <div key={req.id} className="bg-primary/5 border border-primary/20 rounded-lg p-2 flex items-center justify-between gap-2">
-                                <div className="min-w-0"><p className="text-xs font-bold truncate">{req.name}</p></div>
-                                <div className="flex gap-1 shrink-0">
-                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleRejectRequest(req.id)}><X className="h-4 w-4" /></Button>
-                                    <Button size="sm" className="h-7 px-2 text-[10px]" onClick={() => setRequestToLink(req)}>Vincular</Button>
+                            <div key={req.id} className="bg-primary/5 border border-primary/20 rounded-lg p-2 flex flex-col gap-2">
+                                <div className="flex items-center justify-between gap-2 min-w-0">
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold truncate">{req.name}</p>
+                                        <p className="text-[9px] text-primary/70 uppercase font-black">
+                                            {req.intent === 'create' ? 'Solicitou Nova Comanda' : 'Já tem comanda'}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-1 shrink-0">
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleRejectRequest(req.id)}><X className="h-4 w-4" /></Button>
+                                        <Button size="sm" className="h-7 px-2 text-[10px]" onClick={() => setRequestToLink(req)}>Vincular</Button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -792,12 +819,9 @@ export default function OrdersClient() {
             <CardHeader className="pb-3 border-b bg-muted/10">
               {currentOrder && (
                 <div className="space-y-2">
-                  {/* NOME NO TOPO EM DESTAQUE */}
                   <h2 className="text-2xl font-black text-foreground truncate uppercase leading-tight">
                     {currentOrder.name}
                   </h2>
-                  
-                  {/* ÍCONES E TOTAL NA MESMA LINHA */}
                   <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <Tooltip>
@@ -829,8 +853,6 @@ export default function OrdersClient() {
                         {formatCurrency(orderTotal)}
                       </div>
                   </div>
-                  
-                  {/* INFO EXTRA */}
                   <div className="text-[10px] text-muted-foreground flex gap-2 font-bold uppercase tracking-wider">
                     <span>{currentOrder.items.length} itens</span>
                     <span>•</span>
