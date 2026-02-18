@@ -126,7 +126,7 @@ export default function GuestRegisterPage() {
         <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
             <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
                 <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-6 flex items-center justify-center min-h-[140px] w-full">
+                    <div className="mx-auto mb-6 flex items-center justify-center min-h-[140px] w-full overflow-visible">
                         {barInfo.logo ? (
                             <img 
                                 src={barInfo.logo} 

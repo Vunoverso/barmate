@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { OrderStatement } from './order-statement';
@@ -80,7 +81,7 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: {
               <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-grow"><h3 className="font-medium text-xs sm:text-sm">{product.name}</h3><p className="text-xs text-muted-foreground">{category?.name}</p></div>
-            <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
+            <p className="text-primary font-semibold text-sm sm:base">{formatCurrency(product.price)}</p>
           </Card>
         );
       })}
@@ -166,7 +167,7 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
 function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
     const [a, setA] = useState('');
     const [d, setD] = useState('');
-    const [s, setS] = useState('');
+    const [s, setS] = useState('permuta');
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent>
