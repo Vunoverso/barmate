@@ -52,7 +52,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OrderStatement } from './order-statement';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   if (!categories.length) return {};
@@ -103,6 +103,57 @@ export default function OrdersClient() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
+
+  // Função para limpar dados antes de enviar ao Firestore (evita erro de 'undefined')
+  const prepareForFirestore = (data: any) => {
+    return JSON.parse(JSON.stringify(data, (key, value) => {
+        return value === undefined ? null : value;
+    }));
+  };
+
+  const syncOrderToFirestore = async (order: ActiveOrder) => {
+    try {
+        if (!db) return;
+        const orderRef = doc(db, 'open_orders', order.id);
+        const plainOrder = prepareForFirestore(order);
+        await setDoc(orderRef, plainOrder, { merge: true });
+    } catch (error) {
+        console.error("Firestore sync error", error);
+    }
+  };
+    
+  const deleteOrderFromFirestore = async (orderId: string) => {
+    try {
+        if (!db) return;
+        const orderRef = doc(db, 'open_orders', orderId);
+        await deleteDoc(orderRef);
+    } catch (error) {
+        console.error("Firestore delete error", error);
+    }
+  };
+
+  // Efeito para sincronizar TODAS as comandas locais com a nuvem ao carregar
+  useEffect(() => {
+    const syncAllOrders = async () => {
+        const localOrders = getOpenOrders();
+        if (localOrders.length > 0 && db) {
+            try {
+                const batch = writeBatch(db);
+                localOrders.forEach(order => {
+                    const orderRef = doc(db, 'open_orders', order.id);
+                    batch.set(orderRef, prepareForFirestore(order), { merge: true });
+                });
+                await batch.commit();
+                console.log("Todas as comandas sincronizadas com a nuvem.");
+            } catch (error) {
+                console.error("Erro ao sincronizar comandas em lote:", error);
+            }
+        }
+    };
+    if (!isLoading) {
+        syncAllOrders();
+    }
+  }, [isLoading]);
 
  const fetchData = useCallback(() => {
     setIsLoading(true);
@@ -182,33 +233,6 @@ export default function OrdersClient() {
         setActiveDisplayCategory(displayCategories[0]);
     }
   }, [displayCategories, activeDisplayCategory]);
-
-    const syncOrderToFirestore = async (order: ActiveOrder) => {
-        try {
-            if (!db) return;
-            const orderRef = doc(db, 'open_orders', order.id);
-            // Remove undefined values to avoid Firestore errors
-            const plainOrder = JSON.parse(JSON.stringify(order));
-            await setDoc(orderRef, plainOrder, { merge: true });
-        } catch (error) {
-            console.error("Firestore sync error", error);
-            toast({
-                title: "Erro de Sincronização",
-                description: "Não foi possível atualizar a comanda na nuvem. Verifique sua conexão.",
-                variant: "destructive",
-            });
-        }
-    };
-    
-    const deleteOrderFromFirestore = async (orderId: string) => {
-        try {
-            if (!db) return;
-            const orderRef = doc(db, 'open_orders', orderId);
-            await deleteDoc(orderRef);
-        } catch (error) {
-            console.error("Firestore delete error", error);
-        }
-    };
 
 
   const handleOpenCreateOrderDialog = useCallback(() => {
