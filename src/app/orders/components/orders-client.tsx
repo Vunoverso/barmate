@@ -38,6 +38,8 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -67,12 +69,168 @@ const updateOrderNameBasedOnTotal = (order: ActiveOrder): ActiveOrder => {
     return order;
 };
 
-// Helper to sanitize data for Firestore (remove undefined)
 const prepareForFirestore = (data: any) => {
   return JSON.parse(JSON.stringify(data, (key, value) => {
       return value === undefined ? null : value;
   }));
 };
+
+function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
+  if (products.length === 0) return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
+  if (viewMode === 'grid') return (
+    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
+      {products.map(product => {
+        const category = productCategories.find(c => c.id === product.categoryId);
+        const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+        return (
+          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
+            <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
+              <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+            <CardContent className="p-1.5">
+              <h3 className="font-medium truncate text-[11px] leading-tight">{product.name}</h3>
+              <p className="text-primary font-semibold text-xs sm:text-sm">{formatCurrency(product.price)}</p>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+  return (
+    <div className="space-y-1">
+      {products.map(product => {
+         const category = productCategories.find(c => c.id === product.categoryId);
+         const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+        return (
+          <Card key={product.id} className="flex items-center p-1.5 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-muted rounded-md flex items-center justify-center mr-2 group-hover:bg-muted/80 transition-colors">
+              <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+            <div className="flex-grow"><h3 className="font-medium text-xs sm:text-sm">{product.name}</h3><p className="text-xs text-muted-foreground">{category?.name}</p></div>
+            <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, onOpenChange: (o: boolean) => void, order: ActiveOrder }) {
+  const { toast } = useToast();
+  const [url, setUrl] = useState('');
+  useEffect(() => { 
+    if (isOpen) {
+        let origin = window.location.origin;
+        if (origin.includes('cloudworkstations.dev') && !origin.includes('9000-')) {
+            origin = origin.replace(/\d+-/, '9000-');
+        }
+        setUrl(`${origin}/my-order/${order.id}`); 
+    }
+  }, [isOpen, order.id]);
+  const copy = () => { navigator.clipboard.writeText(url); toast({ title: "Link copiado!" }); };
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md text-center">
+        <DialogHeader><DialogTitle>Compartilhar Comanda</DialogTitle></DialogHeader>
+        <div className="py-4 flex flex-col items-center gap-4">
+          <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`} alt="QR" width={250} height={250} className="rounded-lg border" unoptimized />
+          <div className="flex w-full gap-2"><Input value={url} readOnly /><Button size="icon" onClick={copy}><Copy className="h-4 w-4" /></Button></div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: any) {
+    const [n, setN] = useState('');
+    useEffect(() => { if (order) setN(order.name); }, [order]);
+    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Editar Nome</DialogTitle></DialogHeader><Input value={n} onChange={e => setN(e.target.value)} /><DialogFooter><Button onClick={() => {onSave(order.id, n); onOpenChange(false);}}>Salvar</Button></DialogFooter></DialogContent></Dialog>);
+}
+
+function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMerge }: any) {
+    const [sel, setSel] = useState<Record<string, boolean>>({});
+    const other = allOrders.filter((o: any) => o.id !== currentOrder.id);
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader><DialogTitle>Juntar Comandas</DialogTitle></DialogHeader>
+                <ScrollArea className="h-48">
+                    {other.map((o: any) => (
+                        <div key={o.id} className="flex items-center gap-2 p-2">
+                            <Checkbox 
+                                id={o.id} 
+                                checked={!!sel[o.id]} 
+                                onCheckedChange={(checked) => setSel(prev => ({...prev, [o.id]: !!checked}))} 
+                            /> 
+                            <Label htmlFor={o.id} className="cursor-pointer">{o.name}</Label>
+                        </div>
+                    ))}
+                </ScrollArea>
+                <DialogFooter>
+                    <Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))}>Juntar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
+    const [a, setA] = useState('');
+    const [d, setD] = useState('');
+    const [s, setS] = useState('');
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader><DialogTitle>Adicionar Crédito</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Valor do Crédito</Label>
+                        <Input type="number" placeholder="0,00" value={a} onChange={e => setA(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Motivo/Descrição</Label>
+                        <Input placeholder="Ex: Permuta, Troco anterior" value={d} onChange={e => setD(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Origem do Valor</Label>
+                        <Select onValueChange={setS} value={s}>
+                            <SelectTrigger><SelectValue placeholder="Selecione a origem..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="permuta">Permuta / Cortesia (Não entra no caixa)</SelectItem>
+                                <SelectItem value="dinheiro">Dinheiro (Entra no Caixa Diário)</SelectItem>
+                                <SelectItem value="cartao">Cartão / PIX (Entra no Banco)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter><Button onClick={() => onSave({amount: parseFloat(a), description: d, source: s})}>Confirmar Crédito</Button></DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink, onCreateAndLink }: any) {
+    const [sid, setSid] = useState('');
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader><DialogTitle>Vincular {request.name}</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Escolher Comanda Aberta</Label>
+                        <Select onValueChange={setSid} value={sid}>
+                            <SelectTrigger><SelectValue placeholder="Escolha uma comanda..." /></SelectTrigger>
+                            <SelectContent>{orders.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
+                    <Button className="w-full" disabled={!sid} onClick={() => onLink(sid)}>Vincular à Selecionada</Button>
+                    <Separator />
+                    <Button variant="outline" className="w-full" onClick={() => onCreateAndLink({ name: request.name, clientId: null })}>Abrir Nova Comanda para o Cliente</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -135,7 +293,6 @@ export default function OrdersClient() {
     return () => unsubscribe();
   }, []);
 
-  // Effect to sync all local orders to Firestore on mount
   useEffect(() => {
     const syncAllOrders = async () => {
         const localOrders = getOpenOrders();
@@ -614,13 +771,13 @@ export default function OrdersClient() {
             <CardHeader className="pb-3 border-b bg-muted/10">
               {currentOrder && (
                 <div className="space-y-3">
-                  <h2 className="text-xl font-black text-foreground truncate uppercase">{currentOrder.name}</h2>
+                  <h2 className="text-2xl font-black text-foreground truncate uppercase">{currentOrder.name}</h2>
                   <div className="flex justify-between items-center">
                       <div className="flex items-center gap-1">
-                        <LinkIcon className="h-4 w-4 cursor-pointer text-primary" onClick={handleShareOrder} />
-                        <Edit className="h-4 w-4 cursor-pointer text-primary" onClick={handleEditOrder} />
-                        <Merge className="h-4 w-4 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} />
-                        <Printer className="h-4 w-4 cursor-pointer text-primary" onClick={handlePrintOrder} />
+                        <LinkIcon className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handleShareOrder} title="Compartilhar" />
+                        <Edit className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handleEditOrder} title="Editar Nome" />
+                        <Merge className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={() => setIsMergeDialogOpen(true)} title="Juntar Comandas" />
+                        <Printer className="h-5 w-5 cursor-pointer text-primary hover:scale-110 transition-transform" onClick={handlePrintOrder} title="Imprimir" />
                       </div>
                       <div className="text-xl font-bold text-primary">{formatCurrency(orderTotal)}</div>
                   </div>
@@ -671,90 +828,4 @@ export default function OrdersClient() {
       {requestToLink && <LinkGuestRequestDialog isOpen={!!requestToLink} onOpenChange={() => setRequestToLink(null)} request={requestToLink} orders={openOrders} onLink={handleLinkRequestToOrder} onCreateAndLink={details => { const id = handleCreateNewOrder(details); if (id) handleLinkRequestToOrder(id); }} />}
     </TooltipProvider>
   );
-}
-
-function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, onOpenChange: (o: boolean) => void, order: ActiveOrder }) {
-  const { toast } = useToast();
-  const [url, setUrl] = useState('');
-  useEffect(() => { if (isOpen) setUrl(`${window.location.origin}/my-order/${order.id}`); }, [isOpen, order.id]);
-  const copy = () => { navigator.clipboard.writeText(url); toast({ title: "Link copiado!" }); };
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md text-center">
-        <DialogHeader><DialogTitle>Compartilhar Comanda</DialogTitle></DialogHeader>
-        <div className="py-4 flex flex-col items-center gap-4">
-          <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`} alt="QR" width={250} height={250} className="rounded-lg border" unoptimized />
-          <div className="flex w-full gap-2"><Input value={url} readOnly /><Button size="icon" onClick={copy}><Copy className="h-4 w-4" /></Button></div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
-  if (products.length === 0) return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
-  if (viewMode === 'grid') return (
-    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
-      {products.map(product => {
-        const category = productCategories.find(c => c.id === product.categoryId);
-        const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
-        return (
-          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
-            <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
-              <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
-            </div>
-            <CardContent className="p-1.5">
-              <h3 className="font-medium truncate text-[11px] leading-tight">{product.name}</h3>
-              <p className="text-primary font-semibold text-xs sm:text-sm">{formatCurrency(product.price)}</p>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
-  );
-  return (
-    <div className="space-y-1">
-      {products.map(product => {
-         const category = productCategories.find(c => c.id === product.categoryId);
-         const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
-        return (
-          <Card key={product.id} className="flex items-center p-1.5 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
-            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-muted rounded-md flex items-center justify-center mr-2 group-hover:bg-muted/80 transition-colors">
-              <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            </div>
-            <div className="flex-grow"><h3 className="font-medium text-xs sm:text-sm">{product.name}</h3><p className="text-xs text-muted-foreground">{category?.name}</p></div>
-            <p className="text-primary font-semibold text-sm sm:text-base">{formatCurrency(product.price)}</p>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-function EditOrderNameDialog({ isOpen, onOpenChange, order, onSave }: any) {
-    const [n, setN] = useState('');
-    useEffect(() => { if (order) setN(order.name); }, [order]);
-    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Editar Nome</DialogTitle></DialogHeader><Input value={n} onChange={e => setN(e.target.value)} /><DialogFooter><Button onClick={() => {onSave(order.id, n); onOpenChange(false);}}>Salvar</Button></DialogFooter></DialogContent></Dialog>);
-}
-
-function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMerge }: any) {
-    const [sel, setSel] = useState<any>({});
-    const other = allOrders.filter((o: any) => o.id !== currentOrder.id);
-    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Juntar Comandas</DialogTitle></DialogHeader><ScrollArea className="h-48">{other.map((o: any) => (<div key={o.id} className="flex gap-2 p-2"><Checkbox id={o.id} checked={!!sel[o.id]} onCheckedChange={() => setSel({...sel, [o.id]: !sel[o.id]})} /> <Label htmlFor={o.id}>{o.name}</Label></div>))}</ScrollArea><DialogFooter><Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))}>Juntar</Button></DialogFooter></DialogContent></Dialog>);
-}
-
-function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
-    const [a, setA] = useState('');
-    const [d, setD] = useState('');
-    const [s, setS] = useState('');
-    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Crédito</DialogTitle></DialogHeader><div className="space-y-2"><Input type="number" placeholder="Valor" value={a} onChange={e => setA(e.target.value)} /><Input placeholder="Motivo" value={d} onChange={e => setD(e.target.value)} /><Select onValueChange={setS}><SelectTrigger><SelectValue placeholder="Origem" /></SelectTrigger><SelectContent><SelectItem value="permuta">Permuta</SelectItem><SelectItem value="dinheiro">Dinheiro</SelectItem><SelectItem value="cartao">Cartão</SelectItem></SelectContent></Select></div><DialogFooter><Button onClick={() => onSave({amount: parseFloat(a), description: d, source: s})}>Adicionar</Button></DialogFooter></DialogContent></Dialog>);
-}
-
-function LinkGuestRequestDialog({ isOpen, onOpenChange, request, orders, onLink, onCreateAndLink }: any) {
-    const [sid, setSid] = useState('');
-    return (<Dialog open={isOpen} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Vincular {request.name}</DialogTitle></DialogHeader><div className="space-y-4"><Select onValueChange={setSid}><SelectTrigger><SelectValue placeholder="Escolha uma comanda..." /></SelectTrigger><SelectContent>{orders.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent></Select><Button className="w-full" disabled={!sid} onClick={() => onLink(sid)}>Vincular à Selecionada</Button><Separator /><Button variant="outline" className="w-full" onClick={() => onCreateAndLink({ name: request.name, clientId: null })}>Abrir Nova Comanda</Button></div></DialogContent></Dialog>);
-}
-
-function Checkbox({ id, checked, onCheckedChange }: any) {
-    return <input type="checkbox" id={id} checked={checked} onChange={onCheckedChange} className="h-4 w-4 rounded border-gray-300" />;
 }
