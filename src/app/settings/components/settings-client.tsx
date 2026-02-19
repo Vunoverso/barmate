@@ -424,20 +424,20 @@ export default function SettingsClient() {
               <div className="space-y-4">
                 <Label>Logotipo do Bar</Label>
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-                    <div className="relative h-32 w-32 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/30">
+                    <div className="relative h-32 w-32 rounded-full border-4 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden shadow-inner">
                         {barLogo ? (
                             <>
                                 <img 
                                     src={barLogo} 
                                     alt="Logo" 
-                                    className="h-full w-full object-contain transition-transform duration-200" 
+                                    className="h-full w-full object-cover transition-transform duration-200" 
                                     style={{ transform: `scale(${barLogoScale})` }}
                                 />
                                 <Button 
                                     type="button" 
                                     variant="destructive" 
                                     size="icon" 
-                                    className="absolute top-1 right-1 h-6 w-6 rounded-full"
+                                    className="absolute top-1 right-1 h-6 w-6 rounded-full shadow-lg"
                                     onClick={() => setBarLogo('')}
                                 >
                                     <X className="h-3 w-3" />
@@ -462,23 +462,24 @@ export default function SettingsClient() {
                             <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()}>
                                 Escolher Imagem
                             </Button>
-                            <p className="text-xs text-muted-foreground">PNG ou JPG até 1MB.</p>
+                            <p className="text-xs text-muted-foreground">O logo será enquadrado no círculo automaticamente.</p>
                         </div>
                         
                         {barLogo && (
                             <div className="space-y-3 pt-2">
                                 <div className="flex justify-between items-center">
-                                    <Label className="text-xs font-bold uppercase opacity-70">Ajustar Tamanho</Label>
+                                    <Label className="text-xs font-bold uppercase opacity-70">Ajustar Escala no Círculo</Label>
                                     <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{Math.round(barLogoScale * 100)}%</span>
                                 </div>
                                 <Slider 
                                     value={[barLogoScale]} 
                                     min={0.5} 
-                                    max={2.5} 
+                                    max={3.0} 
                                     step={0.05} 
                                     onValueChange={([val]) => setBarLogoScale(val)}
                                     className="w-full max-w-xs"
                                 />
+                                <p className="text-[10px] text-muted-foreground italic">Use a escala para que o seu logo preencha o círculo sem cortes indesejados.</p>
                             </div>
                         )}
                     </div>

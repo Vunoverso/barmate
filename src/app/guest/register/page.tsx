@@ -125,18 +125,20 @@ export default function GuestRegisterPage() {
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
             <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
-                <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-6 flex items-center justify-center min-h-[140px] w-full overflow-visible">
+                <CardHeader className="text-center pb-4">
+                    <div className="mx-auto mb-4 flex items-center justify-center">
                         {barInfo.logo ? (
-                            <img 
-                                src={barInfo.logo} 
-                                alt="Logo" 
-                                className="h-32 w-auto max-w-full object-contain transition-transform duration-200" 
-                                style={{ transform: `scale(${barInfo.logoScale})` }}
-                            />
+                            <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-primary/10 bg-background flex items-center justify-center shadow-lg">
+                                <img 
+                                    src={barInfo.logo} 
+                                    alt="Logo" 
+                                    className="w-full h-full object-cover transition-transform duration-200" 
+                                    style={{ transform: `scale(${barInfo.logoScale})` }}
+                                />
+                            </div>
                         ) : (
-                            <div className="bg-primary/10 rounded-full p-4 w-fit mx-auto">
-                                <UserCircle2 className="h-10 w-10 text-primary" />
+                            <div className="bg-primary/10 rounded-full p-6 w-fit mx-auto">
+                                <UserCircle2 className="h-12 w-12 text-primary" />
                             </div>
                         )}
                     </div>

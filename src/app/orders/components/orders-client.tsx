@@ -295,7 +295,6 @@ export default function OrdersClient() {
         const plainOrder = prepareForFirestore({ ...order, isShared: true });
         await setDoc(orderRef, plainOrder, { merge: true });
         
-        // Atualiza estado local para refletir que foi compartilhada
         const localOrders = getOpenOrders().map(o => o.id === order.id ? { ...o, isShared: true } : o);
         saveOpenOrders(localOrders);
         setOpenOrders(localOrders);
@@ -310,7 +309,6 @@ export default function OrdersClient() {
         const orderRef = doc(db, 'open_orders', orderId);
         await deleteDoc(orderRef);
         
-        // Atualiza estado local
         const localOrders = getOpenOrders().map(o => o.id === orderId ? { ...o, isShared: false } : o);
         saveOpenOrders(localOrders);
         setOpenOrders(localOrders);
@@ -319,7 +317,6 @@ export default function OrdersClient() {
     }
   };
 
-  // Escuta mudanças nas comandas em tempo real (para status de conexão)
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
@@ -963,7 +960,7 @@ export default function OrdersClient() {
       {orderToShare && <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={() => setOrderToShare(null)} order={orderToShare} />}
       {orderToDelete && <AlertDialog open={!!orderToDelete} onOpenChange={() => setOrderToDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Remover Comanda?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Não</AlertDialogCancel><AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive">Sim, Remover</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>}
       {orderToArchive && <AlertDialog open={!!orderToArchive} onOpenChange={() => setOrderToArchive(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Arquivar como Dívida?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Não</AlertDialogCancel><AlertDialogAction onClick={handleArchiveOrder}>Sim, Arquivar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>}
-      <Dialog open={!!orderToPrint} onOpenChange={o => !o && setOrderToPrint(null)}><DialogContent><div ref={statementRef}>{orderToPrint && <OrderStatement order={orderToPrint} />}</div><DialogFooter><Button onClick={handleActualPrint}>Imprimir</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={!!orderToPrint} onOpenChange={o => !o && setOrderToPrint(null)}><DialogContent><div ref={statementRef}>{orderToPrint && <OrderStatement order={orderToPrint} />}</div><DialogFooter><Button onClick={handleActualPrint}>Imprimir</Button></DialogFooter></DialogContent>
       {requestToLink && <LinkGuestRequestDialog isOpen={!!requestToLink} onOpenChange={() => setRequestToLink(null)} request={requestToLink} orders={openOrders} onLink={handleLinkRequestToOrder} onCreateAndLink={details => { const id = handleCreateNewOrder(details); if (id) handleLinkRequestToOrder(id); }} />}
     </TooltipProvider>
   );
