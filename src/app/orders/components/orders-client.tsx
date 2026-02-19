@@ -133,7 +133,7 @@ export default function OrdersClient() {
             if (cloud) {
                 return { ...o, isShared: true, viewerCount: cloud.viewerCount || 0 };
             }
-            return o;
+            return { ...o, viewerCount: 0 };
         }));
     });
     return () => unsubscribe();
@@ -156,7 +156,10 @@ export default function OrdersClient() {
     setProducts(getProducts());
     setProductCategories(getProductCategories());
     const fetchedOrders = getOpenOrders();
-    setOpenOrders(fetchedOrders);
+    setOpenOrders(prev => fetchedOrders.map(o => {
+        const existing = prev.find(p => p.id === o.id);
+        return existing ? { ...o, viewerCount: existing.viewerCount } : o;
+    }));
     setClients(getClients());
     if (!currentOrderId && fetchedOrders.length > 0) setCurrentOrderId(fetchedOrders[0].id);
     setIsLoading(false);
@@ -173,7 +176,10 @@ export default function OrdersClient() {
 
   const updateOrdersAndSync = (updatedOrders: ActiveOrder[]) => {
       saveOpenOrders(updatedOrders);
-      setOpenOrders([...updatedOrders]);
+      setOpenOrders(prev => updatedOrders.map(uo => {
+          const p = prev.find(prevO => prevO.id === uo.id);
+          return p ? { ...uo, viewerCount: p.viewerCount } : uo;
+      }));
       const active = updatedOrders.find(o => o.id === currentOrderId);
       if (active && active.isShared) syncOrderToFirestore(active);
   };
@@ -278,6 +284,30 @@ export default function OrdersClient() {
       }
   };
 
+  const handleCreateAndApproveFromRequest = async (request: GuestRequest) => {
+      if (!db) return;
+      const newOrderId = `ord-${Date.now()}`;
+      const newOrder: ActiveOrder = { 
+          id: newOrderId, 
+          name: request.name, 
+          items: [], 
+          createdAt: new Date(),
+          isShared: true 
+      };
+      
+      const currentOrders = getOpenOrders();
+      const updatedOrders = [...currentOrders, newOrder];
+      saveOpenOrders(updatedOrders);
+      setOpenOrders(updatedOrders);
+      setCurrentOrderId(newOrderId);
+      
+      await syncOrderToFirestore(newOrder);
+      await handleApproveRequest(request, newOrderId);
+      
+      setIsRequestsDialogOpen(false);
+      toast({ title: `Comanda para ${request.name} criada e liberada!` });
+  };
+
   const handleRejectRequest = async (requestId: string) => {
       if (!db) return;
       try {
@@ -292,7 +322,10 @@ export default function OrdersClient() {
     if (target) {
         target.isShared = false;
         saveOpenOrders(all);
-        setOpenOrders([...all]);
+        setOpenOrders(prev => all.map(uo => {
+            const p = prev.find(prevO => prevO.id === uo.id);
+            return p ? { ...uo, viewerCount: 0 } : uo;
+        }));
         await deleteOrderFromFirestore(order.id);
         toast({ title: "Compartilhamento Interrompido" });
     }
@@ -312,11 +345,11 @@ export default function OrdersClient() {
               {pendingRequests.length > 0 && (
                   <Button 
                     variant="destructive" 
-                    className="w-full animate-pulse flex items-center gap-2"
+                    className="w-full animate-pulse flex items-center gap-2 font-black"
                     onClick={() => setIsRequestsDialogOpen(true)}
                   >
                     <Bell className="h-4 w-4" />
-                    {pendingRequests.length} {pendingRequests.length === 1 ? 'Solicitação' : 'Solicitações'}
+                    {pendingRequests.length} {pendingRequests.length === 1 ? 'SOLICITAÇÃO' : 'SOLICITAÇÕES'}
                   </Button>
               )}
 
@@ -329,10 +362,13 @@ export default function OrdersClient() {
                       const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
                       const hasCredit = balance < 0;
                       return (
-                        <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center", hasCredit && "border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20")}>
+                        <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center transition-all", hasCredit && "border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20")}>
                           <div className="min-w-0 flex items-center gap-2">
                             <div className="font-semibold text-xs truncate">{o.name}</div>
-                            <div className="flex gap-1">{o.isShared && <LinkIcon className="h-3 w-3 text-blue-500"/>}{(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse"/>}</div>
+                            <div className="flex gap-1">
+                                {o.isShared && <LinkIcon className="h-3.5 w-3.5 text-blue-500 shrink-0"/>}
+                                {(o.viewerCount || 0) > 0 && <Wifi className="h-3.5 w-3.5 text-green-500 animate-pulse shrink-0"/>}
+                            </div>
                           </div>
                           <div className={cn("text-right font-black text-xs", hasCredit && "text-green-600")}>{formatCurrency(balance)}</div>
                         </div>
@@ -398,7 +434,7 @@ export default function OrdersClient() {
                                         onClick={() => { 
                                             const all = getOpenOrders();
                                             const target = all.find(o => o.id === currentOrder.id);
-                                            if(target) { target.isShared = true; saveOpenOrders(all); setOpenOrders([...all]); syncOrderToFirestore(target); setOrderToShare(target); }
+                                            if(target) { target.isShared = true; saveOpenOrders(all); setOpenOrders(prev => all.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 }))); syncOrderToFirestore(target); setOrderToShare(target); }
                                         }} 
                                     />
                                 </TooltipTrigger>
@@ -444,14 +480,14 @@ export default function OrdersClient() {
         </div>
       </div>
 
-      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(newOrders); setCurrentOrderId(id); }} clients={clients} />
+      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: prev.find(p => p.id === no.id)?.viewerCount || 0 }))); setCurrentOrderId(id); }} clients={clients} />
       
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(details) => {
           if (!currentOrder) return;
           addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
           const updated = getOpenOrders().filter(o => o.id !== currentOrder.id);
           saveOpenOrders(updated);
-          setOpenOrders(updated);
+          setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
           deleteOrderFromFirestore(currentOrder.id);
           if (details.isPartial) {
               setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
@@ -462,7 +498,7 @@ export default function OrdersClient() {
       
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
       
-      <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { saveOpenOrders(merged); setOpenOrders([...merged]); setIsMergeDialogOpen(false); }} />
+      <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { saveOpenOrders(merged); setOpenOrders(prev => merged.map(m => ({ ...m, viewerCount: prev.find(p => p.id === m.id)?.viewerCount || 0 }))); setIsMergeDialogOpen(false); }} />
       
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { 
           const order = { ...orders[idx] };
@@ -481,7 +517,7 @@ export default function OrdersClient() {
         openOrders={openOrders}
         onApprove={handleApproveRequest}
         onReject={handleRejectRequest}
-        onOpenCreateDialog={() => { setIsRequestsDialogOpen(false); setIsCreateOrderDialogOpen(true); }}
+        onCreateFromRequest={handleCreateAndApproveFromRequest}
       />
       
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
@@ -579,7 +615,7 @@ function GuestRequestsDialog({
     openOrders, 
     onApprove, 
     onReject,
-    onOpenCreateDialog
+    onCreateFromRequest
 }: { 
     isOpen: boolean, 
     onOpenChange: (o: boolean) => void, 
@@ -587,7 +623,7 @@ function GuestRequestsDialog({
     openOrders: ActiveOrder[], 
     onApprove: (r: GuestRequest, oid: string) => void, 
     onReject: (id: string) => void,
-    onOpenCreateDialog: () => void
+    onCreateFromRequest: (r: GuestRequest) => void
 }) {
     const [selectedOrderMap, setSelectedOrderMap] = useState<Record<string, string>>({});
 
@@ -603,46 +639,49 @@ function GuestRequestsDialog({
                         {requests.length === 0 ? (
                             <p className="text-center py-10 opacity-50">Nenhuma solicitação no momento.</p>
                         ) : requests.map(req => (
-                            <Card key={req.id} className="p-4 bg-muted/20">
+                            <Card key={req.id} className="p-4 bg-muted/20 border-2 border-primary/10">
                                 <div className="flex flex-col gap-4">
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className="font-black text-lg uppercase leading-none">{req.name}</p>
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                {req.intent === 'create' ? 'Deseja abrir nova comanda' : 'Já está consumindo e quer ver a conta'}
-                                            </p>
+                                            <p className="font-black text-xl uppercase leading-none text-primary">{req.name}</p>
+                                            <Badge variant={req.intent === 'create' ? 'default' : 'secondary'} className="mt-2">
+                                                {req.intent === 'create' ? 'QUER CRIAR NOVA COMANDA' : 'QUER VER CONTA EXISTENTE'}
+                                            </Badge>
                                         </div>
                                         <Button variant="ghost" size="icon" onClick={() => onReject(req.id)} className="text-destructive"><X className="h-5 w-5" /></Button>
                                     </div>
                                     
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase font-bold opacity-50">Vincular a Comanda Aberta</Label>
-                                            <Select onValueChange={(val) => setSelectedOrderMap(p => ({ ...p, [req.id]: val }))}>
-                                                <SelectTrigger><SelectValue placeholder="Selecione a mesa..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    {openOrders.map(o => (
-                                                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="flex items-end gap-2">
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {req.intent === 'create' ? (
                                             <Button 
-                                                className="flex-1 bg-green-600 hover:bg-green-700" 
-                                                disabled={!selectedOrderMap[req.id]}
-                                                onClick={() => onApprove(req, selectedOrderMap[req.id])}
+                                                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-black" 
+                                                onClick={() => onCreateFromRequest(req)}
                                             >
-                                                <Check className="mr-2 h-4 w-4" /> Aprovar
+                                                <UserPlus className="mr-2 h-5 w-5" /> CRIAR COMANDA AGORA
                                             </Button>
+                                        ) : null}
+
+                                        <div className="space-y-2 border-t pt-3">
+                                            <Label className="text-[10px] uppercase font-bold opacity-50">Vincular a uma Mesa/Comanda já Aberta</Label>
+                                            <div className="flex gap-2">
+                                                <Select onValueChange={(val) => setSelectedOrderMap(p => ({ ...p, [req.id]: val }))}>
+                                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione a mesa..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {openOrders.map(o => (
+                                                            <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button 
+                                                    variant="secondary"
+                                                    disabled={!selectedOrderMap[req.id]}
+                                                    onClick={() => onApprove(req, selectedOrderMap[req.id])}
+                                                >
+                                                    <Check className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
-                                    
-                                    {req.intent === 'create' && (
-                                        <Button variant="outline" className="w-full" onClick={onOpenCreateDialog}>
-                                            <UserPlus className="mr-2 h-4 w-4" /> Criar Comanda do Zero
-                                        </Button>
-                                    )}
                                 </div>
                             </Card>
                         ))}
