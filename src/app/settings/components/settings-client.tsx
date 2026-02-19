@@ -188,7 +188,6 @@ export default function SettingsClient() {
   const [barLogo, setBarLogo] = useState('');
   const [barLogoScale, setBarLogoScale] = useState(1);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
-  const [transactionFees, setTransactionFees] = useState<TransactionFees>({ debitRate: 0, creditRate: 0, pixRate: 0 });
   const [isImporting, setIsImporting] = useState(false);
   const [importAlertOpen, setImportAlertOpen] = useState(false);
   const [clearFinancialsAlertOpen, setClearFinancialsAlertOpen] = useState(false);
@@ -203,7 +202,6 @@ export default function SettingsClient() {
     setBarAddress(localStorage.getItem('barAddress') || '');
     setBarLogo(localStorage.getItem('barLogo') || '');
     setBarLogoScale(parseFloat(localStorage.getItem('barLogoScale') || '1'));
-    setTransactionFees(getTransactionFees());
     setProductCategories(getProductCategories());
   }, []);
 
@@ -378,7 +376,7 @@ export default function SettingsClient() {
                         </div>
                         {barLogo && (
                             <div className="space-y-2 pt-2">
-                                <Label className="text-xs font-bold uppercase opacity-70">Ajustar Escala no Círculo: {Math.round(barLogoScale * 100)}%</Label>
+                                <Label className="text-xs font-bold uppercase opacity-70">Ajustar Escala: {Math.round(barLogoScale * 100)}%</Label>
                                 <Slider value={[barLogoScale]} min={0.5} max={3.0} step={0.05} onValueChange={([val]) => setBarLogoScale(val)} className="w-full max-w-xs" />
                             </div>
                         )}
@@ -432,63 +430,15 @@ export default function SettingsClient() {
 
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
       
-      {editingCategory && (
-        <EditCategoryDialog 
-          isOpen={isEditCategoryDialogOpen} 
-          onOpenChange={setIsEditCategoryDialogOpen} 
-          category={editingCategory} 
-          onSave={handleSaveCategory} 
-        />
-      )}
+      {editingCategory && <EditCategoryDialog isOpen={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen} category={editingCategory} onSave={handleSaveCategory} />}
+      <AddCategoryDialog isOpen={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen} onSave={handleAddNewCategory} />
+      <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Importar Backup?</AlertDialogTitle><AlertDialogDescription>Substituirá tudo. Recomenda-se exportar antes.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">Continuar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Zerar Histórico?</AlertDialogTitle><AlertDialogDescription>Vendas e caixa serão apagados. Produtos e clientes permanecem.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">Zerar Agora</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       
-      <AddCategoryDialog 
-        isOpen={isAddCategoryDialogOpen} 
-        onOpenChange={setIsAddCategoryDialogOpen} 
-        onSave={handleAddNewCategory} 
-      />
-      
-      <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Importar Backup?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação substituirá todos os dados atuais por completo.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">
-              Continuar e Substituir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Zerar Histórico?</AlertDialogTitle>
-            <AlertDialogDescription>Todas as vendas e movimentações de caixa serão apagadas permanentemente.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">
-              Zerar Agora
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover Categoria?</AlertDialogTitle>
-            <AlertDialogDescription>Isso não apagará os produtos, mas eles ficarão sem categoria.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">
-              Remover
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Remover Categoria?</AlertDialogTitle><AlertDialogDescription>Isso não apagará os produtos, mas eles ficarão sem categoria.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">Remover</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>

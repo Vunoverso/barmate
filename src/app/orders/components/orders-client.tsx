@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -161,8 +161,6 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
     );
 }
 
-const Copy = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
-
 // --- Componente Principal ---
 
 export default function OrdersClient() {
@@ -173,7 +171,6 @@ export default function OrdersClient() {
   const [guestRequests, setGuestRequests] = useState<GuestRequest[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
-  const [productSearchTerm, setProductSearchTerm] = useState('');
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
@@ -220,8 +217,6 @@ export default function OrdersClient() {
                         ...o, 
                         isShared: true, 
                         viewerCount: cloudData.viewerCount || 0,
-                        // Não sobrescrevemos os itens locais aqui para evitar perda de foco/estado do admin,
-                        // mas garantimos que a flag de compartilhamento e o contador de viewers fiquem atualizados.
                     };
                 }
                 return { ...o, isShared: false, viewerCount: 0 };
@@ -321,6 +316,7 @@ export default function OrdersClient() {
   const stopSharing = async (oid: string) => {
       await deleteOrderFromFirestore(oid);
       const orders = getOpenOrders().map(o => o.id === oid ? { ...o, isShared: false } : o);
+      saveOpenOrders(orders);
       setOpenOrders(orders);
       toast({ title: "Acesso Encerrado", description: "O cliente não visualiza mais esta comanda." });
   };
@@ -461,7 +457,7 @@ export default function OrdersClient() {
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
               <div className="px-4"><TabsList className="w-full overflow-x-auto"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
-                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
+                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
               </ScrollArea>
             </Tabs>
           </Card>
