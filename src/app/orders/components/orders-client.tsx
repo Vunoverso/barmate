@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, BellCircle } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -147,12 +147,9 @@ export default function OrdersClient() {
             .map(d => ({ id: d.id, ...d.data() } as GuestRequest))
             .filter(r => r.status === 'pending');
         setPendingRequests(requests);
-        if (requests.length > 0 && !isRequestsDialogOpen) {
-            // Optional alert could be added here
-        }
     });
     return () => unsubscribe();
-  }, [isRequestsDialogOpen]);
+  }, []);
 
   const fetchData = useCallback(() => {
     setIsLoading(true);
@@ -268,7 +265,6 @@ export default function OrdersClient() {
               associatedOrderId: targetOrderId
           });
           
-          // Se for uma comanda existente, marcar como compartilhada se já não for
           const orders = getOpenOrders();
           const order = orders.find(o => o.id === targetOrderId);
           if (order && !order.isShared) {
@@ -307,7 +303,7 @@ export default function OrdersClient() {
                     className="w-full animate-pulse flex items-center gap-2"
                     onClick={() => setIsRequestsDialogOpen(true)}
                   >
-                    <BellCircle className="h-4 w-4" />
+                    <Bell className="h-4 w-4" />
                     {pendingRequests.length} {pendingRequests.length === 1 ? 'Solicitação' : 'Solicitações'}
                   </Button>
               )}
