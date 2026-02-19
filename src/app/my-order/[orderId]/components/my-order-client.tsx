@@ -8,19 +8,41 @@ import { formatCurrency } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FileX, ShoppingCart, Loader2 } from 'lucide-react';
+import { FileX, ShoppingCart, Loader2, BellRing } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 export default function MyOrderClient({ orderId }: { orderId: string }) {
     const [order, setOrder] = useState<ActiveOrder | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const hasIncremented = useRef(false);
+    const prevItemsCount = useRef<number>(0);
+    const { toast } = useToast();
+
+    // Som de notificação (Beep suave)
+    const playNotificationSound = () => {
+        try {
+            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, context.currentTime); // Lá (A5)
+            gain.gain.setValueAtTime(0.1, context.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start();
+            oscillator.stop(context.currentTime + 0.5);
+        } catch (e) {
+            // Ignora se o navegador bloquear áudio sem interação prévia
+        }
+    };
 
     useEffect(() => {
         if (!orderId || !db) {
@@ -31,7 +53,6 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
 
         const docRef = doc(db, 'open_orders', orderId);
 
-        // Incrementar contador de visualização apenas uma vez por montagem
         if (!hasIncremented.current) {
             updateDoc(docRef, { viewerCount: increment(1) }).catch(() => {});
             hasIncremented.current = true;
@@ -42,11 +63,25 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                 const data = docSnap.data();
                 const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
                 
-                setOrder({
+                const newOrder = {
                     ...data,
                     id: docSnap.id,
                     createdAt: createdAt
-                } as ActiveOrder);
+                } as ActiveOrder;
+
+                // Detectar se novos itens foram adicionados
+                const currentItemsCount = newOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+                if (prevItemsCount.current > 0 && currentItemsCount > prevItemsCount.current) {
+                    playNotificationSound();
+                    toast({
+                        title: "Novo item lançado!",
+                        description: "Sua comanda acaba de ser atualizada pelo garçom.",
+                        action: <BellRing className="h-4 w-4 text-primary animate-bounce" />
+                    });
+                }
+                prevItemsCount.current = currentItemsCount;
+
+                setOrder(newOrder);
                 setError(null);
             } else {
                 const archivedOrders = getArchivedOrders();
@@ -63,7 +98,6 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             setIsLoading(false);
         });
 
-        // Cleanup: Decrementar ao sair ou desmontar o componente
         return () => {
             unsubscribe();
             if (hasIncremented.current) {
@@ -71,7 +105,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                 hasIncremented.current = false;
             }
         };
-    }, [orderId]);
+    }, [orderId, toast]);
 
 
     const orderTotal = useMemo(() => {

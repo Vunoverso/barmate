@@ -499,8 +499,9 @@ export default function OrdersClient() {
                 </ul>}
               </ScrollArea>
             </CardContent>
-            <CardFooter className="p-3 border-t bg-muted/5">
+            <CardFooter className="flex flex-col gap-2 p-3 border-t bg-muted/5">
                <Button className="w-full bg-accent text-accent-foreground font-black h-14 text-lg" disabled={!currentOrderId || orderTotal === 0} onClick={() => setIsPaymentDialogOpen(true)}>PAGAR {formatCurrency(orderTotal)}</Button>
+               <Button variant="ghost" className="w-full text-destructive text-xs h-8 hover:bg-destructive/10" disabled={!currentOrderId} onClick={() => currentOrder && setOrderToDelete(currentOrder)}>Cancelar Comanda</Button>
             </CardFooter>
           </Card>
         </div>
@@ -670,6 +671,13 @@ function GuestRequestsDialog({
 }) {
     const [selectedOrderMap, setSelectedOrderMap] = useState<Record<string, string>>({});
 
+    const getMatchingOrder = (reqName: string) => {
+        return openOrders.find(o => 
+            o.name.toLowerCase().includes(reqName.toLowerCase()) || 
+            reqName.toLowerCase().includes(o.name.toLowerCase())
+        );
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-xl">
@@ -681,53 +689,70 @@ function GuestRequestsDialog({
                     <div className="space-y-4 py-4">
                         {requests.length === 0 ? (
                             <p className="text-center py-10 opacity-50">Nenhuma solicitação no momento.</p>
-                        ) : requests.map(req => (
-                            <Card key={req.id} className="p-4 bg-muted/20 border-2 border-primary/10">
-                                <div className="flex flex-col gap-4">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <p className="font-black text-xl uppercase leading-none text-primary">{req.name}</p>
-                                            <Badge variant={req.intent === 'create' ? 'default' : 'secondary'} className="mt-2">
-                                                {req.intent === 'create' ? 'QUER CRIAR NOVA COMANDA' : 'QUER VER CONTA EXISTENTE'}
-                                            </Badge>
+                        ) : requests.map(req => {
+                            const suggested = getMatchingOrder(req.name);
+                            return (
+                                <Card key={req.id} className="p-4 bg-muted/20 border-2 border-primary/10">
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-black text-xl uppercase leading-none text-primary">{req.name}</p>
+                                                <Badge variant={req.intent === 'create' ? 'default' : 'secondary'} className="mt-2">
+                                                    {req.intent === 'create' ? 'QUER CRIAR NOVA COMANDA' : 'QUER VER CONTA EXISTENTE'}
+                                                </Badge>
+                                            </div>
+                                            <Button variant="ghost" size="icon" onClick={() => onReject(req.id)} className="text-destructive"><X className="h-5 w-5" /></Button>
                                         </div>
-                                        <Button variant="ghost" size="icon" onClick={() => onReject(req.id)} className="text-destructive"><X className="h-5 w-5" /></Button>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 gap-3">
-                                        {req.intent === 'create' ? (
-                                            <Button 
-                                                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-black" 
-                                                onClick={() => onCreateFromRequest(req)}
-                                            >
-                                                <UserPlus className="mr-2 h-5 w-5" /> CRIAR COMANDA AGORA
-                                            </Button>
-                                        ) : null}
-
-                                        <div className="space-y-2 border-t pt-3">
-                                            <Label className="text-[10px] uppercase font-bold opacity-50">Vincular a uma Mesa/Comanda já Aberta</Label>
-                                            <div className="flex gap-2">
-                                                <Select onValueChange={(val) => setSelectedOrderMap(p => ({ ...p, [req.id]: val }))}>
-                                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione a mesa..." /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {openOrders.map(o => (
-                                                            <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                        
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {req.intent === 'create' && !suggested ? (
                                                 <Button 
-                                                    variant="secondary"
-                                                    disabled={!selectedOrderMap[req.id]}
-                                                    onClick={() => onApprove(req, selectedOrderMap[req.id])}
+                                                    className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-black" 
+                                                    onClick={() => onCreateFromRequest(req)}
                                                 >
-                                                    <Check className="h-4 w-4" />
+                                                    <UserPlus className="mr-2 h-5 w-5" /> CRIAR COMANDA AGORA
                                                 </Button>
+                                            ) : null}
+
+                                            {suggested && (
+                                                <div className="p-3 bg-yellow-500/10 border-2 border-yellow-500/30 rounded-lg space-y-2">
+                                                    <p className="text-[10px] font-black uppercase text-yellow-600">Sugestão de Vínculo</p>
+                                                    <p className="text-xs">Encontramos uma mesa aberta com nome similar: <strong>{suggested.name}</strong></p>
+                                                    <Button 
+                                                        variant="secondary" 
+                                                        className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-black h-10"
+                                                        onClick={() => onApprove(req, suggested.id)}
+                                                    >
+                                                        VINCULAR A {suggested.name.toUpperCase()}
+                                                    </Button>
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-2 border-t pt-3">
+                                                <Label className="text-[10px] uppercase font-bold opacity-50">Ou Vincular a outra Mesa/Comanda</Label>
+                                                <div className="flex gap-2">
+                                                    <Select onValueChange={(val) => setSelectedOrderMap(p => ({ ...p, [req.id]: val }))} value={selectedOrderMap[req.id] || ""}>
+                                                        <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione a mesa..." /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {openOrders.map(o => (
+                                                                <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Button 
+                                                        variant="secondary"
+                                                        disabled={!selectedOrderMap[req.id]}
+                                                        onClick={() => onApprove(req, selectedOrderMap[req.id])}
+                                                    >
+                                                        <Check className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </Card>
-                        ))}
+                                </Card>
+                            );
+                        })}
                     </div>
                 </ScrollArea>
                 <DialogFooter><Button variant="secondary" onClick={() => onOpenChange(false)}>Fechar</Button></DialogFooter>
