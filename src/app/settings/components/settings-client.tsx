@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Edit3, Trash2, PlusCircle, Download, Upload, AlertTriangle, ImagePlus, X } from 'lucide-react';
+import { Save, Edit3, Trash2, PlusCircle, Download, Upload, ImagePlus, X, Package } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -80,7 +80,7 @@ function EditCategoryDialog({ isOpen, onOpenChange, category, onSave }: EditCate
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Editar Nome da Categoria</DialogTitle>
-            <DialogDescription>Altere o nome de exibição da categoria "{category?.name}". O ID interno não será alterado.</DialogDescription>
+            <DialogDescription>Altere o nome de exibição da categoria "{category?.name}".</DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-2">
             <Label htmlFor="categoryName">Novo Nome da Categoria</Label>
@@ -234,11 +234,7 @@ export default function SettingsClient() {
   const handleSaveCompanyDetails = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (barName.trim() === '') {
-      toast({
-        title: "Erro",
-        description: "O nome do estabelecimento não pode estar vazio.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "O nome do estabelecimento não pode estar vazio.", variant: "destructive" });
       return;
     }
     localStorage.setItem('barName', barName.trim());
@@ -261,21 +257,13 @@ export default function SettingsClient() {
     }
 
     window.dispatchEvent(new Event('storage'));
-    toast({
-      title: "Sucesso!",
-      description: "Dados do estabelecimento e marca atualizados.",
-      action: <Save className="text-green-500" />,
-    });
+    toast({ title: "Sucesso!", description: "Dados do estabelecimento e marca atualizados." });
   };
 
   const handleSaveTransactionFees = (e?: React.FormEvent) => {
     e?.preventDefault();
     saveTransactionFees(transactionFees);
-    toast({
-        title: "Taxas Salvas!",
-        description: "As taxas de transação foram atualizadas.",
-        action: <Save className="text-green-500" />,
-    });
+    toast({ title: "Taxas Salvas!", description: "As taxas de transação foram atualizadas." });
   };
 
   const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
@@ -289,115 +277,65 @@ export default function SettingsClient() {
   };
 
   const handleSaveCategory = (updatedCategory: ProductCategory) => {
-    const updatedCategories = productCategories.map(cat =>
-      cat.id === updatedCategory.id ? updatedCategory : cat
-    );
+    const updatedCategories = productCategories.map(cat => cat.id === updatedCategory.id ? updatedCategory : cat);
     saveProductCategories(updatedCategories);
-    toast({ title: "Categoria Atualizada", description: `Categoria "${updatedCategory.name}" salva com sucesso.`});
+    toast({ title: "Categoria Atualizada" });
   };
 
   const handleAddNewCategory = (data: { name: string; iconName: string }) => {
     const newId = `cat_${data.name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}_${Date.now()}`;
-    const newCategory: ProductCategory = {
-        id: newId,
-        name: data.name,
-        iconName: data.iconName,
-    };
-    const updatedCategories = [...productCategories, newCategory];
-    saveProductCategories(updatedCategories);
-    toast({ title: "Categoria Adicionada", description: `A categoria "${data.name}" foi criada com sucesso.`});
-  };
-
-  const confirmDeleteCategory = (category: ProductCategory) => {
-    setCategoryToDelete(category);
+    const newCategory: ProductCategory = { id: newId, name: data.name, iconName: data.iconName };
+    saveProductCategories([...productCategories, newCategory]);
+    toast({ title: "Categoria Adicionada" });
   };
 
   const handleDeleteCategory = () => {
     if (!categoryToDelete) return;
-
-    const updatedCategories = productCategories.filter(cat => cat.id !== categoryToDelete.id);
-    saveProductCategories(updatedCategories);
-    toast({ title: "Categoria Removida", description: `Categoria "${categoryToDelete.name}" removida com sucesso.`, variant: "default" });
+    saveProductCategories(productCategories.filter(cat => cat.id !== categoryToDelete.id));
+    toast({ title: "Categoria Removida" });
     setCategoryToDelete(null);
   };
 
   const handleExportData = () => {
-    toast({ title: "Exportando dados...", description: "Aguarde enquanto preparamos seu backup." });
-    try {
-        const backupData: { [key: string]: any } = {};
-        DATA_KEYS.forEach(key => {
-            const data = localStorage.getItem(key);
-            if (data !== null) {
-                try {
-                  if (['barName', 'barCnpj', 'barAddress', 'barLogo', 'barLogoScale'].includes(key)) {
-                    backupData[key] = data;
-                  } else {
-                    backupData[key] = JSON.parse(data);
-                  }
-                } catch(e) {
-                   console.warn(`Could not parse localStorage item ${key}, skipping.`, e);
-                }
-            }
-        });
-
-        const jsonString = JSON.stringify(backupData, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `barmate_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        toast({ title: "Backup Concluído!", description: "Seu arquivo de backup foi baixado." });
-    } catch (error) {
-        console.error("Export error:", error);
-        toast({ title: "Erro na Exportação", description: "Não foi possível gerar o arquivo de backup.", variant: "destructive" });
-    }
+    const backupData: any = {};
+    DATA_KEYS.forEach(key => {
+        const data = localStorage.getItem(key);
+        if (data !== null) {
+            try {
+                backupData[key] = ['barName', 'barCnpj', 'barAddress', 'barLogo', 'barLogoScale'].includes(key) ? data : JSON.parse(data);
+            } catch(e) {}
+        }
+    });
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `barmate_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
-  const handleTriggerImport = () => {
-    setImportAlertOpen(true);
-  };
+  const handleTriggerImport = () => setImportAlertOpen(true);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     setIsImporting(true);
-    toast({ title: "Importando dados...", description: "Isso pode levar alguns instantes." });
-
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const text = e.target?.result as string;
-            const data = JSON.parse(text);
-
-            if (typeof data !== 'object' || data === null) {
-              throw new Error("Arquivo de backup inválido.");
-            }
-            
+            const data = JSON.parse(e.target?.result as string);
             Object.keys(data).forEach(key => {
                 if (DATA_KEYS.includes(key)) {
-                    if (['barName', 'barCnpj', 'barAddress', 'barLogo', 'barLogoScale'].includes(key)) {
-                      localStorage.setItem(key, data[key]);
-                    } else {
-                      localStorage.setItem(key, JSON.stringify(data[key]));
-                    }
+                    localStorage.setItem(key, typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]));
                 }
             });
-            
-            toast({ title: "Importação Concluída!", description: "Todos os dados foram restaurados. A página será recarregada." });
-            setTimeout(() => window.location.reload(), 2000);
-        } catch (innerError) {
-            console.error("Import processing error:", innerError);
-            toast({ title: "Erro ao Processar Arquivo", description: "O arquivo JSON é inválido ou está corrompido.", variant: "destructive" });
+            toast({ title: "Dados Restaurados!" });
+            setTimeout(() => window.location.reload(), 1500);
+        } catch (err) {
+            toast({ title: "Erro no Backup", variant: "destructive" });
         } finally {
             setIsImporting(false);
-            if (fileInputRef.current) {
-               fileInputRef.current.value = "";
-            }
         }
     };
     reader.readAsText(file);
@@ -406,7 +344,7 @@ export default function SettingsClient() {
   const handleClearFinancialHistory = () => {
     clearFinancialData();
     setClearFinancialsAlertOpen(false);
-    toast({ title: "Histórico Financeiro Zerado" });
+    toast({ title: "Histórico Zerado" });
   };
 
   if (!isMounted) return null;
@@ -418,13 +356,13 @@ export default function SettingsClient() {
           <form onSubmit={handleSaveCompanyDetails}>
             <CardHeader>
               <CardTitle>Identidade do Estabelecimento</CardTitle>
-              <CardDescription>Defina sua marca e os dados que aparecerão nos recibos e no celular dos clientes.</CardDescription>
+              <CardDescription>Defina sua marca para recibos e tela do cliente.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <Label>Logotipo do Bar</Label>
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-                    <div className="relative h-32 w-32 rounded-full border-4 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden shadow-inner">
+                    <div className="h-32 w-32 rounded-full border-4 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden relative shadow-inner">
                         {barLogo ? (
                             <>
                                 <img 
@@ -433,114 +371,38 @@ export default function SettingsClient() {
                                     className="h-full w-full object-cover transition-transform duration-200" 
                                     style={{ transform: `scale(${barLogoScale})` }}
                                 />
-                                <Button 
-                                    type="button" 
-                                    variant="destructive" 
-                                    size="icon" 
-                                    className="absolute top-1 right-1 h-6 w-6 rounded-full shadow-lg"
-                                    onClick={() => setBarLogo('')}
-                                >
-                                    <X className="h-3 w-3" />
-                                </Button>
+                                <Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 rounded-full" onClick={() => setBarLogo('')}><X className="h-3 w-3" /></Button>
                             </>
                         ) : (
-                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                <ImagePlus className="h-8 w-8" />
-                                <span className="text-[10px] uppercase font-bold text-center px-2">Subir Logo</span>
-                            </div>
+                            <div className="flex flex-col items-center gap-2 text-muted-foreground"><ImagePlus className="h-8 w-8" /><span className="text-[10px] font-bold">SUBIR LOGO</span></div>
                         )}
                     </div>
                     <div className="flex-1 space-y-4 w-full">
                         <div className="space-y-2">
-                            <input
-                                type="file"
-                                ref={logoInputRef}
-                                onChange={handleLogoUpload}
-                                accept="image/*"
-                                className="hidden"
-                            />
-                            <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()}>
-                                Escolher Imagem
-                            </Button>
-                            <p className="text-xs text-muted-foreground">O logo será enquadrado no círculo automaticamente.</p>
+                            <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" className="hidden" />
+                            <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()}>Escolher Imagem</Button>
                         </div>
-                        
                         {barLogo && (
-                            <div className="space-y-3 pt-2">
-                                <div className="flex justify-between items-center">
-                                    <Label className="text-xs font-bold uppercase opacity-70">Ajustar Escala no Círculo</Label>
-                                    <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{Math.round(barLogoScale * 100)}%</span>
-                                </div>
-                                <Slider 
-                                    value={[barLogoScale]} 
-                                    min={0.5} 
-                                    max={3.0} 
-                                    step={0.05} 
-                                    onValueChange={([val]) => setBarLogoScale(val)}
-                                    className="w-full max-w-xs"
-                                />
-                                <p className="text-[10px] text-muted-foreground italic">Use a escala para que o seu logo preencha o círculo sem cortes indesejados.</p>
+                            <div className="space-y-2 pt-2">
+                                <Label className="text-xs font-bold uppercase opacity-70">Ajustar Escala no Círculo: {Math.round(barLogoScale * 100)}%</Label>
+                                <Slider value={[barLogoScale]} min={0.5} max={3.0} step={0.05} onValueChange={([val]) => setBarLogoScale(val)} className="w-full max-w-xs" />
                             </div>
                         )}
                     </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="barName">Nome do Estabelecimento</Label>
-                  <Input id="barName" value={barName} onChange={(e) => setBarName(e.target.value)} placeholder="Nome do bar" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="barCnpj">CNPJ</Label>
-                  <Input id="barCnpj" value={barCnpj} onChange={(e) => setBarCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
-                </div>
+                <div className="space-y-2"><Label htmlFor="barName">Nome do Bar</Label><Input id="barName" value={barName} onChange={(e) => setBarName(e.target.value)} /></div>
+                <div className="space-y-2"><Label htmlFor="barCnpj">CNPJ</Label><Input id="barCnpj" value={barCnpj} onChange={(e) => setBarCnpj(e.target.value)} /></div>
               </div>
-              <div className="space-y-2">
-                  <Label htmlFor="barAddress">Endereço</Label>
-                  <Textarea id="barAddress" value={barAddress} onChange={(e) => setBarAddress(e.target.value)} placeholder="Endereço completo" />
-              </div>
+              <div className="space-y-2"><Label htmlFor="barAddress">Endereço</Label><Textarea id="barAddress" value={barAddress} onChange={(e) => setBarAddress(e.target.value)} /></div>
               <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Identidade</Button>
             </CardContent>
           </form>
         </Card>
 
         <Card>
-          <form onSubmit={handleSaveTransactionFees}>
-            <CardHeader>
-                <CardTitle>Taxas de Transação</CardTitle>
-                <CardDescription>Percentuais descontados em vendas por cartão/PIX.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="debitRate">Taxa de Débito (%)</Label>
-                        <Input id="debitRate" type="number" step="0.01" value={transactionFees.debitRate} onChange={(e) => setTransactionFees(prev => ({ ...prev, debitRate: parseFloat(e.target.value) || 0 }))} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="creditRate">Taxa de Crédito (%)</Label>
-                        <Input id="creditRate" type="number" step="0.01" value={transactionFees.creditRate} onChange={(e) => setTransactionFees(prev => ({ ...prev, creditRate: parseFloat(e.target.value) || 0 }))} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="pixRate">Taxa de PIX (%)</Label>
-                        <Input id="pixRate" type="number" step="0.01" value={transactionFees.pixRate} onChange={(e) => setTransactionFees(prev => ({ ...prev, pixRate: parseFloat(e.target.value) || 0 }))} />
-                    </div>
-                </div>
-                <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Taxas</Button>
-            </CardContent>
-          </form>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Categorias de Produtos</CardTitle>
-                  <CardDescription>Gerencie a organização do seu catálogo.</CardDescription>
-                </div>
-                <Button onClick={() => setIsAddCategoryDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Nova Categoria</Button>
-            </div>
-          </CardHeader>
+          <CardHeader><CardTitle>Categorias</CardTitle></CardHeader>
           <CardContent>
             <Table>
               <TableHeader><TableRow><TableHead>Ícone</TableHead><TableHead>Nome</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
@@ -553,69 +415,51 @@ export default function SettingsClient() {
                       <TableCell className="font-medium">{category.name}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenEditCategoryDialog(category)}>Renomear</Button>
-                        <Button variant="destructive" size="sm" onClick={() => confirmDeleteCategory(category)} disabled={productCategories.length <= 1}>Remover</Button>
+                        <Button variant="destructive" size="sm" onClick={() => setCategoryToDelete(category)} disabled={productCategories.length <= 1}>Remover</Button>
                       </TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
+            <Button onClick={() => setIsAddCategoryDialogOpen(true)} className="mt-4"><PlusCircle className="mr-2 h-4 w-4" /> Nova Categoria</Button>
           </CardContent>
         </Card>
 
         <Card className="border-destructive">
             <CardHeader><CardTitle className="text-destructive">Zona de Perigo</CardTitle></CardHeader>
             <CardContent className="flex flex-wrap gap-4">
-                <Button variant="destructive" onClick={() => setClearFinancialsAlertOpen(true)}><Trash2 className="mr-2 h-4 w-4" /> Zerar Financeiro</Button>
-                <Button variant="outline" onClick={handleExportData}><Download className="mr-2 h-4 w-4" /> Exportar Backup</Button>
-                <Button variant="outline" onClick={handleTriggerImport}><Upload className="mr-2 h-4 w-4" /> Importar Backup</Button>
+                <Button variant="destructive" onClick={() => setClearFinancialsAlertOpen(true)}>Zerar Financeiro</Button>
+                <Button variant="outline" onClick={handleExportData}>Exportar Backup</Button>
+                <Button variant="outline" onClick={handleTriggerImport}>Importar Backup</Button>
             </CardContent>
         </Card>
       </div>
 
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
       {editingCategory && <EditCategoryDialog isOpen={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen} category={editingCategory} onSave={handleSaveCategory} />}
       <AddCategoryDialog isOpen={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen} onSave={handleAddNewCategory} />
       
       <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Importar Backup?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação substituirá todos os dados atuais. Recomendamos exportar um backup antes.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">Substituir Dados</AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Importar Backup?</AlertDialogTitle><AlertDialogDescription>Isso substituirá todos os dados atuais.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">Substituir</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Zerar Histórico Financeiro?</AlertDialogTitle>
-            <AlertDialogDescription>Vendas e registros de caixa serão apagados permanentemente. Produtos e clientes não serão afetados.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">Zerar Agora</AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Zerar Histórico?</AlertDialogTitle><AlertDialogDescription>Todas as vendas e caixa serão apagados.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">Zerar</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {categoryToDelete && (
-        <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remover Categoria?</AlertDialogTitle>
-              <AlertDialogDescription>Deseja remover "{categoryToDelete.name}"? Produtos vinculados precisarão ser reatribuídos.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">Remover</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Remover Categoria?</AlertDialogTitle></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">Remover</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

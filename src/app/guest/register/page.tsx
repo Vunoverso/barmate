@@ -30,7 +30,6 @@ export default function GuestRegisterPage() {
         }
     }, []);
 
-    // Busca marca e logo em tempo real da nuvem
     useEffect(() => {
         if (!db) return;
         const unsubscribe = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
@@ -48,9 +47,7 @@ export default function GuestRegisterPage() {
 
     useEffect(() => {
         if (!requestId || !db) return;
-
-        const docRef = doc(db, 'guest_requests', requestId);
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        const unsubscribe = onSnapshot(doc(db, 'guest_requests', requestId), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.status === 'approved' && data.associatedOrderId) {
@@ -60,20 +57,15 @@ export default function GuestRegisterPage() {
                     localStorage.removeItem('barmate_guest_request_id');
                     setRequestId(null);
                     setStatus('idle');
-                    toast({ title: "Solicitação Recusada", description: "Por favor, fale com um atendente.", variant: "destructive" });
+                    toast({ title: "Solicitação Recusada", variant: "destructive" });
                 }
             }
         });
-
         return () => unsubscribe();
     }, [requestId, router, toast]);
 
     const handleSendRequest = async (intent: 'create' | 'view') => {
-        if (!name.trim() || !db) {
-            toast({ title: "Atenção", description: "Por favor, digite seu Nome e Sobrenome.", variant: "destructive" });
-            return;
-        }
-
+        if (!name.trim() || !db) return;
         setIsSubmitting(true);
         try {
             const docRef = await addDoc(collection(db, 'guest_requests'), {
@@ -86,11 +78,8 @@ export default function GuestRegisterPage() {
             setRequestId(docRef.id);
             setStatus('pending');
         } catch (error) {
-            console.error("Erro ao registrar:", error);
-            toast({ title: "Erro na Conexão", description: "Não foi possível enviar sua solicitação.", variant: "destructive" });
-        } finally {
-            setIsSubmitting(false);
-        }
+            toast({ title: "Erro na Conexão", variant: "destructive" });
+        } finally { setIsSubmitting(false); }
     };
 
     if (status === 'pending') {
@@ -98,24 +87,13 @@ export default function GuestRegisterPage() {
             <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
                 <Card className="w-full max-w-md text-center shadow-xl">
                     <CardHeader>
-                        <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit mb-4">
-                            <Clock className="h-10 w-10 text-primary animate-pulse" />
-                        </div>
+                        <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit mb-4"><Clock className="h-10 w-10 text-primary animate-pulse" /></div>
                         <CardTitle className="text-2xl">Aguardando Liberação</CardTitle>
-                        <CardDescription>
-                            Olá, <strong>{name || 'Cliente'}</strong>! Sua solicitação foi enviada. Aguarde enquanto vinculamos sua comanda.
-                        </CardDescription>
+                        <CardDescription>Olá, <strong>{name}</strong>! Sua solicitação foi enviada.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex flex-col items-center gap-2">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                            <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Sincronizando em tempo real</p>
-                        </div>
-                        <Button variant="outline" className="w-full" onClick={() => {
-                            localStorage.removeItem('barmate_guest_request_id');
-                            setRequestId(null);
-                            setStatus('idle');
-                        }}>Cancelar</Button>
+                    <CardContent>
+                        <div className="flex flex-col items-center gap-2 mb-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /><p className="text-xs font-bold opacity-50">SINCRO EM TEMPO REAL</p></div>
+                        <Button variant="outline" className="w-full" onClick={() => { localStorage.removeItem('barmate_guest_request_id'); setRequestId(null); setStatus('idle'); }}>Cancelar</Button>
                     </CardContent>
                 </Card>
             </div>
@@ -124,66 +102,41 @@ export default function GuestRegisterPage() {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-            <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
+            <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary overflow-hidden">
                 <CardHeader className="text-center pb-4">
-                    <div className="mx-auto mb-4 flex items-center justify-center">
+                    <div className="mx-auto mb-4 flex items-center justify-center h-32 w-32 rounded-full overflow-hidden bg-background shadow-lg border-4 border-primary/5">
                         {barInfo.logo ? (
-                            <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-primary/10 bg-background flex items-center justify-center shadow-lg">
-                                <img 
-                                    src={barInfo.logo} 
-                                    alt="Logo" 
-                                    className="w-full h-full object-cover transition-transform duration-200" 
-                                    style={{ transform: `scale(${barInfo.logoScale})` }}
-                                />
-                            </div>
+                            <img 
+                                src={barInfo.logo} 
+                                alt="Logo" 
+                                className="w-full h-full object-cover transition-transform" 
+                                style={{ transform: `scale(${barInfo.logoScale})` }}
+                            />
                         ) : (
-                            <div className="bg-primary/10 rounded-full p-6 w-fit mx-auto">
-                                <UserCircle2 className="h-12 w-12 text-primary" />
-                            </div>
+                            <UserCircle2 className="h-16 w-16 text-primary/20" />
                         )}
                     </div>
-                    <CardTitle className="text-2xl font-black italic tracking-tighter uppercase mb-1">{barInfo.name}</CardTitle>
+                    <CardTitle className="text-2xl font-black uppercase mb-1">{barInfo.name}</CardTitle>
                     <CardDescription>Identifique-se para acessar seu consumo.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
-                        <Label htmlFor="guestName" className="font-bold text-xs uppercase opacity-70">Nome e Sobrenome</Label>
-                        <Input
-                            id="guestName"
-                            placeholder="Ex: João Silva"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            className="h-12 text-lg font-semibold"
-                            required
-                            autoFocus
-                        />
+                        <Label className="font-bold text-xs uppercase opacity-70">Nome e Sobrenome</Label>
+                        <Input value={name} onChange={(e) => setName(e.target.value)} className="h-12 text-lg font-semibold" placeholder="Ex: João Silva" />
                     </div>
-                    
                     <div className="flex flex-col gap-3">
-                        <Button 
-                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center" 
-                            disabled={isSubmitting || !name.trim()}
-                            onClick={() => handleSendRequest('create')}
-                        >
-                            <span className="flex items-center gap-2"><PlusCircle className="h-5 w-5" /> Solicitar Nova Comanda</span>
-                            <span className="text-[10px] opacity-70 font-normal">Quero começar a consumir</span>
+                        <Button className="w-full h-14 text-lg font-bold flex flex-col" disabled={isSubmitting || !name.trim()} onClick={() => handleSendRequest('create')}>
+                            <span>Solicitar Nova Comanda</span>
+                            <span className="text-[10px] font-normal opacity-70">Ainda não tenho uma conta</span>
                         </Button>
-
-                        <Button 
-                            variant="secondary"
-                            className="w-full h-14 text-lg font-bold flex flex-col items-center justify-center" 
-                            disabled={isSubmitting || !name.trim()}
-                            onClick={() => handleSendRequest('view')}
-                        >
-                            <span className="flex items-center gap-2"><Search className="h-5 w-5" /> Ver Minha Comanda Aberta</span>
-                            <span className="text-[10px] opacity-70 font-normal">Já tenho uma conta ativa</span>
+                        <Button variant="secondary" className="w-full h-14 text-lg font-bold flex flex-col" disabled={isSubmitting || !name.trim()} onClick={() => handleSendRequest('view')}>
+                            <span>Ver Minha Comanda Aberta</span>
+                            <span className="text-[10px] font-normal opacity-70">Já estou consumindo</span>
                         </Button>
                     </div>
                 </CardContent>
-                <CardFooter className="justify-center border-t pt-4">
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50 text-center">
-                        {isSubmitting ? "Sincronizando..." : "Sua comanda aparecerá automaticamente após o vínculo."}
-                    </p>
+                <CardFooter className="justify-center border-t py-4">
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50">Sincronização Online BarMate</p>
                 </CardFooter>
             </Card>
         </div>
