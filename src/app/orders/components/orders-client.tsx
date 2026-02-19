@@ -155,6 +155,7 @@ export default function OrdersClient() {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [productSearchTerm, setProductSearchTerm] = useState('');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
@@ -242,7 +243,6 @@ export default function OrdersClient() {
     if (idx === -1) return;
     
     const order = orders[idx];
-    // COXA CREME TEST: Verificando se já existe para incrementar ou criar novo
     const existing = order.items.find(i => i.id === product.id && i.price >= 0);
     
     if (existing) {
@@ -376,7 +376,7 @@ export default function OrdersClient() {
           <Card className="flex-grow flex flex-col">
             <CardHeader>
               <div className="flex items-center justify-between"><CardTitle>Comandas</CardTitle><Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button></div>
-              <div className="relative pt-2"><Search className="absolute left-2.5 top-4.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar..." value={orderSearchTerm} onChange={e => setOrderSearchTerm(e.target.value)} className="pl-8" /></div>
+              <div className="relative pt-2"><Search className="absolute left-2.5 top-4.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar comanda..." value={orderSearchTerm} onChange={e => setOrderSearchTerm(e.target.value)} className="pl-8" /></div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">
@@ -414,11 +414,14 @@ export default function OrdersClient() {
 
         <div className="md:col-span-5 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
-            <CardHeader><CardTitle>Produtos</CardTitle></CardHeader>
+            <CardHeader>
+                <CardTitle>Produtos</CardTitle>
+                <div className="relative pt-2"><Search className="absolute left-2.5 top-4.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar produto..." value={productSearchTerm} onChange={e => setProductSearchTerm(e.target.value)} className="pl-8" /></div>
+            </CardHeader>
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
               <div className="px-4"><TabsList className="w-full overflow-x-auto"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
-                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode="grid" />
+                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode="grid" />
               </ScrollArea>
             </Tabs>
           </Card>

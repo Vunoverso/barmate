@@ -41,8 +41,8 @@ export const KEY_VISUALLY_REMOVED_ADJUSTMENTS = 'barmate_session_visuallyRemoved
 // --- INITIAL DATA (CLEAN STATE) ---
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
   { id: 'cat_cervejas', name: 'Cervejas', iconName: 'Beer' },
+  { id: 'cat_destilados', name: 'Bebidas Alcoólicas', iconName: 'Martini' },
   { id: 'cat_vinhos', name: 'Vinhos', iconName: 'Wine' },
-  { id: 'cat_destilados', name: 'Drinks', iconName: 'Martini' },
   { id: 'cat_sem_alcool', name: 'Sem Álcool', iconName: 'Coffee' },
   { id: 'cat_porcoes', name: 'Porções', iconName: 'UtensilsCrossed' },
   { id: 'cat_sobremesas', name: 'Sobremesas', iconName: 'CakeSlice' },
