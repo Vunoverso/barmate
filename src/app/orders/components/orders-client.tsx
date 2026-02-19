@@ -3,7 +3,7 @@
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client, GuestRequest } from '@/types';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
-import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients, getArchivedOrders, saveArchivedOrders } from '@/lib/data-access';
+import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, CheckCircle, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -36,9 +36,9 @@ import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc
 
 // --- Sub-componentes ---
 
-function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
+function ProductDisplay({ products, productCategories, addToOrder }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
-  if (viewMode === 'grid') return (
+  return (
     <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
       {products.map(product => {
         const category = productCategories.find(c => c.id === product.categoryId);
@@ -52,23 +52,6 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: {
               <h3 className="font-medium truncate text-[11px] leading-tight">{product.name}</h3>
               <p className="text-primary font-semibold text-xs sm:text-sm">{formatCurrency(product.price)}</p>
             </CardContent>
-          </Card>
-        );
-      })}
-    </div>
-  );
-  return (
-    <div className="space-y-1">
-      {products.map(product => {
-         const category = productCategories.find(c => c.id === product.categoryId);
-         const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
-        return (
-          <Card key={product.id} className="flex items-center p-1.5 cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => addToOrder(product)}>
-            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-muted rounded-md flex items-center justify-center mr-2 group-hover:bg-muted/80 transition-colors">
-              <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            </div>
-            <div className="flex-grow"><h3 className="font-medium text-xs sm:text-sm">{product.name}</h3><p className="text-xs text-muted-foreground">{category?.name}</p></div>
-            <p className="text-primary font-semibold text-sm sm:base">{formatCurrency(product.price)}</p>
           </Card>
         );
       })}
@@ -172,7 +155,6 @@ export default function OrdersClient() {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
@@ -187,7 +169,7 @@ export default function OrdersClient() {
   const prepareForFirestore = (data: any) => JSON.parse(JSON.stringify(data, (k, v) => v === undefined ? null : v));
 
   const syncOrderToFirestore = async (order: ActiveOrder) => {
-    if (!db) return;
+    if (!db || !order.isShared) return;
     try { 
         await setDoc(doc(db, 'open_orders', order.id), prepareForFirestore({ 
             ...order, 
@@ -195,7 +177,7 @@ export default function OrdersClient() {
             updatedAt: new Date().toISOString()
         }), { merge: true }); 
     } catch (e) {
-        console.error("Erro ao sincronizar com Firestore:", e);
+        console.error("Erro ao sincronizar:", e);
     }
   };
     
@@ -207,21 +189,11 @@ export default function OrdersClient() {
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
-        const cloudOrdersMap = snapshot.docs.reduce((acc, d) => ({ ...acc, [d.id]: d.data() }), {} as any);
-        
-        setOpenOrders(prev => {
-            return prev.map(o => {
-                const cloudData = cloudOrdersMap[o.id];
-                if (cloudData) {
-                    return { 
-                        ...o, 
-                        isShared: true, 
-                        viewerCount: cloudData.viewerCount || 0,
-                    };
-                }
-                return { ...o, isShared: false, viewerCount: 0 };
-            });
-        });
+        const cloudDataMap = snapshot.docs.reduce((acc, d) => ({ ...acc, [d.id]: d.data() }), {} as any);
+        setOpenOrders(prev => prev.map(o => {
+            const cloud = cloudDataMap[o.id];
+            return cloud ? { ...o, isShared: true, viewerCount: cloud.viewerCount || 0 } : { ...o, isShared: false, viewerCount: 0 };
+        }));
     });
     return () => unsubscribe();
   }, []);
@@ -253,60 +225,63 @@ export default function OrdersClient() {
   const currentOrder = useMemo(() => openOrders.find(o => o.id === currentOrderId), [openOrders, currentOrderId]);
   const orderTotal = useMemo(() => currentOrder?.items.reduce((acc, i) => acc + i.price * i.quantity, 0) || 0, [currentOrder]);
 
-  const addToOrder = useCallback((product: Product) => {
+  const updateOrdersAndSync = (updatedOrders: ActiveOrder[]) => {
+      saveOpenOrders(updatedOrders);
+      setOpenOrders([...updatedOrders]);
+      const active = updatedOrders.find(o => o.id === currentOrderId);
+      if (active && active.isShared) syncOrderToFirestore(active);
+  };
+
+  const addToOrder = (product: Product) => {
     if (!currentOrderId) return;
     const orders = getOpenOrders();
-    const orderIndex = orders.findIndex(o => o.id === currentOrderId);
-    if (orderIndex === -1) return;
+    const idx = orders.findIndex(o => o.id === currentOrderId);
+    if (idx === -1) return;
     
-    const order = orders[orderIndex];
+    const order = orders[idx];
     const existing = order.items.find(i => i.id === product.id && i.price > 0);
     
     if (existing) { existing.quantity += 1; }
     else { order.items.push({ ...product, lineItemId: `li-${Date.now()}-${Math.random()}`, quantity: 1 }); }
     
-    saveOpenOrders(orders);
-    setOpenOrders([...orders]); 
-    if (order.isShared) syncOrderToFirestore(order);
-  }, [currentOrderId]);
+    updateOrdersAndSync(orders);
+  };
 
-  const updateQuantity = useCallback((lineItemId: string, newQty: number) => {
-    if (!currentOrderId) return;
+  const updateQuantity = (lineItemId: string, newQty: number) => {
     const orders = getOpenOrders();
-    const orderIndex = orders.findIndex(o => o.id === currentOrderId);
-    if (orderIndex === -1) return;
+    const idx = orders.findIndex(o => o.id === currentOrderId);
+    if (idx === -1) return;
 
-    const order = orders[orderIndex];
+    const order = orders[idx];
     if (newQty <= 0) {
         order.items = order.items.filter(i => i.lineItemId !== lineItemId);
     } else {
         const item = order.items.find(i => i.lineItemId === lineItemId);
         if (item) item.quantity = newQty;
     }
+    updateOrdersAndSync(orders);
+  };
 
-    saveOpenOrders(orders);
-    setOpenOrders([...orders]);
-    if (order.isShared) syncOrderToFirestore(order);
-  }, [currentOrderId]);
-
-  const removeFromOrder = useCallback((lineItemId: string) => {
-    if (!currentOrderId) return;
+  const removeFromOrder = (lineItemId: string) => {
     const orders = getOpenOrders();
-    const orderIndex = orders.findIndex(o => o.id === currentOrderId);
-    if (orderIndex === -1) return;
+    const idx = orders.findIndex(o => o.id === currentOrderId);
+    if (idx === -1) return;
 
-    const order = orders[orderIndex];
-    order.items = order.items.filter(i => i.lineItemId !== lineItemId);
-    saveOpenOrders(orders);
-    setOpenOrders([...orders]);
-    if (order.isShared) syncOrderToFirestore(order);
-  }, [currentOrderId]);
+    orders[idx].items = orders[idx].items.filter(i => i.lineItemId !== lineItemId);
+    updateOrdersAndSync(orders);
+  };
 
   const handleLinkRequestToOrder = async (oid: string) => {
       if (!requestToLink || !db) return;
       try {
-          const selected = openOrders.find(o => o.id === oid);
-          if (selected) syncOrderToFirestore(selected);
+          const orders = getOpenOrders();
+          const target = orders.find(o => o.id === oid);
+          if (target) {
+              target.isShared = true;
+              saveOpenOrders(orders);
+              setOpenOrders([...orders]);
+              await syncOrderToFirestore(target);
+          }
           await updateDoc(doc(db, 'guest_requests', requestToLink.id), { status: 'approved', associatedOrderId: oid });
           setRequestToLink(null);
           toast({ title: "Cliente Vinculado!" });
@@ -318,49 +293,39 @@ export default function OrdersClient() {
       const orders = getOpenOrders().map(o => o.id === oid ? { ...o, isShared: false } : o);
       saveOpenOrders(orders);
       setOpenOrders(orders);
-      toast({ title: "Acesso Encerrado", description: "O cliente não visualiza mais esta comanda." });
+      toast({ title: "Acesso Encerrado" });
   };
 
   const handleMergeOrders = (ids: string[]) => {
       if (!currentOrder) return;
-      const allOpen = getOpenOrders();
-      const targetOrder = allOpen.find(o => o.id === currentOrder.id);
-      if (!targetOrder) return;
+      const all = getOpenOrders();
+      const target = all.find(o => o.id === currentOrder.id);
+      if (!target) return;
 
       ids.forEach(id => {
-          const sourceOrder = allOpen.find(o => o.id === id);
-          if (sourceOrder) {
-              targetOrder.items.push(...sourceOrder.items);
-          }
+          const source = all.find(o => o.id === id);
+          if (source) { target.items.push(...source.items); deleteOrderFromFirestore(id); }
       });
 
-      const updated = allOpen.filter(o => !ids.includes(o.id));
-      saveOpenOrders(updated);
-      setOpenOrders(updated);
+      const updated = all.filter(o => !ids.includes(o.id));
+      updateOrdersAndSync(updated);
       setIsMergeDialogOpen(false);
-      toast({ title: "Comandas Unidas!", description: `${ids.length} comanda(s) movida(s) para ${targetOrder.name}.` });
-      ids.forEach(id => deleteOrderFromFirestore(id));
-      if (targetOrder.isShared) syncOrderToFirestore(targetOrder);
+      toast({ title: "Comandas Unidas!" });
   };
 
   const handleAddCredit = (details: { amount: number, description: string, source: string }) => {
-      if (!currentOrder) return;
-      const allOpen = getOpenOrders();
-      const order = allOpen.find(o => o.id === currentOrder.id);
+      const all = getOpenOrders();
+      const order = all.find(o => o.id === currentOrderId);
       if (!order) return;
 
-      const creditItem: OrderItem = {
+      order.items.push({
           id: `credit-${Date.now()}`,
           name: `Crédito: ${details.description}`,
           price: -Math.abs(details.amount),
           categoryId: 'cat_outros',
           quantity: 1,
           lineItemId: `li-credit-${Date.now()}`
-      };
-
-      order.items.push(creditItem);
-      saveOpenOrders(allOpen);
-      setOpenOrders([...allOpen]);
+      });
 
       if (details.source !== 'permuta') {
           addFinancialEntry({
@@ -373,9 +338,9 @@ export default function OrdersClient() {
           });
       }
 
+      updateOrdersAndSync(all);
       setIsCreditDialogOpen(false);
       toast({ title: "Crédito Adicionado!" });
-      if (order.isShared) syncOrderToFirestore(order);
   };
 
   const handlePayment = (details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'> }) => {
@@ -420,28 +385,12 @@ export default function OrdersClient() {
                       const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
                       const hasCredit = balance < 0;
                       return (
-                        <div 
-                          key={o.id} 
-                          role="button" 
-                          onClick={() => setCurrentOrderId(o.id)} 
-                          className={cn(
-                            buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), 
-                            "w-full h-auto py-2 px-3 cursor-pointer flex justify-between transition-all items-center",
-                            hasCredit && "border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
-                          )}
-                        >
+                        <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center", hasCredit && "border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20")}>
                           <div className="min-w-0 flex items-center gap-2">
-                            <div className="font-semibold text-xs truncate">
-                              {o.name}
-                            </div>
-                            <div className="flex gap-1">
-                                {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
-                                {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
-                            </div>
+                            <div className="font-semibold text-xs truncate">{o.name}</div>
+                            <div className="flex gap-1">{o.isShared && <LinkIcon className="h-3 w-3 text-blue-500"/>}{(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse"/>}</div>
                           </div>
-                          <div className={cn("text-right font-black text-xs", hasCredit && "text-green-600")}>
-                            {formatCurrency(balance)}
-                          </div>
+                          <div className={cn("text-right font-black text-xs", hasCredit && "text-green-600")}>{formatCurrency(balance)}</div>
                         </div>
                       );
                     })}
@@ -457,7 +406,7 @@ export default function OrdersClient() {
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
               <div className="px-4"><TabsList className="w-full overflow-x-auto"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
-                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
+                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode="grid" />
               </ScrollArea>
             </Tabs>
           </Card>
@@ -471,12 +420,16 @@ export default function OrdersClient() {
                   <h2 className="text-3xl font-black text-foreground uppercase leading-none truncate">{currentOrder.name}</h2>
                   <div className="flex justify-between items-center">
                       <div className="flex gap-3">
-                        <Tooltip><TooltipTrigger asChild><LinkIcon className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => { syncOrderToFirestore(currentOrder); setOrderToShare(currentOrder); }} /></TooltipTrigger><TooltipContent>Compartilhar</TooltipContent></Tooltip>
-                        {currentOrder.isShared && <Tooltip><TooltipTrigger asChild><Unlink className="h-5 w-5 cursor-pointer text-destructive hover:text-destructive/80 transition-colors" onClick={() => stopSharing(currentOrder.id)} /></TooltipTrigger><TooltipContent>Encerrar Acesso</TooltipContent></Tooltip>}
-                        <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><LinkIcon className="h-5 w-5 cursor-pointer text-primary" onClick={() => { 
+                            const all = getOpenOrders();
+                            const target = all.find(o => o.id === currentOrder.id);
+                            if(target) { target.isShared = true; saveOpenOrders(all); setOpenOrders([...all]); syncOrderToFirestore(target); setOrderToShare(target); }
+                        }} /></TooltipTrigger><TooltipContent>Compartilhar</TooltipContent></Tooltip>
+                        {currentOrder.isShared && <Tooltip><TooltipTrigger asChild><Unlink className="h-5 w-5 cursor-pointer text-destructive" onClick={() => stopSharing(currentOrder.id)} /></TooltipTrigger><TooltipContent>Encerrar Acesso</TooltipContent></Tooltip>}
+                        <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                       </div>
-                      <div className={cn("text-2xl font-black tabular-nums", orderTotal < 0 ? "text-green-600" : "text-primary")}>{formatCurrency(orderTotal)}</div>
+                      <div className={cn("text-2xl font-black", orderTotal < 0 ? "text-green-600" : "text-primary")}>{formatCurrency(orderTotal)}</div>
                   </div>
                 </div>
               )}
@@ -485,26 +438,18 @@ export default function OrdersClient() {
               <ScrollArea className="h-full p-4">
                 {currentOrder?.items.length === 0 ? <p className="text-center py-10 opacity-50">Comanda vazia.</p> : <ul className="space-y-3">
                   {currentOrder?.items.map((item, i) => (
-                    <li key={item.lineItemId || i} className={cn("flex flex-col gap-1 p-2 border rounded-md shadow-sm", item.price < 0 ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800" : "bg-card")}>
+                    <li key={item.lineItemId || i} className={cn("flex flex-col gap-1 p-2 border rounded-md shadow-sm", item.price < 0 ? "bg-green-50 border-green-200 dark:bg-green-900/20" : "bg-card")}>
                       <div className="flex justify-between items-start">
                         <span className="text-xs font-bold truncate max-w-[180px]">{item.name}</span>
-                        <span className={cn("text-xs font-black", item.price < 0 ? "text-green-600" : "text-primary")}>
-                          {formatCurrency(item.price * item.quantity)}
-                        </span>
+                        <span className={cn("text-xs font-black", item.price < 0 ? "text-green-600" : "text-primary")}>{formatCurrency(item.price * item.quantity)}</span>
                       </div>
                       <div className="flex justify-between items-center mt-1">
                         <div className="text-[10px] text-muted-foreground">{formatCurrency(item.price)} un.</div>
                         <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.lineItemId!, item.quantity - 1)}>
-                            <MinusCircle className="h-3.5 w-3.5" />
-                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.lineItemId!, item.quantity - 1)}><MinusCircle className="h-3.5 w-3.5" /></Button>
                           <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.lineItemId!, item.quantity + 1)}>
-                            <PlusCircle className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive/20" onClick={() => removeFromOrder(item.lineItemId!)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.lineItemId!, item.quantity + 1)}><PlusCircle className="h-3.5 w-3.5" /></Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeFromOrder(item.lineItemId!)}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
                       </div>
                     </li>
@@ -513,9 +458,7 @@ export default function OrdersClient() {
               </ScrollArea>
             </CardContent>
             <CardFooter className="p-3 border-t bg-muted/5">
-               <Button className="w-full bg-accent text-accent-foreground font-black h-14 text-lg shadow-md hover:scale-[1.02] transition-transform" disabled={!currentOrderId || orderTotal === 0} onClick={() => setIsPaymentDialogOpen(true)}>
-                 PAGAR {formatCurrency(orderTotal)}
-               </Button>
+               <Button className="w-full bg-accent text-accent-foreground font-black h-14 text-lg" disabled={!currentOrderId || orderTotal === 0} onClick={() => setIsPaymentDialogOpen(true)}>PAGAR {formatCurrency(orderTotal)}</Button>
             </CardFooter>
           </Card>
         </div>
@@ -526,7 +469,7 @@ export default function OrdersClient() {
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onSave={handleAddCredit} />
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={handlePayment} />
       {orderToShare && <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={() => setOrderToShare(null)} order={orderToShare} />}
-      {requestToLink && <Dialog open={!!requestToLink} onOpenChange={() => setRequestToLink(null)}><DialogContent><DialogHeader><DialogTitle>Vincular {requestToLink.name}</DialogTitle><DialogDescription>Escolha uma comanda aberta para vincular o acesso deste cliente.</DialogDescription></DialogHeader><ScrollArea className="h-[300px] border rounded-md p-2">{openOrders.map(o => <Button key={o.id} variant="ghost" className="w-full justify-start mb-1" onClick={() => handleLinkRequestToOrder(o.id)}>{o.name}</Button>)}</ScrollArea></DialogContent></Dialog>}
+      {requestToLink && <Dialog open={!!requestToLink} onOpenChange={() => setRequestToLink(null)}><DialogContent><DialogHeader><DialogTitle>Vincular {requestToLink.name}</DialogTitle><DialogDescription>Escolha uma comanda aberta.</DialogDescription></DialogHeader><ScrollArea className="h-[300px] border rounded-md p-2">{openOrders.map(o => <Button key={o.id} variant="ghost" className="w-full justify-start mb-1" onClick={() => handleLinkRequestToOrder(o.id)}>{o.name}</Button>)}</ScrollArea></DialogContent></Dialog>}
     </TooltipProvider>
   );
 }
