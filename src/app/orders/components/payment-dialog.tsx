@@ -22,7 +22,7 @@ import { Terminal, Banknote, HelpCircle, Download, Printer } from "lucide-react"
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Receipt } from './receipt';
 import { useToast } from '@/hooks/use-toast';
 
@@ -52,8 +52,15 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [leaveChangeAsCredit, setLeaveChangeAsCredit] = useState(false);
   const [error, setError] = useState<string>('');
   const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
+  const [lastOrderName, setLastOrderName] = useState<string>('');
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (currentOrder?.name) {
+        setLastOrderName(currentOrder.name);
+    }
+  }, [currentOrder]);
 
   const numDiscount = parseLocaleFloat(discount);
   const numCashAmount = parseLocaleFloat(cashAmount);
@@ -73,13 +80,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     const overpayment = totalPaid - amountToPay;
 
     if (numCashTendered > 0) {
-        // If cash tendered is provided, change is based on that relative to the cash portion due.
         const cashDue = amountToPay - (numDebitAmount + numCreditAmount + numPixAmount);
         if (numCashTendered > cashDue) {
             calculatedChange = numCashTendered - cashDue;
         }
     } else if (overpayment > 0) {
-        // If no cash tendered, change can only come from overpayment in cash.
         calculatedChange = Math.min(overpayment, numCashAmount);
     }
     return Math.max(0, calculatedChange);
@@ -148,10 +153,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
     const finalCashTendered = numCashTendered > 0 ? numCashTendered : (numCashAmount > 0 ? numCashAmount : undefined);
     const consumedTotal = currentOrder?.items.filter(i => i.price > 0).reduce((sum, i) => sum + i.price * i.quantity, 0) || totalAmount;
-    
-    // Change to be credited is the total change if the checkbox is checked, otherwise it's 0.
     const changeToCredit = leaveChangeAsCredit ? totalChange : 0;
-
     const isPartialNow = allowPartialPayment && roundedRemaining > 0.01;
     
     const saleObject: Omit<Sale, 'id' | 'timestamp' | 'name'> = {
@@ -161,9 +163,9 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         totalAmount: isPartialNow ? totalPaid : amountToPay,
         discountAmount: isPartialNow ? 0 : numDiscount,
         cashTendered: finalCashTendered,
-        changeGiven: changeToCredit, // This now correctly represents the credit amount
+        changeGiven: changeToCredit, 
         status: 'completed',
-        leaveChangeAsCredit: leaveChangeAsCredit, // This is now directly from the checkbox
+        leaveChangeAsCredit: leaveChangeAsCredit, 
     }
     
     if (isPartialNow) {
@@ -175,110 +177,27 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             timestamp: new Date(),
             ...saleObject,
         });
-         onSubmit({ sale: saleObject, leaveChangeAsCredit, isPartial: false });
+        onSubmit({ sale: saleObject, leaveChangeAsCredit, isPartial: false });
     }
   };
 
-  const handleDownloadReceipt = async () => {
-    if (!receiptRef.current) {
-        toast({ title: "Erro", description: "Não foi possível encontrar o recibo para baixar.", variant: "destructive" });
-        return;
-    };
-    try {
-        const printWindow = window.open('', '', 'width=800,height=600');
-        if (printWindow) {
-            document.querySelectorAll('link[rel="stylesheet"], style').forEach(styleSheet => {
-                printWindow.document.head.appendChild(styleSheet.cloneNode(true));
-            });
-
-            const contentNode = receiptRef.current;
-            printWindow.document.body.innerHTML = contentNode.outerHTML;
-
-            const printSpecificStyles = printWindow.document.createElement('style');
-            printSpecificStyles.innerHTML = `
-                @page { size: 80mm auto; margin: 0; }
-                body { 
-                    background: white !important; 
-                    margin: 0;
-                    -webkit-print-color-adjust: exact;
-                    print-color-adjust: exact;
-                }
-                .printable-content {
-                    width: 76mm;
-                    margin: 0 auto !important;
-                    padding: 2mm !important;
-                    box-sizing: border-box !important;
-                    border-left: 1px dotted black !important;
-                    border-right: 1px dotted black !important;
-                    color: black !important;
-                }
-                .printable-content * {
-                    color: black !important;
-                }
-            `;
-            printWindow.document.head.appendChild(printSpecificStyles);
-        
-            setTimeout(() => {
-                printWindow.focus();
-                printWindow.print();
-                printWindow.close();
-            }, 500);
-        }
-    } catch (err) {
-        console.error(err);
-        toast({ title: "Erro ao gerar imagem", description: "Não foi possível criar a imagem do recibo.", variant: "destructive" });
+  const handlePrintReceipt = () => {
+    if (!receiptRef.current) return;
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (printWindow) {
+        printWindow.document.write('<html><head><title>Imprimir Recibo</title>');
+        printWindow.document.write('<style>body{font-family:monospace;padding:20px;color:black;}table{width:100%;border-collapse:collapse;}th,td{text-align:left;padding:5px;border-bottom:1px dashed #ccc;} .text-right{text-align:right;} .text-center{text-align:center;} hr{border:none;border-top:1px dashed black;margin:10px 0;}</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(receiptRef.current.innerHTML);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            printWindow.close();
+        }, 250);
     }
   };
-  
-    const handlePrintReceipt = () => {
-        const node = receiptRef.current;
-        if (!node) {
-            toast({ title: "Erro", description: "Não foi possível encontrar o recibo para imprimir.", variant: "destructive" });
-            return;
-        }
-
-        const printWindow = window.open('', '', 'width=800,height=600');
-        if (printWindow) {
-            document.querySelectorAll('link[rel="stylesheet"], style').forEach(styleSheet => {
-                printWindow.document.head.appendChild(styleSheet.cloneNode(true));
-            });
-
-            printWindow.document.body.innerHTML = node.outerHTML;
-
-            const printSpecificStyles = printWindow.document.createElement('style');
-            printSpecificStyles.innerHTML = `
-                @page { size: 80mm auto; margin: 0; }
-                body { 
-                    background: white !important; 
-                    margin: 0;
-                    -webkit-print-color-adjust: exact;
-                    print-color-adjust: exact;
-                }
-                .printable-content {
-                    width: 76mm;
-                    margin: 0 auto !important;
-                    padding: 2mm !important;
-                    box-sizing: border-box !important;
-                    border-left: 1px dotted black !important;
-                    border-right: 1px dotted black !important;
-                    color: black !important;
-                }
-                /* Ensure all text within is black for printing */
-                .printable-content * {
-                    color: black !important;
-                }
-            `;
-            printWindow.document.head.appendChild(printSpecificStyles);
-        
-            setTimeout(() => {
-                printWindow.focus();
-                printWindow.print();
-                printWindow.close();
-            }, 500); // Wait for styles to apply
-        } else {
-            toast({ title: "Erro de Pop-up", description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
-        }
-    };
   
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -287,7 +206,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
           <DialogTitle>{saleCompleted ? 'Venda Finalizada' : 'Processar Pagamento'}</DialogTitle>
           <DialogDescription>
             {saleCompleted 
-             ? `Recibo para ${currentOrder?.name || 'a venda'}.`
+             ? `Recibo para ${lastOrderName || 'a venda'}.`
              : `Total Original da Comanda: ${formatCurrency(totalAmount)}`}
           </DialogDescription>
         </DialogHeader>
@@ -295,7 +214,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         <ScrollArea className="px-6">
         {saleCompleted ? (
             <div ref={receiptRef}>
-                <Receipt sale={saleCompleted} orderName={currentOrder?.name} />
+                <Receipt sale={saleCompleted} orderName={lastOrderName} />
             </div>
         ) : (
          <TooltipProvider>
@@ -398,15 +317,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         <DialogFooter className="p-6 pt-4 border-t">
           {saleCompleted ? (
             <div className="w-full flex justify-between">
-                <Button variant="secondary" onClick={() => handleOpenChange(false)}>Fechar</Button>
+                <Button variant="secondary" onClick={() => handleOpenChange(false)}>Fechar Janela</Button>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={handlePrintReceipt}>
+                    <Button variant="default" onClick={handlePrintReceipt}>
                         <Printer className="mr-2 h-4 w-4" />
-                        Imprimir
-                    </Button>
-                    <Button onClick={handleDownloadReceipt} disabled>
-                        <Download className="mr-2 h-4 w-4" />
-                        Baixar
+                        Imprimir Recibo
                     </Button>
                 </div>
             </div>
@@ -423,5 +338,3 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     </Dialog>
   );
 }
-
-    

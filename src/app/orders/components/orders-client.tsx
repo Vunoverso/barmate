@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy, LayoutGrid, List, QrCode } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy, LayoutGrid, List, QrCode, Printer } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
+import { OrderStatement } from './order-statement';
 
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado.</p>;
@@ -95,6 +96,7 @@ export default function OrdersClient() {
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
 
   const { toast } = useToast();
@@ -213,6 +215,26 @@ export default function OrdersClient() {
     updateOrdersAndSync(orders);
   };
 
+  const handlePrintStatement = () => {
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (printWindow && currentOrder) {
+        const statementElement = document.getElementById('printable-statement');
+        if (statementElement) {
+            printWindow.document.write('<html><head><title>Imprimir Extrato</title>');
+            printWindow.document.write('<style>body{font-family:monospace;padding:20px;color:black;}table{width:100%;border-collapse:collapse;}th,td{text-align:left;padding:5px;border-bottom:1px dashed #ccc;} .text-right{text-align:right;} .text-center{text-align:center;} hr{border:none;border-top:1px dashed black;margin:10px 0;}</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(statementElement.innerHTML);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }, 250);
+        }
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="grid md:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
@@ -287,6 +309,7 @@ export default function OrdersClient() {
                         }} /></TooltipTrigger><TooltipContent>Compartilhar</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsPrintDialogOpen(true)} /></TooltipTrigger><TooltipContent>Imprimir Extrato</TooltipContent></Tooltip>
                       </div>
                       <div className={cn("text-2xl font-black", orderTotal < 0 ? "text-green-600" : "text-primary")}>{formatCurrency(orderTotal)}</div>
                   </div>
@@ -331,14 +354,31 @@ export default function OrdersClient() {
           saveOpenOrders(updated);
           setOpenOrders(updated);
           deleteOrderFromFirestore(currentOrder.id);
-          setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
-          setIsPaymentDialogOpen(false);
+          if (!details.isPartial) {
+              // We don't clear currentOrderId immediately so the receipt view can stay open
+          } else {
+              setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
+              setIsPaymentDialogOpen(false);
+          }
           toast({ title: "Pagamento Concluído!" });
       }} />
       
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
       <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { saveOpenOrders(merged); setOpenOrders([...merged]); setIsMergeDialogOpen(false); }} />
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { orders[idx].items.push({ id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}` } as any); updateOrdersAndSync(orders); setIsCreditDialogOpen(false); } }} />
+      
+      <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader><DialogTitle>Imprimir Extrato</DialogTitle></DialogHeader>
+            <div id="printable-statement" className="bg-white p-4 overflow-auto max-h-[60vh]">
+                {currentOrder && <OrderStatement order={currentOrder} />}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsPrintDialogOpen(false)}>Voltar</Button>
+                <Button onClick={handlePrintStatement}><Printer className="mr-2 h-4 w-4" /> Imprimir</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
