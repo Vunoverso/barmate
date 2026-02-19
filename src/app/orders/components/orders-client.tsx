@@ -3,7 +3,7 @@
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client, GuestRequest } from '@/types';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
-import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients, saveClients } from '@/lib/data-access';
+import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, CheckCircle, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -233,16 +233,28 @@ export default function OrdersClient() {
   };
 
   const addToOrder = (product: Product) => {
-    if (!currentOrderId) return;
+    if (!currentOrderId) {
+        toast({ title: "Selecione uma comanda!", variant: "destructive" });
+        return;
+    }
     const orders = getOpenOrders();
     const idx = orders.findIndex(o => o.id === currentOrderId);
     if (idx === -1) return;
     
     const order = orders[idx];
-    const existing = order.items.find(i => i.id === product.id && i.price > 0);
+    // COXA CREME TEST: Verificando se já existe para incrementar ou criar novo
+    const existing = order.items.find(i => i.id === product.id && i.price >= 0);
     
-    if (existing) { existing.quantity += 1; }
-    else { order.items.push({ ...product, lineItemId: `li-${Date.now()}-${Math.random()}`, quantity: 1 }); }
+    if (existing) {
+        existing.quantity += 1;
+        if (!existing.lineItemId) existing.lineItemId = `li-${product.id}-${Date.now()}`;
+    } else {
+        order.items.push({ 
+            ...product, 
+            lineItemId: `li-${product.id}-${Date.now()}`, 
+            quantity: 1 
+        });
+    }
     
     updateOrdersAndSync(orders);
   };

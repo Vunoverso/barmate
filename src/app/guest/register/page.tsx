@@ -106,12 +106,14 @@ export default function GuestRegisterPage() {
                 <CardHeader className="text-center pb-4">
                     <div className="mx-auto mb-4 flex items-center justify-center h-32 w-32 rounded-full overflow-hidden bg-background shadow-lg border-4 border-primary/5">
                         {barInfo.logo ? (
-                            <img 
-                                src={barInfo.logo} 
-                                alt="Logo" 
-                                className="w-full h-full object-cover transition-transform" 
-                                style={{ transform: `scale(${barInfo.logoScale})` }}
-                            />
+                            <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-white">
+                                <img 
+                                    src={barInfo.logo} 
+                                    alt="Logo" 
+                                    className="max-w-none transition-transform" 
+                                    style={{ transform: `scale(${barInfo.logoScale})`, width: '128px', height: '128px', objectFit: 'contain' }}
+                                />
+                            </div>
                         ) : (
                             <UserCircle2 className="h-16 w-16 text-primary/20" />
                         )}
