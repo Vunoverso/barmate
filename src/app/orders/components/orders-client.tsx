@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy, LayoutGrid, List } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy, LayoutGrid, List, QrCode } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -86,7 +86,6 @@ export default function OrdersClient() {
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [guestRequests, setGuestRequests] = useState<GuestRequest[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
@@ -97,7 +96,6 @@ export default function OrdersClient() {
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
-  const [requestToLink, setRequestToLink] = useState<GuestRequest | null>(null);
 
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -129,16 +127,12 @@ export default function OrdersClient() {
         const cloudDataMap = snapshot.docs.reduce((acc, d) => ({ ...acc, [d.id]: d.data() }), {} as any);
         setOpenOrders(prev => prev.map(o => {
             const cloud = cloudDataMap[o.id];
-            return cloud ? { ...o, isShared: true, viewerCount: cloud.viewerCount || 0 } : { ...o, isShared: false, viewerCount: 0 };
+            if (cloud) {
+                return { ...o, isShared: true, viewerCount: cloud.viewerCount || 0 };
+            }
+            return o;
         }));
     });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
-    const unsubscribe = onSnapshot(q, (snapshot) => setGuestRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as GuestRequest))));
     return () => unsubscribe();
   }, []);
 
@@ -263,13 +257,13 @@ export default function OrdersClient() {
                 <div className="relative pt-2"><Search className="absolute left-2.5 top-4.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar produto..." value={productSearchTerm} onChange={e => setProductSearchTerm(e.target.value)} className="pl-8" /></div>
             </CardHeader>
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
-              <div className="px-4 overflow-x-auto"><TabsList className="w-fit min-w-full justify-start"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
+              <div className="px-4 overflow-x-auto"><TabsList className="w-fit min-w-full justify-start"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.id}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
                 <TabsContent value="Todos" className="mt-0">
                     <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                 </TabsContent>
                 {productCategories.map(c => (
-                    <TabsContent key={c.id} value={c.name} className="mt-0">
+                    <TabsContent key={c.id} value={c.id} className="mt-0">
                         <ProductDisplay products={products.filter(p => p.categoryId === c.id && p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                     </TabsContent>
                 ))}
@@ -341,6 +335,82 @@ export default function OrdersClient() {
           setIsPaymentDialogOpen(false);
           toast({ title: "Pagamento Concluído!" });
       }} />
+      
+      <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
+      <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { saveOpenOrders(merged); setOpenOrders([...merged]); setIsMergeDialogOpen(false); }} />
+      <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { orders[idx].items.push({ id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}` } as any); updateOrdersAndSync(orders); setIsCreditDialogOpen(false); } }} />
     </TooltipProvider>
   );
+}
+
+function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, onOpenChange: (open: boolean) => void, order: ActiveOrder | null }) {
+    const [url, setUrl] = useState('');
+    const { toast } = useToast();
+    useEffect(() => { if (isOpen && order) { let origin = window.location.origin; if (origin.includes('cloudworkstations.dev') && !origin.includes('9000-')) origin = origin.replace(/\d+-/, '9000-'); setUrl(`${origin}/my-order/${order.id}`); } }, [isOpen, order]);
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader><DialogTitle>Compartilhar Comanda</DialogTitle><DialogDescription>O cliente poderá acompanhar o consumo em tempo real.</DialogDescription></DialogHeader>
+                <div className="flex flex-col items-center gap-4 py-4">
+                    <div className="bg-white p-2 rounded-lg border-2 border-primary/10">
+                        {url && <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`} alt="QR Code" className="w-40 h-40" />}
+                    </div>
+                    <div className="flex gap-2 w-full">
+                        <Input value={url} readOnly />
+                        <Button size="icon" variant="outline" onClick={() => { navigator.clipboard.writeText(url); toast({ title: "Copiado!" }); }}><Copy className="h-4 w-4" /></Button>
+                    </div>
+                </div>
+                <DialogFooter><DialogClose asChild><Button variant="secondary">Fechar</Button></DialogClose></DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, openOrders, onMerge }: { isOpen: boolean, onOpenChange: (o: boolean) => void, currentOrder?: ActiveOrder, openOrders: ActiveOrder[], onMerge: (orders: ActiveOrder[]) => void }) {
+    const [targetId, setTargetId] = useState('');
+    if (!currentOrder) return null;
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader><DialogTitle>Juntar Comandas</DialogTitle><DialogDescription>Mover todos os itens da comanda <strong>{currentOrder.name}</strong> para outra.</DialogDescription></DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label>Selecione a comanda de destino</Label>
+                    <Select value={targetId} onValueChange={setTargetId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>{openOrders.filter(o => o.id !== currentOrder.id).map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                    <Button disabled={!targetId} onClick={() => {
+                        const all = [...openOrders];
+                        const fromIdx = all.findIndex(o => o.id === currentOrder.id);
+                        const toIdx = all.findIndex(o => o.id === targetId);
+                        all[toIdx].items = [...all[toIdx].items, ...all[fromIdx].items];
+                        onMerge(all.filter(o => o.id !== currentOrder.id));
+                    }}>Confirmar Junção</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function AddCreditDialog({ isOpen, onOpenChange, onAdd }: { isOpen: boolean, onOpenChange: (o: boolean) => void, onAdd: (amt: number, desc: string) => void }) {
+    const [amt, setAmt] = useState('');
+    const [desc, setDesc] = useState('Crédito Avulso');
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader><DialogTitle>Adicionar Crédito</DialogTitle><DialogDescription>Lançar um valor pago antecipadamente ou estorno.</DialogDescription></DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2"><Label>Valor do Crédito (R$)</Label><Input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="0,00" autoFocus /></div>
+                    <div className="space-y-2"><Label>Descrição</Label><Input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Adiantamento PIX" /></div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                    <Button onClick={() => onAdd(parseFloat(amt), desc)}>Adicionar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }
