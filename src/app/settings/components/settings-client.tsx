@@ -165,15 +165,15 @@ export default function SettingsClient() {
               <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
                   <div className="h-32 w-32 rounded-full border-4 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden relative shadow-inner">
                       {barLogo ? (
-                          <>
+                          <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-white">
                               <img 
                                 src={barLogo} 
                                 alt="Logo" 
-                                className="h-full w-full object-contain transition-transform" 
-                                style={{ transform: `scale(${barLogoScale})` }} 
+                                className="max-w-none transition-transform" 
+                                style={{ transform: `scale(${barLogoScale})`, width: '128px', height: '128px', objectFit: 'contain' }} 
                               />
                               <Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 rounded-full" onClick={() => setBarLogo('')}><X className="h-3 w-3" /></Button>
-                          </>
+                          </div>
                       ) : (
                           <div className="flex flex-col items-center gap-2 text-muted-foreground"><ImagePlus className="h-8 w-8" /><span className="text-[10px] font-bold uppercase">Logo</span></div>
                       )}
