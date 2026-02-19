@@ -44,47 +44,52 @@ export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
   { id: 'cat_destilados', name: 'Bebidas Alcoólicas', iconName: 'Martini' },
   { id: 'cat_vinhos', name: 'Vinhos', iconName: 'Wine' },
   { id: 'cat_sem_alcool', name: 'Sem Álcool', iconName: 'Coffee' },
+  { id: 'cat_lanches', name: 'Lanches', iconName: 'UtensilsCrossed' },
   { id: 'cat_porcoes', name: 'Porções', iconName: 'UtensilsCrossed' },
   { id: 'cat_sobremesas', name: 'Sobremesas', iconName: 'CakeSlice' },
   { id: 'cat_outros', name: 'Outros', iconName: 'Package' },
 ];
+
 export const INITIAL_PRODUCTS: Product[] = [
     // Cervejas
     { id: 'prod_1', name: 'Cerveja Pilsen 600ml', price: 12.00, categoryId: 'cat_cervejas', stock: 100 },
     { id: 'prod_2', name: 'Cerveja IPA Long Neck', price: 15.00, categoryId: 'cat_cervejas', stock: 50 },
-    { id: 'prod_3', name: 'Cerveja de Trigo 500ml', price: 18.00, categoryId: 'cat_cervejas', stock: 40 },
     { id: 'prod_22', name: 'Balde com 6 Pilsen Long Neck', price: 60.00, categoryId: 'cat_cervejas', stock: 20, isCombo: true, comboItems: 6},
+
+    // Bebidas Alcoólicas (Destilados/Drinks)
+    { id: 'prod_6', name: 'Caipirinha de Limão', price: 18.00, categoryId: 'cat_destilados', stock: null },
+    { id: 'prod_7', name: 'Gin Tônica', price: 28.00, categoryId: 'cat_destilados', stock: null },
+    { id: 'prod_8', name: 'Mojito', price: 22.00, categoryId: 'cat_destilados', stock: null },
+    { id: 'prod_19', name: 'Dose de Whisky 12 Anos', price: 30.00, categoryId: 'cat_destilados', stock: null },
 
     // Vinhos
     { id: 'prod_4', name: 'Taça de Vinho Tinto Seco', price: 25.00, categoryId: 'cat_vinhos', stock: null },
     { id: 'prod_5', name: 'Garrafa de Vinho Branco Suave', price: 80.00, categoryId: 'cat_vinhos', stock: 10 },
 
-    // Drinks
-    { id: 'prod_6', name: 'Caipirinha de Limão', price: 18.00, categoryId: 'cat_destilados', stock: null },
-    { id: 'prod_7', name: 'Gin Tônica', price: 28.00, categoryId: 'cat_destilados', stock: null },
-    { id: 'prod_8', name: 'Mojito', price: 22.00, categoryId: 'cat_destilados', stock: null },
-
     // Sem Álcool
     { id: 'prod_9', name: 'Refrigerante Lata', price: 6.00, categoryId: 'cat_sem_alcool', stock: 200 },
     { id: 'prod_10', name: 'Água com Gás', price: 4.00, categoryId: 'cat_sem_alcool', stock: 150 },
     { id: 'prod_11', name: 'Suco Natural de Laranja', price: 9.00, categoryId: 'cat_sem_alcool', stock: null },
-    { id: 'prod_12', name: 'Café Espresso', price: 5.00, categoryId: 'cat_sem_alcool', stock: null },
+
+    // Lanches
+    { id: 'prod_coxa', name: 'Coxa Creme', price: 12.00, categoryId: 'cat_lanches', stock: 30 },
+    { id: 'prod_misto', name: 'Misto Quente', price: 10.00, categoryId: 'cat_lanches', stock: null },
+    { id: 'prod_burger', name: 'X-Burguer Clássico', price: 22.00, categoryId: 'cat_lanches', stock: null },
 
     // Porções
-    { id: 'prod_13', name: 'Batata Frita com Cheddar e Bacon', price: 35.00, categoryId: 'cat_porcoes', stock: null },
+    { id: 'prod_13', name: 'Batata Frita Especial', price: 35.00, categoryId: 'cat_porcoes', stock: null },
     { id: 'prod_14', name: 'Anéis de Cebola', price: 28.00, categoryId: 'cat_porcoes', stock: null },
     { id: 'prod_15', name: 'Frango a Passarinho', price: 45.00, categoryId: 'cat_porcoes', stock: null },
-    { id: 'prod_16', name: 'Tábua de Frios', price: 60.00, categoryId: 'cat_porcoes', stock: 20 },
 
     // Sobremesas
     { id: 'prod_17', name: 'Petit Gâteau', price: 22.00, categoryId: 'cat_sobremesas', stock: 30 },
     { id: 'prod_18', name: 'Pudim de Leite', price: 15.00, categoryId: 'cat_sobremesas', stock: 25 },
 
     // Outros
-    { id: 'prod_19', name: 'Dose de Whisky 12 Anos', price: 30.00, categoryId: 'cat_outros', stock: null },
     { id: 'prod_20', name: 'Couvert Artístico', price: 10.00, categoryId: 'cat_outros', stock: null },
     { id: 'prod_21', name: 'Taxa de Serviço (10%)', price: 0, categoryId: 'cat_outros', stock: null },
 ];
+
 export const INITIAL_SALES: Sale[] = [];
 export const INITIAL_OPEN_ORDERS: ActiveOrder[] = [];
 export const INITIAL_ARCHIVED_ORDERS: ActiveOrder[] = [];
