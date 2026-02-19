@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy, LayoutGrid, List } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -36,23 +36,47 @@ import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc
 
 // --- Sub-componentes ---
 
-function ProductDisplay({ products, productCategories, addToOrder }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
-  if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado nesta categoria ou busca.</p>;
+function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
+  if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado.</p>;
+  
+  if (viewMode === 'grid') {
+    return (
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
+        {products.map(product => {
+          const category = productCategories.find(c => c.id === product.categoryId);
+          const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
+          return (
+            <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border-none shadow-none bg-muted/20" onClick={() => addToOrder(product)}>
+              <div className="aspect-square bg-muted/50 flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors rounded-lg">
+                <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+              <CardContent className="p-1 text-center">
+                <h3 className="font-medium truncate text-[10px] leading-tight mb-0.5">{product.name}</h3>
+                <p className="text-primary font-black text-[10px]">{formatCurrency(product.price)}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
+    <div className="space-y-1">
       {products.map(product => {
         const category = productCategories.find(c => c.id === product.categoryId);
         const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
         return (
-          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border-none shadow-none bg-muted/20" onClick={() => addToOrder(product)}>
-            <div className="aspect-square bg-muted/50 flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors rounded-lg">
-              <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
+          <div key={product.id} className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50 cursor-pointer" onClick={() => addToOrder(product)}>
+            <div className="flex items-center gap-3">
+              <IconComponent className="h-5 w-5 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold truncate">{product.name}</p>
+                <p className="text-[10px] text-muted-foreground">{category?.name}</p>
+              </div>
             </div>
-            <CardContent className="p-1 text-center">
-              <h3 className="font-medium truncate text-[10px] leading-tight mb-0.5">{product.name}</h3>
-              <p className="text-primary font-black text-[10px]">{formatCurrency(product.price)}</p>
-            </CardContent>
-          </Card>
+            <div className="text-xs font-black text-primary">{formatCurrency(product.price)}</div>
+          </div>
         );
       })}
     </div>
@@ -156,6 +180,7 @@ export default function OrdersClient() {
   
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
@@ -414,14 +439,37 @@ export default function OrdersClient() {
 
         <div className="md:col-span-5 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
-            <CardHeader>
-                <CardTitle>Produtos</CardTitle>
+            <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                    <CardTitle>Produtos</CardTitle>
+                    <div className="flex items-center gap-1 border rounded-md p-1 bg-muted/20">
+                        <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => setViewMode('grid')}><LayoutGrid className="h-4 w-4" /></Button>
+                        <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" className="h-7 w-7" onClick={() => setViewMode('list')}><List className="h-4 w-4" /></Button>
+                    </div>
+                </div>
                 <div className="relative pt-2"><Search className="absolute left-2.5 top-4.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar produto..." value={productSearchTerm} onChange={e => setProductSearchTerm(e.target.value)} className="pl-8" /></div>
             </CardHeader>
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
               <div className="px-4"><TabsList className="w-full overflow-x-auto"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
-                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode="grid" />
+                <TabsContent value="Todos" className="mt-0">
+                    <ProductDisplay 
+                        products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} 
+                        productCategories={productCategories} 
+                        addToOrder={addToOrder} 
+                        viewMode={viewMode} 
+                    />
+                </TabsContent>
+                {productCategories.map(c => (
+                    <TabsContent key={c.id} value={c.name} className="mt-0">
+                        <ProductDisplay 
+                            products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase())).filter(p => p.categoryId === c.id)} 
+                            productCategories={productCategories} 
+                            addToOrder={addToOrder} 
+                            viewMode={viewMode} 
+                        />
+                    </TabsContent>
+                ))}
               </ScrollArea>
             </Tabs>
           </Card>
