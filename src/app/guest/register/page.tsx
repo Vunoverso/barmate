@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, UserCircle2, Clock, PlusCircle, Search } from 'lucide-react';
+import { Loader2, UserCircle2, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function GuestRegisterPage() {

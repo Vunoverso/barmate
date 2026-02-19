@@ -43,9 +43,8 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { OrderStatement } from './order-statement';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, writeBatch, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
+import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
 
 // --- Sub-componentes ---
 
@@ -130,7 +129,7 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
                                 <Checkbox id={o.id} checked={!!sel[o.id]} onCheckedChange={(checked) => setSel(prev => ({...prev, [o.id]: !!checked}))} /> 
                                 <Label htmlFor={o.id} className="cursor-pointer flex-grow">{o.name}</Label>
                             </div>
-                        )) : <p className="text-center py-10 text-xs text-muted-foreground italic">Vazio.</p>}
+                        )) : <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma outra comanda aberta.</p>}
                     </ScrollArea>
                 </div>
                 <DialogFooter><Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))} disabled={!Object.values(sel).some(v => v)}>Juntar Selecionadas</Button></DialogFooter>
@@ -153,7 +152,7 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
                     <div className="space-y-2">
                         <Label>Origem</Label>
                         <Select onValueChange={setS} value={s}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder="Selecione a origem..." /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="permuta">Permuta / Cortesia</SelectItem>
                                 <SelectItem value="dinheiro">Dinheiro (Entra no Caixa)</SelectItem>
@@ -189,7 +188,6 @@ export default function OrdersClient() {
   const [orderToPrint, setOrderToPrint] = useState<ActiveOrder | null>(null);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
   const [requestToLink, setRequestToLink] = useState<GuestRequest | null>(null);
-  const statementRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -266,6 +264,11 @@ export default function OrdersClient() {
       } catch (e) {}
   };
 
+  const stopSharing = async (oid: string) => {
+      await deleteOrderFromFirestore(oid);
+      toast({ title: "Acesso Encerrado", description: "O cliente não visualiza mais esta comanda." });
+  };
+
   if (isLoading) return <div className="flex items-center justify-center h-full"><p>Carregando...</p></div>;
 
   return (
@@ -308,7 +311,7 @@ export default function OrdersClient() {
           <Card className="flex-grow flex flex-col">
             <CardHeader><CardTitle>Produtos</CardTitle></CardHeader>
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
-              <div className="px-4"><TabsList><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
+              <div className="px-4"><TabsList className="w-full overflow-x-auto"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
                 <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
               </ScrollArea>
@@ -320,13 +323,14 @@ export default function OrdersClient() {
           <Card className="flex-grow flex flex-col">
             <CardHeader className="pb-3 border-b bg-muted/10">
               {currentOrder && (
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-black truncate uppercase">{currentOrder.name}</h2>
+                <div className="space-y-3">
+                  <h2 className="text-3xl font-black text-foreground uppercase leading-none truncate">{currentOrder.name}</h2>
                   <div className="flex justify-between items-center">
-                      <div className="flex gap-2">
-                        <LinkIcon className="h-5 w-5 cursor-pointer text-primary" onClick={() => { syncOrderToFirestore(currentOrder); setOrderToShare(currentOrder); }} />
-                        <Merge className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} />
-                        <Printer className="h-5 w-5 cursor-pointer text-primary" onClick={() => setOrderToPrint(currentOrder)} />
+                      <div className="flex gap-3">
+                        <Tooltip><TooltipTrigger asChild><LinkIcon className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => { syncOrderToFirestore(currentOrder); setOrderToShare(currentOrder); }} /></TooltipTrigger><TooltipContent>Compartilhar</TooltipContent></Tooltip>
+                        {currentOrder.isShared && <Tooltip><TooltipTrigger asChild><Unlink className="h-5 w-5 cursor-pointer text-destructive hover:text-destructive/80 transition-colors" onClick={() => stopSharing(currentOrder.id)} /></TooltipTrigger><TooltipContent>Encerrar Acesso</TooltipContent></Tooltip>}
+                        <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => setOrderToPrint(currentOrder)} /></TooltipTrigger><TooltipContent>Imprimir</TooltipContent></Tooltip>
                       </div>
                       <div className="text-2xl font-black text-primary">{formatCurrency(orderTotal)}</div>
                   </div>
@@ -357,7 +361,7 @@ export default function OrdersClient() {
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onSave={(d: any) => { /* Credit logic */ setIsCreditDialogOpen(false); }} />
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(d: any) => { /* Payment logic */ setIsPaymentDialogOpen(false); }} />
       {orderToShare && <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={() => setOrderToShare(null)} order={orderToShare} />}
-      {requestToLink && <Dialog open={!!requestToLink} onOpenChange={() => setRequestToLink(null)}><DialogContent><DialogHeader><DialogTitle>Vincular {requestToLink.name}</DialogTitle></DialogHeader><ScrollArea className="h-[300px] border rounded-md">{openOrders.map(o => <Button key={o.id} variant="ghost" className="w-full justify-start" onClick={() => handleLinkRequestToOrder(o.id)}>{o.name}</Button>)}</ScrollArea></DialogContent></Dialog>}
+      {requestToLink && <Dialog open={!!requestToLink} onOpenChange={() => setRequestToLink(null)}><DialogContent><DialogHeader><DialogTitle>Vincular {requestToLink.name}</DialogTitle></DialogHeader><ScrollArea className="h-[300px] border rounded-md p-2">{openOrders.map(o => <Button key={o.id} variant="ghost" className="w-full justify-start mb-1" onClick={() => handleLinkRequestToOrder(o.id)}>{o.name}</Button>)}</ScrollArea></DialogContent></Dialog>}
     </TooltipProvider>
   );
 }

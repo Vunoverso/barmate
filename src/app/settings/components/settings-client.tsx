@@ -260,12 +260,6 @@ export default function SettingsClient() {
     toast({ title: "Sucesso!", description: "Dados do estabelecimento e marca atualizados." });
   };
 
-  const handleSaveTransactionFees = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    saveTransactionFees(transactionFees);
-    toast({ title: "Taxas Salvas!", description: "As taxas de transação foram atualizadas." });
-  };
-
   const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
   const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
@@ -437,27 +431,64 @@ export default function SettingsClient() {
       </div>
 
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
-      {editingCategory && <EditCategoryDialog isOpen={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen} category={editingCategory} onSave={handleSaveCategory} />}
-      <AddCategoryDialog isOpen={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen} onSave={handleAddNewCategory} />
+      
+      {editingCategory && (
+        <EditCategoryDialog 
+          isOpen={isEditCategoryDialogOpen} 
+          onOpenChange={setIsEditCategoryDialogOpen} 
+          category={editingCategory} 
+          onSave={handleSaveCategory} 
+        />
+      )}
+      
+      <AddCategoryDialog 
+        isOpen={isAddCategoryDialogOpen} 
+        onOpenChange={setIsAddCategoryDialogOpen} 
+        onSave={handleAddNewCategory} 
+      />
       
       <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Importar Backup?</AlertDialogTitle><AlertDialogDescription>Isso substituirá todos os dados atuais.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">Substituir</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar Backup?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação substituirá todos os dados atuais por completo.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setImportAlertOpen(false); fileInputRef.current?.click(); }} className="bg-destructive">
+              Continuar e Substituir
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={clearFinancialsAlertOpen} onOpenChange={setClearFinancialsAlertOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Zerar Histórico?</AlertDialogTitle><AlertDialogDescription>Todas as vendas e caixa serão apagados.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">Zerar</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Zerar Histórico?</AlertDialogTitle>
+            <AlertDialogDescription>Todas as vendas e movimentações de caixa serão apagadas permanentemente.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearFinancialHistory} className="bg-destructive">
+              Zerar Agora
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Remover Categoria?</AlertDialogTitle></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">Remover</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover Categoria?</AlertDialogTitle>
+            <AlertDialogDescription>Isso não apagará os produtos, mas eles ficarão sem categoria.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive">
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
