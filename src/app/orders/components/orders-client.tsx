@@ -26,6 +26,16 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { db } from '@/lib/firebase';
@@ -87,6 +97,7 @@ export default function OrdersClient() {
   const [clients, setClients] = useState<Client[]>([]);
   const [pendingRequests, setPendingRequests] = useState<GuestRequest[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
   
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -123,7 +134,6 @@ export default function OrdersClient() {
     try { await deleteDoc(doc(db, 'open_orders', orderId)); } catch (e) {}
   };
 
-  // Listen to open orders for viewer count
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
@@ -139,7 +149,6 @@ export default function OrdersClient() {
     return () => unsubscribe();
   }, []);
 
-  // Listen to guest requests
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'guest_requests'), (snapshot) => {
@@ -241,6 +250,18 @@ export default function OrdersClient() {
     const newOrders = [...orders];
     newOrders[idx] = order;
     updateOrdersAndSync(newOrders);
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    const all = getOpenOrders();
+    const updated = all.filter(o => o.id !== orderToDelete.id);
+    saveOpenOrders(updated);
+    setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
+    if (orderToDelete.isShared) await deleteOrderFromFirestore(orderToDelete.id);
+    if (currentOrderId === orderToDelete.id) setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
+    setOrderToDelete(null);
+    toast({ title: "Comanda Cancelada" });
   };
 
   const handlePrintStatement = () => {
@@ -370,7 +391,12 @@ export default function OrdersClient() {
                                 {(o.viewerCount || 0) > 0 && <Wifi className="h-3.5 w-3.5 text-green-500 animate-pulse shrink-0"/>}
                             </div>
                           </div>
-                          <div className={cn("text-right font-black text-xs", hasCredit && "text-green-600")}>{formatCurrency(balance)}</div>
+                          <div className="flex items-center gap-2">
+                              <div className={cn("text-right font-black text-xs", hasCredit && "text-green-600")}>{formatCurrency(balance)}</div>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setOrderToDelete(o); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                          </div>
                         </div>
                       );
                     })}
@@ -532,6 +558,23 @@ export default function OrdersClient() {
             </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!orderToDelete} onOpenChange={(o) => !o && setOrderToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Cancelamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja cancelar e excluir a comanda <strong>{orderToDelete?.name}</strong>? Esta ação não pode ser desfeita e todos os itens lançados serão perdidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive hover:bg-destructive/90 text-white">
+              Confirmar Exclusão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }
