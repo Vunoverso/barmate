@@ -46,7 +46,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
 
-// --- Sub-componentes ---
+// --- Sub-componentes Definidos no Topo para Evitar ReferenceErrors ---
 
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
@@ -132,7 +132,10 @@ function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMe
                         )) : <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma outra comanda aberta.</p>}
                     </ScrollArea>
                 </div>
-                <DialogFooter><Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))} disabled={!Object.values(sel).some(v => v)}>Juntar Selecionadas</Button></DialogFooter>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                    <Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))} disabled={!Object.values(sel).some(v => v)}>Juntar Selecionadas</Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
@@ -147,25 +150,30 @@ function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
             <DialogContent>
                 <DialogHeader><DialogTitle>Adicionar Crédito</DialogTitle></DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className="space-y-2"><Label>Valor do Crédito</Label><Input type="number" value={a} onChange={e => setA(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Motivo</Label><Input value={d} onChange={e => setD(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Valor do Crédito</Label><Input type="number" value={a} onChange={e => setA(e.target.value)} placeholder="0,00" /></div>
+                    <div className="space-y-2"><Label>Motivo</Label><Input value={d} onChange={e => setD(e.target.value)} placeholder="Ex: Troco de pagamento anterior" /></div>
                     <div className="space-y-2">
-                        <Label>Origem</Label>
+                        <Label>Origem do Valor</Label>
                         <Select onValueChange={setS} value={s}>
                             <SelectTrigger><SelectValue placeholder="Selecione a origem..." /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="permuta">Permuta / Cortesia</SelectItem>
-                                <SelectItem value="dinheiro">Dinheiro (Entra no Caixa)</SelectItem>
-                                <SelectItem value="cartao">Cartão / PIX (Banco)</SelectItem>
+                                <SelectItem value="permuta">Permuta / Cortesia (Não entra no caixa)</SelectItem>
+                                <SelectItem value="dinheiro">Dinheiro (Entra no Caixa Diário)</SelectItem>
+                                <SelectItem value="cartao">Cartão / PIX (Vai para o Banco)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                 </div>
-                <DialogFooter><Button onClick={() => onSave({amount: parseFloat(a), description: d, source: s})}>Confirmar</Button></DialogFooter>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                    <Button onClick={() => onSave({amount: parseFloat(a), description: d, source: s})}>Confirmar Crédito</Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
+
+// --- Componente Principal ---
 
 export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -180,12 +188,8 @@ export default function OrdersClient() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState<ActiveOrder | null>(null);
-  const [orderToArchive, setOrderToArchive] = useState<ActiveOrder | null>(null);
-  const [orderToEdit, setOrderToEdit] = useState<ActiveOrder | null>(null);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
-  const [orderToPrint, setOrderToPrint] = useState<ActiveOrder | null>(null);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
   const [requestToLink, setRequestToLink] = useState<GuestRequest | null>(null);
 
@@ -269,6 +273,72 @@ export default function OrdersClient() {
       toast({ title: "Acesso Encerrado", description: "O cliente não visualiza mais esta comanda." });
   };
 
+  const handleMergeOrders = (ids: string[]) => {
+      if (!currentOrder) return;
+      const allOpen = getOpenOrders();
+      const targetOrder = allOpen.find(o => o.id === currentOrder.id);
+      if (!targetOrder) return;
+
+      ids.forEach(id => {
+          const sourceOrder = allOpen.find(o => o.id === id);
+          if (sourceOrder) {
+              targetOrder.items.push(...sourceOrder.items);
+          }
+      });
+
+      const updated = allOpen.filter(o => !ids.includes(o.id));
+      saveOpenOrders(updated);
+      setIsMergeDialogOpen(false);
+      toast({ title: "Comandas Unidas!", description: `${ids.length} comanda(s) movida(s) para ${targetOrder.name}.` });
+      ids.forEach(id => deleteOrderFromFirestore(id));
+      if (targetOrder.isShared) syncOrderToFirestore(targetOrder);
+  };
+
+  const handleAddCredit = (details: { amount: number, description: string, source: string }) => {
+      if (!currentOrder) return;
+      const allOpen = getOpenOrders();
+      const order = allOpen.find(o => o.id === currentOrder.id);
+      if (!order) return;
+
+      const creditItem: OrderItem = {
+          id: `credit-${Date.now()}`,
+          name: `Crédito: ${details.description}`,
+          price: -Math.abs(details.amount),
+          categoryId: 'cat_outros',
+          quantity: 1,
+          lineItemId: `li-credit-${Date.now()}`
+      };
+
+      order.items.push(creditItem);
+      saveOpenOrders(allOpen);
+
+      if (details.source !== 'permuta') {
+          addFinancialEntry({
+              description: `Crédito em Comanda (${order.name}): ${details.description}`,
+              amount: details.amount,
+              type: 'income',
+              source: details.source === 'dinheiro' ? 'daily_cash' : 'bank_account',
+              saleId: null,
+              adjustmentId: null
+          });
+      }
+
+      setIsCreditDialogOpen(false);
+      toast({ title: "Crédito Adicionado!" });
+      if (order.isShared) syncOrderToFirestore(order);
+  };
+
+  const handlePayment = (details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'> }) => {
+      if (!currentOrder) return;
+      addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
+      const updated = getOpenOrders().filter(o => o.id !== currentOrder.id);
+      saveOpenOrders(updated);
+      deleteOrderFromFirestore(currentOrder.id);
+      setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
+      setIsPaymentDialogOpen(false);
+      toast({ title: "Pagamento Concluído!" });
+  };
+
   if (isLoading) return <div className="flex items-center justify-center h-full"><p>Carregando...</p></div>;
 
   return (
@@ -287,7 +357,7 @@ export default function OrdersClient() {
                         <p className="text-[10px] font-bold uppercase text-primary px-2">Aguardando vínculo</p>
                         {guestRequests.map(req => (
                             <div key={req.id} className="bg-primary/5 border rounded-lg p-2 flex justify-between items-center">
-                                <div className="min-w-0"><p className="text-xs font-bold truncate">{req.name}</p></div>
+                                <div className="min-w-0"><p className="text-xs font-bold truncate">{req.name}</p><p className="text-[9px] opacity-60 uppercase">{req.intent === 'create' ? 'Nova Comanda' : 'Ver Aberta'}</p></div>
                                 <Button size="sm" className="h-7 text-[10px]" onClick={() => setRequestToLink(req)}>Vincular</Button>
                             </div>
                         ))}
@@ -295,12 +365,33 @@ export default function OrdersClient() {
                     </div>
                 )}
                 <div className="space-y-2">
-                    {openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).map(o => (
-                      <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between")}>
-                        <div className="min-w-0"><div className="font-semibold text-xs truncate flex items-center gap-1">{o.name}{o.isShared && <LinkIcon className="h-2.5 w-2.5 text-blue-500"/>}{(o.viewerCount || 0) > 0 && <Wifi className="h-2.5 w-2.5 text-green-500 animate-pulse"/>}</div></div>
-                        <div className="text-right font-semibold text-xs">{formatCurrency(o.items.reduce((acc, i) => acc + i.price * i.quantity, 0))}</div>
-                      </div>
-                    ))}
+                    {openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).map(o => {
+                      const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
+                      const hasCredit = balance < 0;
+                      return (
+                        <div 
+                          key={o.id} 
+                          role="button" 
+                          onClick={() => setCurrentOrderId(o.id)} 
+                          className={cn(
+                            buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), 
+                            "w-full h-auto py-2 px-3 cursor-pointer flex justify-between transition-all",
+                            hasCredit && "border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
+                          )}
+                        >
+                          <div className="min-w-0">
+                            <div className="font-semibold text-xs truncate flex items-center gap-1">
+                              {o.name}
+                              {o.isShared && <LinkIcon className="h-2.5 w-2.5 text-blue-500"/>}
+                              {(o.viewerCount || 0) > 0 && <Wifi className="h-2.5 w-2.5 text-green-500 animate-pulse"/>}
+                            </div>
+                          </div>
+                          <div className={cn("text-right font-semibold text-xs", hasCredit && "text-green-600")}>
+                            {formatCurrency(balance)}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -313,7 +404,7 @@ export default function OrdersClient() {
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
               <div className="px-4"><TabsList className="w-full overflow-x-auto"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
-                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
+                <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase())).filter(p => activeDisplayCategory === 'Todos' || productCategories.find(c => c.id === p.categoryId)?.name === activeDisplayCategory)} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
               </ScrollArea>
             </Tabs>
           </Card>
@@ -321,7 +412,7 @@ export default function OrdersClient() {
 
         <div className="md:col-span-4 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
-            <CardHeader className="pb-3 border-b bg-muted/10">
+            <CardHeader className={cn("pb-3 border-b transition-colors", orderTotal < 0 ? "bg-yellow-500/20" : "bg-muted/10")}>
               {currentOrder && (
                 <div className="space-y-3">
                   <h2 className="text-3xl font-black text-foreground uppercase leading-none truncate">{currentOrder.name}</h2>
@@ -330,9 +421,9 @@ export default function OrdersClient() {
                         <Tooltip><TooltipTrigger asChild><LinkIcon className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => { syncOrderToFirestore(currentOrder); setOrderToShare(currentOrder); }} /></TooltipTrigger><TooltipContent>Compartilhar</TooltipContent></Tooltip>
                         {currentOrder.isShared && <Tooltip><TooltipTrigger asChild><Unlink className="h-5 w-5 cursor-pointer text-destructive hover:text-destructive/80 transition-colors" onClick={() => stopSharing(currentOrder.id)} /></TooltipTrigger><TooltipContent>Encerrar Acesso</TooltipContent></Tooltip>}
                         <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
-                        <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => setOrderToPrint(currentOrder)} /></TooltipTrigger><TooltipContent>Imprimir</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary hover:text-primary/80 transition-colors" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                       </div>
-                      <div className="text-2xl font-black text-primary">{formatCurrency(orderTotal)}</div>
+                      <div className={cn("text-2xl font-black", orderTotal < 0 ? "text-green-600" : "text-primary")}>{formatCurrency(orderTotal)}</div>
                   </div>
                 </div>
               )}
@@ -341,9 +432,9 @@ export default function OrdersClient() {
               <ScrollArea className="h-full p-4">
                 {currentOrder?.items.length === 0 ? <p className="text-center py-10 opacity-50">Comanda vazia.</p> : <ul className="space-y-2">
                   {currentOrder?.items.map((item, i) => (
-                    <li key={i} className="flex justify-between items-center p-1.5 border rounded-md">
+                    <li key={i} className={cn("flex justify-between items-center p-1.5 border rounded-md", item.price < 0 && "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800")}>
                       <span className="text-xs truncate max-w-[150px]">{item.name}</span>
-                      <span className="text-xs font-bold">{formatCurrency(item.price * item.quantity)}</span>
+                      <span className={cn("text-xs font-bold", item.price < 0 && "text-green-600")}>{formatCurrency(item.price * item.quantity)}</span>
                     </li>
                   ))}
                 </ul>}
@@ -357,11 +448,11 @@ export default function OrdersClient() {
       </div>
 
       <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; saveOpenOrders([...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]); setCurrentOrderId(id); }} clients={clients} />
-      {currentOrder && <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} allOrders={openOrders} onMerge={(ids: any) => { /* Merge logic */ setIsMergeDialogOpen(false); }} />}
-      <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onSave={(d: any) => { /* Credit logic */ setIsCreditDialogOpen(false); }} />
-      <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(d: any) => { /* Payment logic */ setIsPaymentDialogOpen(false); }} />
+      {currentOrder && <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} allOrders={openOrders} onMerge={handleMergeOrders} />}
+      <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onSave={handleAddCredit} />
+      <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={handlePayment} />
       {orderToShare && <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={() => setOrderToShare(null)} order={orderToShare} />}
-      {requestToLink && <Dialog open={!!requestToLink} onOpenChange={() => setRequestToLink(null)}><DialogContent><DialogHeader><DialogTitle>Vincular {requestToLink.name}</DialogTitle></DialogHeader><ScrollArea className="h-[300px] border rounded-md p-2">{openOrders.map(o => <Button key={o.id} variant="ghost" className="w-full justify-start mb-1" onClick={() => handleLinkRequestToOrder(o.id)}>{o.name}</Button>)}</ScrollArea></DialogContent></Dialog>}
+      {requestToLink && <Dialog open={!!requestToLink} onOpenChange={() => setRequestToLink(null)}><DialogContent><DialogHeader><DialogTitle>Vincular {requestToLink.name}</DialogTitle><DialogDescription>Escolha uma comanda aberta para vincular o acesso deste cliente.</DialogDescription></DialogHeader><ScrollArea className="h-[300px] border rounded-md p-2">{openOrders.map(o => <Button key={o.id} variant="ghost" className="w-full justify-start mb-1" onClick={() => handleLinkRequestToOrder(o.id)}>{o.name}</Button>)}</ScrollArea></DialogContent></Dialog>}
     </TooltipProvider>
   );
 }

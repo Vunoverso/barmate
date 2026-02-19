@@ -126,7 +126,7 @@ export default function GuestRegisterPage() {
                     </div>
                     <div className="flex flex-col gap-3">
                         <Button className="w-full h-14 text-lg font-bold flex flex-col" disabled={isSubmitting || !name.trim()} onClick={() => handleSendRequest('create')}>
-                            <span>Solicitar Nova Comanda</span>
+                            <span>Solicitar Criação de Comanda</span>
                             <span className="text-[10px] font-normal opacity-70">Ainda não tenho uma conta</span>
                         </Button>
                         <Button variant="secondary" className="w-full h-14 text-lg font-bold flex flex-col" disabled={isSubmitting || !name.trim()} onClick={() => handleSendRequest('view')}>
