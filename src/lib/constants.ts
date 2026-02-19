@@ -38,7 +38,7 @@ export const KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES = 'barmate_session_visuallyR
 export const KEY_VISUALLY_REMOVED_ADJUSTMENTS = 'barmate_session_visuallyRemovedAdjustments';
 
 
-// --- INITIAL DATA (CLEAN STATE) ---
+// --- INITIAL DATA ---
 export const INITIAL_PRODUCT_CATEGORIES: ProductCategory[] = [
   { id: 'cat_cervejas', name: 'Cervejas', iconName: 'Beer' },
   { id: 'cat_alcoolicas', name: 'Bebidas Alcoólicas', iconName: 'Martini' },
@@ -56,7 +56,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     { id: 'prod_2', name: 'Cerveja IPA Long Neck', price: 15.00, categoryId: 'cat_cervejas', stock: 50 },
     { id: 'prod_22', name: 'Balde com 6 Pilsen Long Neck', price: 60.00, categoryId: 'cat_cervejas', stock: 20, isCombo: true, comboItems: 6},
 
-    // Bebidas Alcoólicas (Destilados/Drinks)
+    // Bebidas Alcoólicas
     { id: 'prod_6', name: 'Caipirinha de Limão', price: 18.00, categoryId: 'cat_alcoolicas', stock: null },
     { id: 'prod_7', name: 'Gin Tônica', price: 28.00, categoryId: 'cat_alcoolicas', stock: null },
     { id: 'prod_8', name: 'Mojito', price: 22.00, categoryId: 'cat_alcoolicas', stock: null },
@@ -87,7 +87,6 @@ export const INITIAL_PRODUCTS: Product[] = [
 
     // Outros
     { id: 'prod_20', name: 'Couvert Artístico', price: 10.00, categoryId: 'cat_outros', stock: null },
-    { id: 'prod_21', name: 'Taxa de Serviço (10%)', price: 0, categoryId: 'cat_outros', stock: null },
 ];
 
 export const INITIAL_SALES: Sale[] = [];
@@ -102,7 +101,6 @@ export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 1.99, cred
 
 
 // --- UI Helpers ---
-
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Wallet, Users
 };

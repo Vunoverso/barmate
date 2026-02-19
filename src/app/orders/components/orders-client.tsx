@@ -34,8 +34,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
 
-// --- Sub-componentes ---
-
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado.</p>;
   
@@ -82,93 +80,6 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: {
     </div>
   );
 }
-
-function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, onOpenChange: (o: boolean) => void, order: ActiveOrder }) {
-  const { toast } = useToast();
-  const [url, setUrl] = useState('');
-  useEffect(() => { 
-    if (isOpen) {
-        let origin = window.location.origin;
-        if (origin.includes('cloudworkstations.dev') && !origin.includes('9000-')) {
-            origin = origin.replace(/\d+-/, '9000-');
-        }
-        setUrl(`${origin}/my-order/${order.id}`); 
-    }
-  }, [isOpen, order.id]);
-  const copy = () => { navigator.clipboard.writeText(url); toast({ title: "Link copiado!" }); };
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md text-center">
-        <DialogHeader><DialogTitle>Compartilhar Comanda</DialogTitle></DialogHeader>
-        <div className="py-4 flex flex-col items-center gap-4">
-          <Image src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`} alt="QR" width={250} height={250} className="rounded-lg border" unoptimized />
-          <div className="flex w-full gap-2"><Input value={url} readOnly /><Button size="icon" onClick={copy}><Copy className="h-4 w-4" /></Button></div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMerge }: any) {
-    const [sel, setSel] = useState<Record<string, boolean>>({});
-    const other = allOrders.filter((o: any) => o.id !== currentOrder?.id);
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader><DialogTitle>Juntar Comandas</DialogTitle></DialogHeader>
-                <div className="py-2">
-                    <Label className="text-xs text-muted-foreground mb-2 block">Selecione as comandas a serem movidas para "{currentOrder?.name}"</Label>
-                    <ScrollArea className="h-48 border rounded-md p-2">
-                        {other.length > 0 ? other.map((o: any) => (
-                            <div key={o.id} className="flex items-center gap-2 p-2 hover:bg-muted/50 rounded-md">
-                                <Checkbox id={o.id} checked={!!sel[o.id]} onCheckedChange={(checked) => setSel(prev => ({...prev, [o.id]: !!checked}))} /> 
-                                <Label htmlFor={o.id} className="cursor-pointer flex-grow">{o.name}</Label>
-                            </div>
-                        )) : <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma outra comanda aberta.</p>}
-                    </ScrollArea>
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                    <Button onClick={() => onMerge(Object.keys(sel).filter(k => sel[k]))} disabled={!Object.values(sel).some(v => v)}>Juntar Selecionadas</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function AddCreditDialog({ isOpen, onOpenChange, onSave }: any) {
-    const [a, setA] = useState('');
-    const [d, setD] = useState('');
-    const [s, setS] = useState('permuta');
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader><DialogTitle>Adicionar Crédito</DialogTitle></DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2"><Label>Valor do Crédito</Label><Input type="number" value={a} onChange={e => setA(e.target.value)} placeholder="0,00" /></div>
-                    <div className="space-y-2"><Label>Motivo</Label><Input value={d} onChange={e => setD(e.target.value)} placeholder="Ex: Troco de pagamento anterior" /></div>
-                    <div className="space-y-2">
-                        <Label>Origem do Valor</Label>
-                        <Select onValueChange={setS} value={s}>
-                            <SelectTrigger><SelectValue placeholder="Selecione a origem..." /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="permuta">Permuta / Cortesia (Não entra no caixa)</SelectItem>
-                                <SelectItem value="dinheiro">Dinheiro (Entra no Caixa Diário)</SelectItem>
-                                <SelectItem value="cartao">Cartão / PIX (Vai para o Banco)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                    <Button onClick={() => onSave({amount: parseFloat(a), description: d, source: s})}>Confirmar Crédito</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-// --- Componente Principal ---
 
 export default function OrdersClient() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -308,92 +219,6 @@ export default function OrdersClient() {
     updateOrdersAndSync(orders);
   };
 
-  const handleLinkRequestToOrder = async (oid: string) => {
-      if (!requestToLink || !db) return;
-      try {
-          const orders = getOpenOrders();
-          const target = orders.find(o => o.id === oid);
-          if (target) {
-              target.isShared = true;
-              saveOpenOrders(orders);
-              setOpenOrders([...orders]);
-              await syncOrderToFirestore(target);
-          }
-          await updateDoc(doc(db, 'guest_requests', requestToLink.id), { status: 'approved', associatedOrderId: oid });
-          setRequestToLink(null);
-          toast({ title: "Cliente Vinculado!" });
-      } catch (e) {}
-  };
-
-  const stopSharing = async (oid: string) => {
-      await deleteOrderFromFirestore(oid);
-      const orders = getOpenOrders().map(o => o.id === oid ? { ...o, isShared: false } : o);
-      saveOpenOrders(orders);
-      setOpenOrders(orders);
-      toast({ title: "Acesso Encerrado" });
-  };
-
-  const handleMergeOrders = (ids: string[]) => {
-      if (!currentOrder) return;
-      const all = getOpenOrders();
-      const target = all.find(o => o.id === currentOrder.id);
-      if (!target) return;
-
-      ids.forEach(id => {
-          const source = all.find(o => o.id === id);
-          if (source) { target.items.push(...source.items); deleteOrderFromFirestore(id); }
-      });
-
-      const updated = all.filter(o => !ids.includes(o.id));
-      updateOrdersAndSync(updated);
-      setIsMergeDialogOpen(false);
-      toast({ title: "Comandas Unidas!" });
-  };
-
-  const handleAddCredit = (details: { amount: number, description: string, source: string }) => {
-      const all = getOpenOrders();
-      const order = all.find(o => o.id === currentOrderId);
-      if (!order) return;
-
-      order.items.push({
-          id: `credit-${Date.now()}`,
-          name: `Crédito: ${details.description}`,
-          price: -Math.abs(details.amount),
-          categoryId: 'cat_outros',
-          quantity: 1,
-          lineItemId: `li-credit-${Date.now()}`
-      });
-
-      if (details.source !== 'permuta') {
-          addFinancialEntry({
-              description: `Crédito em Comanda (${order.name}): ${details.description}`,
-              amount: details.amount,
-              type: 'income',
-              source: details.source === 'dinheiro' ? 'daily_cash' : 'bank_account',
-              saleId: null,
-              adjustmentId: null
-          });
-      }
-
-      updateOrdersAndSync(all);
-      setIsCreditDialogOpen(false);
-      toast({ title: "Crédito Adicionado!" });
-  };
-
-  const handlePayment = (details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'> }) => {
-      if (!currentOrder) return;
-      addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
-      const updated = getOpenOrders().filter(o => o.id !== currentOrder.id);
-      saveOpenOrders(updated);
-      setOpenOrders(updated);
-      deleteOrderFromFirestore(currentOrder.id);
-      setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
-      setIsPaymentDialogOpen(false);
-      toast({ title: "Pagamento Concluído!" });
-  };
-
-  if (isLoading) return <div className="flex items-center justify-center h-full"><p>Carregando...</p></div>;
-
   return (
     <TooltipProvider>
       <div className="grid md:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
@@ -405,18 +230,6 @@ export default function OrdersClient() {
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">
-                {guestRequests.length > 0 && (
-                    <div className="mb-4 space-y-2">
-                        <p className="text-[10px] font-bold uppercase text-primary px-2">Aguardando vínculo</p>
-                        {guestRequests.map(req => (
-                            <div key={req.id} className="bg-primary/5 border rounded-lg p-2 flex justify-between items-center">
-                                <div className="min-w-0"><p className="text-xs font-bold truncate">{req.name}</p><p className="text-[9px] opacity-60 uppercase">{req.intent === 'create' ? 'Nova Comanda' : 'Ver Aberta'}</p></div>
-                                <Button size="sm" className="h-7 text-[10px]" onClick={() => setRequestToLink(req)}>Vincular</Button>
-                            </div>
-                        ))}
-                        <Separator className="my-4" />
-                    </div>
-                )}
                 <div className="space-y-2">
                     {openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).map(o => {
                       const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
@@ -450,24 +263,14 @@ export default function OrdersClient() {
                 <div className="relative pt-2"><Search className="absolute left-2.5 top-4.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar produto..." value={productSearchTerm} onChange={e => setProductSearchTerm(e.target.value)} className="pl-8" /></div>
             </CardHeader>
             <Tabs value={activeDisplayCategory} onValueChange={setActiveDisplayCategory} className="flex-grow flex flex-col overflow-hidden">
-              <div className="px-4"><TabsList className="w-full overflow-x-auto"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
+              <div className="px-4 overflow-x-auto"><TabsList className="w-fit min-w-full justify-start"><TabsTrigger value="Todos">Todos</TabsTrigger>{productCategories.map(c => <TabsTrigger key={c.id} value={c.name}>{c.name}</TabsTrigger>)}</TabsList></div>
               <ScrollArea className="flex-grow p-4">
                 <TabsContent value="Todos" className="mt-0">
-                    <ProductDisplay 
-                        products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} 
-                        productCategories={productCategories} 
-                        addToOrder={addToOrder} 
-                        viewMode={viewMode} 
-                    />
+                    <ProductDisplay products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                 </TabsContent>
                 {productCategories.map(c => (
                     <TabsContent key={c.id} value={c.name} className="mt-0">
-                        <ProductDisplay 
-                            products={products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase())).filter(p => p.categoryId === c.id)} 
-                            productCategories={productCategories} 
-                            addToOrder={addToOrder} 
-                            viewMode={viewMode} 
-                        />
+                        <ProductDisplay products={products.filter(p => p.categoryId === c.id && p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))} productCategories={productCategories} addToOrder={addToOrder} viewMode={viewMode} />
                     </TabsContent>
                 ))}
               </ScrollArea>
@@ -488,7 +291,6 @@ export default function OrdersClient() {
                             const target = all.find(o => o.id === currentOrder.id);
                             if(target) { target.isShared = true; saveOpenOrders(all); setOpenOrders([...all]); syncOrderToFirestore(target); setOrderToShare(target); }
                         }} /></TooltipTrigger><TooltipContent>Compartilhar</TooltipContent></Tooltip>
-                        {currentOrder.isShared && <Tooltip><TooltipTrigger asChild><Unlink className="h-5 w-5 cursor-pointer text-destructive" onClick={() => stopSharing(currentOrder.id)} /></TooltipTrigger><TooltipContent>Encerrar Acesso</TooltipContent></Tooltip>}
                         <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                       </div>
@@ -528,11 +330,17 @@ export default function OrdersClient() {
       </div>
 
       <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(newOrders); setCurrentOrderId(id); }} clients={clients} />
-      {currentOrder && <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} allOrders={openOrders} onMerge={handleMergeOrders} />}
-      <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onSave={handleAddCredit} />
-      <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={handlePayment} />
-      {orderToShare && <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={() => setOrderToShare(null)} order={orderToShare} />}
-      {requestToLink && <Dialog open={!!requestToLink} onOpenChange={() => setRequestToLink(null)}><DialogContent><DialogHeader><DialogTitle>Vincular {requestToLink.name}</DialogTitle><DialogDescription>Escolha uma comanda aberta.</DialogDescription></DialogHeader><ScrollArea className="h-[300px] border rounded-md p-2">{openOrders.map(o => <Button key={o.id} variant="ghost" className="w-full justify-start mb-1" onClick={() => handleLinkRequestToOrder(o.id)}>{o.name}</Button>)}</ScrollArea></DialogContent></Dialog>}
+      <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(details) => {
+          if (!currentOrder) return;
+          addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
+          const updated = getOpenOrders().filter(o => o.id !== currentOrder.id);
+          saveOpenOrders(updated);
+          setOpenOrders(updated);
+          deleteOrderFromFirestore(currentOrder.id);
+          setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
+          setIsPaymentDialogOpen(false);
+          toast({ title: "Pagamento Concluído!" });
+      }} />
     </TooltipProvider>
   );
 }
