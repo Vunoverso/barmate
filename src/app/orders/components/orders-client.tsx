@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -286,6 +286,18 @@ export default function OrdersClient() {
       } catch (err) {}
   };
 
+  const handleStopSharing = async (order: ActiveOrder) => {
+    const all = getOpenOrders();
+    const target = all.find(o => o.id === order.id);
+    if (target) {
+        target.isShared = false;
+        saveOpenOrders(all);
+        setOpenOrders([...all]);
+        await deleteOrderFromFirestore(order.id);
+        toast({ title: "Compartilhamento Interrompido" });
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="grid md:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
@@ -368,11 +380,31 @@ export default function OrdersClient() {
                   <h2 className="text-3xl font-black text-foreground uppercase leading-none truncate">{currentOrder.name}</h2>
                   <div className="flex justify-between items-center">
                       <div className="flex gap-3">
-                        <Tooltip><TooltipTrigger asChild><LinkIcon className="h-5 w-5 cursor-pointer text-primary" onClick={() => { 
-                            const all = getOpenOrders();
-                            const target = all.find(o => o.id === currentOrder.id);
-                            if(target) { target.isShared = true; saveOpenOrders(all); setOpenOrders([...all]); syncOrderToFirestore(target); setOrderToShare(target); }
-                        }} /></TooltipTrigger><TooltipContent>Compartilhar</TooltipContent></Tooltip>
+                        {currentOrder.isShared ? (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Link2Off 
+                                        className="h-5 w-5 cursor-pointer text-destructive" 
+                                        onClick={() => handleStopSharing(currentOrder)} 
+                                    />
+                                </TooltipTrigger>
+                                <TooltipContent>Parar Compartilhamento</TooltipContent>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <LinkIcon 
+                                        className="h-5 w-5 cursor-pointer text-primary" 
+                                        onClick={() => { 
+                                            const all = getOpenOrders();
+                                            const target = all.find(o => o.id === currentOrder.id);
+                                            if(target) { target.isShared = true; saveOpenOrders(all); setOpenOrders([...all]); syncOrderToFirestore(target); setOrderToShare(target); }
+                                        }} 
+                                    />
+                                </TooltipTrigger>
+                                <TooltipContent>Compartilhar</TooltipContent>
+                            </Tooltip>
+                        )}
                         <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsPrintDialogOpen(true)} /></TooltipTrigger><TooltipContent>Imprimir Extrato</TooltipContent></Tooltip>

@@ -23,12 +23,23 @@ export default function GuestRegisterPage() {
     const { toast } = useToast();
 
     useEffect(() => {
-        const savedId = typeof window !== 'undefined' ? localStorage.getItem('barmate_guest_request_id') : null;
-        if (savedId) {
-            setRequestId(savedId);
+        const savedName = localStorage.getItem('barmate_guest_name');
+        if (savedName) setName(savedName);
+
+        const lastOrderId = localStorage.getItem('barmate_last_order_id');
+        const savedRequestId = localStorage.getItem('barmate_guest_request_id');
+        
+        // Se já tem uma comanda ativa e não está pendente de uma nova, redireciona direto
+        if (lastOrderId && !savedRequestId) {
+            router.push(`/my-order/${lastOrderId}`);
+            return;
+        }
+
+        if (savedRequestId) {
+            setRequestId(savedRequestId);
             setStatus('pending');
         }
-    }, []);
+    }, [router]);
 
     useEffect(() => {
         if (!db) return;
@@ -51,6 +62,7 @@ export default function GuestRegisterPage() {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.status === 'approved' && data.associatedOrderId) {
+                    localStorage.setItem('barmate_last_order_id', data.associatedOrderId);
                     localStorage.removeItem('barmate_guest_request_id');
                     router.push(`/my-order/${data.associatedOrderId}`);
                 } else if (data.status === 'rejected') {
@@ -67,6 +79,7 @@ export default function GuestRegisterPage() {
     const handleSendRequest = async (intent: 'create' | 'view') => {
         if (!name.trim() || !db) return;
         setIsSubmitting(true);
+        localStorage.setItem('barmate_guest_name', name.trim());
         try {
             const docRef = await addDoc(collection(db, 'guest_requests'), {
                 name: name.trim(),

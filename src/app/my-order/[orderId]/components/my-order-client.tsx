@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
+import { Button } from '@/components/ui/button';
 
 export default function MyOrderClient({ orderId }: { orderId: string }) {
     const [order, setOrder] = useState<ActiveOrder | null>(null);
@@ -100,6 +101,18 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                             {error || "O acesso a esta comanda foi encerrado pelo estabelecimento ou ela foi fechada."}
                         </CardDescription>
                     </CardHeader>
+                    <CardContent>
+                        <Button 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => {
+                                localStorage.removeItem('barmate_last_order_id');
+                                window.location.href = '/guest/register';
+                            }}
+                        >
+                            Solicitar Novo Acesso
+                        </Button>
+                    </CardContent>
                 </Card>
             </div>
         );
