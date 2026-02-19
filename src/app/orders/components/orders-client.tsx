@@ -197,7 +197,9 @@ export default function OrdersClient() {
             isShared: true,
             updatedAt: new Date().toISOString()
         }), { merge: true }); 
-    } catch (e) {}
+    } catch (e) {
+        console.error("Erro ao sincronizar com Firestore:", e);
+    }
   };
     
   const deleteOrderFromFirestore = async (orderId: string) => {
@@ -211,20 +213,19 @@ export default function OrdersClient() {
         const cloudOrdersMap = snapshot.docs.reduce((acc, d) => ({ ...acc, [d.id]: d.data() }), {} as any);
         
         setOpenOrders(prev => {
-            const updated = prev.map(o => {
+            return prev.map(o => {
                 const cloudData = cloudOrdersMap[o.id];
                 if (cloudData) {
-                    // Atualiza itens e status se houver mudança remota
                     return { 
                         ...o, 
                         isShared: true, 
                         viewerCount: cloudData.viewerCount || 0,
-                        items: cloudData.items || o.items
+                        // Não sobrescrevemos os itens locais aqui para evitar perda de foco/estado do admin,
+                        // mas garantimos que a flag de compartilhamento e o contador de viewers fiquem atualizados.
                     };
                 }
                 return { ...o, isShared: false, viewerCount: 0 };
             });
-            return updated;
         });
     });
     return () => unsubscribe();
@@ -260,22 +261,27 @@ export default function OrdersClient() {
   const addToOrder = useCallback((product: Product) => {
     if (!currentOrderId) return;
     const orders = getOpenOrders();
-    const order = orders.find(o => o.id === currentOrderId);
-    if (!order) return;
+    const orderIndex = orders.findIndex(o => o.id === currentOrderId);
+    if (orderIndex === -1) return;
+    
+    const order = orders[orderIndex];
     const existing = order.items.find(i => i.id === product.id && i.price > 0);
+    
     if (existing) { existing.quantity += 1; }
     else { order.items.push({ ...product, lineItemId: `li-${Date.now()}-${Math.random()}`, quantity: 1 }); }
+    
     saveOpenOrders(orders);
-    setOpenOrders(orders); // Update local state immediately
+    setOpenOrders([...orders]); 
     if (order.isShared) syncOrderToFirestore(order);
   }, [currentOrderId]);
 
   const updateQuantity = useCallback((lineItemId: string, newQty: number) => {
     if (!currentOrderId) return;
     const orders = getOpenOrders();
-    const order = orders.find(o => o.id === currentOrderId);
-    if (!order) return;
+    const orderIndex = orders.findIndex(o => o.id === currentOrderId);
+    if (orderIndex === -1) return;
 
+    const order = orders[orderIndex];
     if (newQty <= 0) {
         order.items = order.items.filter(i => i.lineItemId !== lineItemId);
     } else {
@@ -284,19 +290,20 @@ export default function OrdersClient() {
     }
 
     saveOpenOrders(orders);
-    setOpenOrders(orders);
+    setOpenOrders([...orders]);
     if (order.isShared) syncOrderToFirestore(order);
   }, [currentOrderId]);
 
   const removeFromOrder = useCallback((lineItemId: string) => {
     if (!currentOrderId) return;
     const orders = getOpenOrders();
-    const order = orders.find(o => o.id === currentOrderId);
-    if (!order) return;
+    const orderIndex = orders.findIndex(o => o.id === currentOrderId);
+    if (orderIndex === -1) return;
 
+    const order = orders[orderIndex];
     order.items = order.items.filter(i => i.lineItemId !== lineItemId);
     saveOpenOrders(orders);
-    setOpenOrders(orders);
+    setOpenOrders([...orders]);
     if (order.isShared) syncOrderToFirestore(order);
   }, [currentOrderId]);
 
@@ -357,7 +364,7 @@ export default function OrdersClient() {
 
       order.items.push(creditItem);
       saveOpenOrders(allOpen);
-      setOpenOrders(allOpen);
+      setOpenOrders([...allOpen]);
 
       if (details.source !== 'permuta') {
           addFinancialEntry({

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { ActiveOrder } from '@/types';
 import { getArchivedOrders } from '@/lib/data-access';
 import { formatCurrency } from '@/lib/constants';
@@ -19,6 +19,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
     const [order, setOrder] = useState<ActiveOrder | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const hasIncremented = useRef(false);
 
     useEffect(() => {
         if (!orderId || !db) {
@@ -27,11 +28,13 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             return;
         }
 
-        setIsLoading(true);
         const docRef = doc(db, 'open_orders', orderId);
 
-        // Incrementar contador de visualização ao abrir
-        updateDoc(docRef, { viewerCount: increment(1) }).catch(() => {});
+        // Incrementar contador de visualização apenas uma vez por montagem
+        if (!hasIncremented.current) {
+            updateDoc(docRef, { viewerCount: increment(1) }).catch(() => {});
+            hasIncremented.current = true;
+        }
 
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -59,16 +62,13 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             setIsLoading(false);
         });
 
-        // Decrementar ao sair (tentativa melhorada)
-        const handleBeforeUnload = () => {
-            updateDoc(docRef, { viewerCount: increment(-1) }).catch(() => {});
-        };
-        window.addEventListener('beforeunload', handleBeforeUnload);
-
+        // Cleanup: Decrementar ao sair ou desmontar o componente
         return () => {
             unsubscribe();
-            handleBeforeUnload();
-            window.removeEventListener('beforeunload', handleBeforeUnload);
+            if (hasIncremented.current) {
+                updateDoc(docRef, { viewerCount: increment(-1) }).catch(() => {});
+                hasIncremented.current = false;
+            }
         };
     }, [orderId]);
 
