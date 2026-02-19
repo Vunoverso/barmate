@@ -1,24 +1,21 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Payment, FinancialEntry, Client, GuestRequest } from '@/types';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Client } from '@/types';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
-import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, addFinancialEntry, getClients } from '@/lib/data-access';
+import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, getClients } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import Image from 'next/image';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, X, Unlink, Wifi, Copy, LayoutGrid, List, QrCode, Printer } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, Wifi, Copy, LayoutGrid, List, Printer } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
@@ -32,7 +29,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc } from "firebase/firestore";
+import { doc, setDoc, deleteDoc, collection, onSnapshot } from "firebase/firestore";
 import { OrderStatement } from './order-statement';
 
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
@@ -174,21 +171,24 @@ export default function OrdersClient() {
     const idx = orders.findIndex(o => o.id === currentOrderId);
     if (idx === -1) return;
     
-    const order = orders[idx];
-    const existing = order.items.find(i => i.id === product.id && i.price >= 0);
+    const order = { ...orders[idx] };
+    const items = [...order.items];
+    const existingIdx = items.findIndex(i => i.id === product.id && i.price >= 0);
     
-    if (existing) {
-        existing.quantity += 1;
-        if (!existing.lineItemId) existing.lineItemId = `li-${product.id}-${Date.now()}`;
+    if (existingIdx !== -1) {
+        items[existingIdx] = { ...items[existingIdx], quantity: items[existingIdx].quantity + 1 };
     } else {
-        order.items.push({ 
+        items.push({ 
             ...product, 
             lineItemId: `li-${product.id}-${Date.now()}`, 
             quantity: 1 
         });
     }
     
-    updateOrdersAndSync(orders);
+    order.items = items;
+    const newOrders = [...orders];
+    newOrders[idx] = order;
+    updateOrdersAndSync(newOrders);
   };
 
   const updateQuantity = (lineItemId: string, newQty: number) => {
@@ -196,14 +196,16 @@ export default function OrdersClient() {
     const idx = orders.findIndex(o => o.id === currentOrderId);
     if (idx === -1) return;
 
-    const order = orders[idx];
+    const order = { ...orders[idx] };
     if (newQty <= 0) {
         order.items = order.items.filter(i => i.lineItemId !== lineItemId);
     } else {
-        const item = order.items.find(i => i.lineItemId === lineItemId);
-        if (item) item.quantity = newQty;
+        order.items = order.items.map(i => i.lineItemId === lineItemId ? { ...i, quantity: newQty } : i);
     }
-    updateOrdersAndSync(orders);
+    
+    const newOrders = [...orders];
+    newOrders[idx] = order;
+    updateOrdersAndSync(newOrders);
   };
 
   const removeFromOrder = (lineItemId: string) => {
@@ -211,8 +213,12 @@ export default function OrdersClient() {
     const idx = orders.findIndex(o => o.id === currentOrderId);
     if (idx === -1) return;
 
-    orders[idx].items = orders[idx].items.filter(i => i.lineItemId !== lineItemId);
-    updateOrdersAndSync(orders);
+    const order = { ...orders[idx] };
+    order.items = order.items.filter(i => i.lineItemId !== lineItemId);
+    
+    const newOrders = [...orders];
+    newOrders[idx] = order;
+    updateOrdersAndSync(newOrders);
   };
 
   const handlePrintStatement = () => {
@@ -354,9 +360,7 @@ export default function OrdersClient() {
           saveOpenOrders(updated);
           setOpenOrders(updated);
           deleteOrderFromFirestore(currentOrder.id);
-          if (!details.isPartial) {
-              // We don't clear currentOrderId immediately so the receipt view can stay open
-          } else {
+          if (details.isPartial) {
               setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
               setIsPaymentDialogOpen(false);
           }
@@ -365,7 +369,15 @@ export default function OrdersClient() {
       
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
       <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { saveOpenOrders(merged); setOpenOrders([...merged]); setIsMergeDialogOpen(false); }} />
-      <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { orders[idx].items.push({ id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}` } as any); updateOrdersAndSync(orders); setIsCreditDialogOpen(false); } }} />
+      <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { 
+          const order = { ...orders[idx] };
+          const items = [...order.items, { id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}` } as any];
+          order.items = items;
+          const newOrders = [...orders];
+          newOrders[idx] = order;
+          updateOrdersAndSync(newOrders);
+          setIsCreditDialogOpen(false); 
+      } }} />
       
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
         <DialogContent className="sm:max-w-md">
