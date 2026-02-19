@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Client } from '@/types';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Client, GuestRequest } from '@/types';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, getClients } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, Wifi, Copy, LayoutGrid, List, Printer } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, BellCircle } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -29,8 +29,9 @@ import {
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, collection, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc } from "firebase/firestore";
 import { OrderStatement } from './order-statement';
+import { Badge } from '@/components/ui/badge';
 
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado.</p>;
@@ -84,6 +85,7 @@ export default function OrdersClient() {
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [openOrders, setOpenOrders] = useState<ActiveOrder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<GuestRequest[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
@@ -94,6 +96,7 @@ export default function OrdersClient() {
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
+  const [isRequestsDialogOpen, setIsRequestsDialogOpen] = useState(false);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
 
   const { toast } = useToast();
@@ -120,6 +123,7 @@ export default function OrdersClient() {
     try { await deleteDoc(doc(db, 'open_orders', orderId)); } catch (e) {}
   };
 
+  // Listen to open orders for viewer count
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
@@ -134,6 +138,21 @@ export default function OrdersClient() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Listen to guest requests
+  useEffect(() => {
+    if (!db) return;
+    const unsubscribe = onSnapshot(collection(db, 'guest_requests'), (snapshot) => {
+        const requests = snapshot.docs
+            .map(d => ({ id: d.id, ...d.data() } as GuestRequest))
+            .filter(r => r.status === 'pending');
+        setPendingRequests(requests);
+        if (requests.length > 0 && !isRequestsDialogOpen) {
+            // Optional alert could be added here
+        }
+    });
+    return () => unsubscribe();
+  }, [isRequestsDialogOpen]);
 
   const fetchData = useCallback(() => {
     setIsLoading(true);
@@ -241,14 +260,59 @@ export default function OrdersClient() {
     }
   };
 
+  const handleApproveRequest = async (request: GuestRequest, targetOrderId: string) => {
+      if (!db) return;
+      try {
+          await updateDoc(doc(db, 'guest_requests', request.id), {
+              status: 'approved',
+              associatedOrderId: targetOrderId
+          });
+          
+          // Se for uma comanda existente, marcar como compartilhada se já não for
+          const orders = getOpenOrders();
+          const order = orders.find(o => o.id === targetOrderId);
+          if (order && !order.isShared) {
+              order.isShared = true;
+              updateOrdersAndSync(orders);
+          }
+          
+          toast({ title: "Solicitação Aprovada!" });
+      } catch (err) {
+          toast({ title: "Erro ao aprovar", variant: "destructive" });
+      }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+      if (!db) return;
+      try {
+          await updateDoc(doc(db, 'guest_requests', requestId), { status: 'rejected' });
+          toast({ title: "Solicitação Recusada" });
+      } catch (err) {}
+  };
+
   return (
     <TooltipProvider>
       <div className="grid md:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
         <div className="md:col-span-3 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
-            <CardHeader>
-              <div className="flex items-center justify-between"><CardTitle>Comandas</CardTitle><Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button></div>
-              <div className="relative pt-2"><Search className="absolute left-2.5 top-4.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar comanda..." value={orderSearchTerm} onChange={e => setOrderSearchTerm(e.target.value)} className="pl-8" /></div>
+            <CardHeader className="space-y-4">
+              <div className="flex items-center justify-between">
+                <CardTitle>Comandas</CardTitle>
+                <Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button>
+              </div>
+              
+              {pendingRequests.length > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    className="w-full animate-pulse flex items-center gap-2"
+                    onClick={() => setIsRequestsDialogOpen(true)}
+                  >
+                    <BellCircle className="h-4 w-4" />
+                    {pendingRequests.length} {pendingRequests.length === 1 ? 'Solicitação' : 'Solicitações'}
+                  </Button>
+              )}
+
+              <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar comanda..." value={orderSearchTerm} onChange={e => setOrderSearchTerm(e.target.value)} className="pl-8" /></div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">
@@ -353,6 +417,7 @@ export default function OrdersClient() {
       </div>
 
       <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(newOrders); setCurrentOrderId(id); }} clients={clients} />
+      
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(details) => {
           if (!currentOrder) return;
           addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
@@ -368,7 +433,9 @@ export default function OrdersClient() {
       }} />
       
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
+      
       <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { saveOpenOrders(merged); setOpenOrders([...merged]); setIsMergeDialogOpen(false); }} />
+      
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { 
           const order = { ...orders[idx] };
           const items = [...order.items, { id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}` } as any];
@@ -378,6 +445,16 @@ export default function OrdersClient() {
           updateOrdersAndSync(newOrders);
           setIsCreditDialogOpen(false); 
       } }} />
+      
+      <GuestRequestsDialog 
+        isOpen={isRequestsDialogOpen} 
+        onOpenChange={setIsRequestsDialogOpen} 
+        requests={pendingRequests} 
+        openOrders={openOrders}
+        onApprove={handleApproveRequest}
+        onReject={handleRejectRequest}
+        onOpenCreateDialog={() => { setIsRequestsDialogOpen(false); setIsCreateOrderDialogOpen(true); }}
+      />
       
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -462,6 +539,88 @@ function AddCreditDialog({ isOpen, onOpenChange, onAdd }: { isOpen: boolean, onO
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
                     <Button onClick={() => onAdd(parseFloat(amt), desc)}>Adicionar</Button>
                 </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function GuestRequestsDialog({ 
+    isOpen, 
+    onOpenChange, 
+    requests, 
+    openOrders, 
+    onApprove, 
+    onReject,
+    onOpenCreateDialog
+}: { 
+    isOpen: boolean, 
+    onOpenChange: (o: boolean) => void, 
+    requests: GuestRequest[], 
+    openOrders: ActiveOrder[], 
+    onApprove: (r: GuestRequest, oid: string) => void, 
+    onReject: (id: string) => void,
+    onOpenCreateDialog: () => void
+}) {
+    const [selectedOrderMap, setSelectedOrderMap] = useState<Record<string, string>>({});
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Clientes Aguardando Aprovação</DialogTitle>
+                    <DialogDescription>Aprove para que o cliente veja a conta no celular dele.</DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] pr-4">
+                    <div className="space-y-4 py-4">
+                        {requests.length === 0 ? (
+                            <p className="text-center py-10 opacity-50">Nenhuma solicitação no momento.</p>
+                        ) : requests.map(req => (
+                            <Card key={req.id} className="p-4 bg-muted/20">
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-black text-lg uppercase leading-none">{req.name}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {req.intent === 'create' ? 'Deseja abrir nova comanda' : 'Já está consumindo e quer ver a conta'}
+                                            </p>
+                                        </div>
+                                        <Button variant="ghost" size="icon" onClick={() => onReject(req.id)} className="text-destructive"><X className="h-5 w-5" /></Button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] uppercase font-bold opacity-50">Vincular a Comanda Aberta</Label>
+                                            <Select onValueChange={(val) => setSelectedOrderMap(p => ({ ...p, [req.id]: val }))}>
+                                                <SelectTrigger><SelectValue placeholder="Selecione a mesa..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {openOrders.map(o => (
+                                                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="flex items-end gap-2">
+                                            <Button 
+                                                className="flex-1 bg-green-600 hover:bg-green-700" 
+                                                disabled={!selectedOrderMap[req.id]}
+                                                onClick={() => onApprove(req, selectedOrderMap[req.id])}
+                                            >
+                                                <Check className="mr-2 h-4 w-4" /> Aprovar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    
+                                    {req.intent === 'create' && (
+                                        <Button variant="outline" className="w-full" onClick={onOpenCreateDialog}>
+                                            <UserPlus className="mr-2 h-4 w-4" /> Criar Comanda do Zero
+                                        </Button>
+                                    )}
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+                </ScrollArea>
+                <DialogFooter><Button variant="secondary" onClick={() => onOpenChange(false)}>Fechar</Button></DialogFooter>
             </DialogContent>
         </Dialog>
     );
