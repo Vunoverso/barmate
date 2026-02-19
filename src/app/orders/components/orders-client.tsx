@@ -37,20 +37,20 @@ import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where, updateDoc
 // --- Sub-componentes ---
 
 function ProductDisplay({ products, productCategories, addToOrder }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
-  if (products.length === 0) return <p className="text-muted-foreground text-center py-10">Nenhum produto encontrado.</p>;
+  if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado nesta categoria ou busca.</p>;
   return (
     <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2"> 
       {products.map(product => {
         const category = productCategories.find(c => c.id === product.categoryId);
         const IconComponent = category ? (LUCIDE_ICON_MAP[category.iconName] || Package) : Package;
         return (
-          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => addToOrder(product)}>
-            <div className="aspect-square bg-muted flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors">
+          <Card key={product.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border-none shadow-none bg-muted/20" onClick={() => addToOrder(product)}>
+            <div className="aspect-square bg-muted/50 flex items-center justify-center p-2 group-hover:bg-muted/80 transition-colors rounded-lg">
               <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
-            <CardContent className="p-1.5">
-              <h3 className="font-medium truncate text-[11px] leading-tight">{product.name}</h3>
-              <p className="text-primary font-semibold text-xs sm:text-sm">{formatCurrency(product.price)}</p>
+            <CardContent className="p-1 text-center">
+              <h3 className="font-medium truncate text-[10px] leading-tight mb-0.5">{product.name}</h3>
+              <p className="text-primary font-black text-[10px]">{formatCurrency(product.price)}</p>
             </CardContent>
           </Card>
         );
@@ -87,7 +87,7 @@ function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, on
 
 function MergeOrdersDialog({ isOpen, onOpenChange, currentOrder, allOrders, onMerge }: any) {
     const [sel, setSel] = useState<Record<string, boolean>>({});
-    const other = allOrders.filter((o: any) => o.id !== currentOrder.id);
+    const other = allOrders.filter((o: any) => o.id !== currentOrder?.id);
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent>
