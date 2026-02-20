@@ -193,7 +193,6 @@ export default function OrdersClient() {
       const active = updatedOrders.find(o => o.id === currentOrderId);
       if (active) {
           const hasKitchenItems = active.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''));
-          // Sync if shared OR if it has kitchen items (so the kitchen view can track them)
           if (active.isShared || hasKitchenItems) {
               syncOrderToFirestore(active);
           }
@@ -274,7 +273,6 @@ export default function OrdersClient() {
     const newOrders = [...orders];
     newOrders[idx] = order;
     
-    // Forçamos a sincronização imediata independente de estar compartilhado ou não
     saveOpenOrders(newOrders);
     setOpenOrders(prev => newOrders.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
     syncOrderToFirestore(order);
@@ -288,10 +286,7 @@ export default function OrdersClient() {
     const updated = all.filter(o => o.id !== orderToDelete.id);
     saveOpenOrders(updated);
     setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
-    
-    // Sempre tentamos deletar do firestore para limpar resquícios da cozinha
     await deleteOrderFromFirestore(orderToDelete.id);
-    
     if (currentOrderId === orderToDelete.id) setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
     setOrderToDelete(null);
     toast({ title: "Comanda Cancelada" });
@@ -380,16 +375,12 @@ export default function OrdersClient() {
             const p = prev.find(prevO => prevO.id === uo.id);
             return p ? { ...uo, viewerCount: 0 } : uo;
         }));
-        
-        // Se não tiver itens de cozinha, removemos do firestore de vez. 
-        // Se tiver, apenas marcamos isShared como false, mas mantemos o doc para a cozinha.
         const hasKitchenItems = order.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''));
         if (!hasKitchenItems) {
             await deleteOrderFromFirestore(order.id);
         } else {
             await updateDoc(doc(db, 'open_orders', order.id), { isShared: false });
         }
-        
         toast({ title: "Compartilhamento Interrompido" });
     }
   };
