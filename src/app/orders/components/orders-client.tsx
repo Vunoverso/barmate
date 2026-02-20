@@ -168,12 +168,20 @@ export default function OrdersClient() {
     setProducts(getProducts());
     setProductCategories(getProductCategories());
     const fetchedOrders = getOpenOrders();
-    setOpenOrders(prev => fetchedOrders.map(o => {
+    
+    // Sort fetched orders by creation date descending
+    const sortedFetched = [...fetchedOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    setOpenOrders(prev => sortedFetched.map(o => {
         const existing = prev.find(p => p.id === o.id);
         return existing ? { ...o, viewerCount: existing.viewerCount } : o;
     }));
     setClients(getClients());
-    if (!currentOrderId && fetchedOrders.length > 0) setCurrentOrderId(fetchedOrders[0].id);
+    
+    // Auto-select the most recent one if none selected
+    if (!currentOrderId && sortedFetched.length > 0) {
+        setCurrentOrderId(sortedFetched[0].id);
+    }
     setIsLoading(false);
   }, [currentOrderId]);
 
@@ -414,26 +422,29 @@ export default function OrdersClient() {
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">
                 <div className="space-y-2">
-                    {openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).map(o => {
-                      const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
-                      const hasCredit = balance < 0;
-                      return (
-                        <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center transition-all", hasCredit && "border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20")}>
-                          <div className="min-w-0 flex items-center gap-2">
-                            <div className="font-semibold text-xs truncate">{o.name}</div>
-                            <div className="flex gap-1">
-                                {o.isShared && <LinkIcon className="h-3.5 w-3.5 text-blue-500 shrink-0"/>}
-                                {(o.viewerCount || 0) > 0 && <Wifi className="h-3.5 w-3.5 text-green-500 animate-pulse shrink-0"/>}
+                    {openOrders
+                      .filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase()))
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .map(o => {
+                        const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
+                        const hasCredit = balance < 0;
+                        return (
+                          <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center transition-all", hasCredit && "border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20")}>
+                            <div className="min-w-0 flex items-center gap-2">
+                              <div className="font-semibold text-xs truncate">{o.name}</div>
+                              <div className="flex gap-1">
+                                  {o.isShared && <LinkIcon className="h-3.5 w-3.5 text-blue-500 shrink-0"/>}
+                                  {(o.viewerCount || 0) > 0 && <Wifi className="h-3.5 w-3.5 text-green-500 animate-pulse shrink-0"/>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className={cn("text-right font-black text-xs", hasCredit && "text-green-600")}>{formatCurrency(balance)}</div>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setOrderToDelete(o); }}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                              <div className={cn("text-right font-black text-xs", hasCredit && "text-green-600")}>{formatCurrency(balance)}</div>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setOrderToDelete(o); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                          </div>
-                        </div>
-                      );
+                        );
                     })}
                 </div>
               </ScrollArea>
@@ -787,7 +798,9 @@ function GuestRequestsDialog({
                                                     <Select onValueChange={(val) => setSelectedOrderMap(p => ({ ...p, [req.id]: val }))} value={selectedOrderMap[req.id] || ""}>
                                                         <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione a mesa..." /></SelectTrigger>
                                                         <SelectContent>
-                                                            {openOrders.map(o => (
+                                                            {openOrders
+                                                              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                                                              .map(o => (
                                                                 <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                                                             ))}
                                                         </SelectContent>
