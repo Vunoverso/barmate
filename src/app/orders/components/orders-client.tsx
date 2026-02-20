@@ -119,11 +119,10 @@ export default function OrdersClient() {
   const prepareForFirestore = (data: any) => JSON.parse(JSON.stringify(data, (k, v) => v === undefined ? null : v));
 
   const syncOrderToFirestore = async (order: ActiveOrder) => {
-    if (!db || !order.isShared) return;
+    if (!db) return;
     try { 
         await setDoc(doc(db, 'open_orders', order.id), prepareForFirestore({ 
             ...order, 
-            isShared: true,
             updatedAt: new Date().toISOString()
         }), { merge: true }); 
     } catch (e) {
@@ -143,7 +142,7 @@ export default function OrdersClient() {
         setOpenOrders(prev => prev.map(o => {
             const cloud = cloudDataMap[o.id];
             if (cloud) {
-                return { ...o, isShared: true, viewerCount: cloud.viewerCount || 0, items: cloud.items || o.items };
+                return { ...o, isShared: cloud.isShared || false, viewerCount: cloud.viewerCount || 0, items: cloud.items || o.items };
             }
             return { ...o, viewerCount: 0 };
         }));
@@ -192,7 +191,13 @@ export default function OrdersClient() {
           return p ? { ...uo, viewerCount: p.viewerCount } : uo;
       }));
       const active = updatedOrders.find(o => o.id === currentOrderId);
-      if (active && active.isShared) syncOrderToFirestore(active);
+      if (active) {
+          const hasKitchenItems = active.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''));
+          // Sync if shared OR if it has kitchen items (so the kitchen view can track them)
+          if (active.isShared || hasKitchenItems) {
+              syncOrderToFirestore(active);
+          }
+      }
   };
 
   const addToOrder = (product: Product) => {
@@ -209,7 +214,7 @@ export default function OrdersClient() {
     const existingIdx = items.findIndex(i => i.id === product.id && i.price >= 0 && !i.isDelivered);
     
     if (existingIdx !== -1) {
-        items[existingIdx] = { ...items[existingIdx], quantity: items[existingIdx].quantity + 1 };
+        items[existingIdx] = { ...items[existingIdx], quantity: items[existingIdx].quantity + 1, addedAt: new Date().toISOString() };
     } else {
         items.push({ 
             ...product, 
@@ -268,7 +273,12 @@ export default function OrdersClient() {
     
     const newOrders = [...orders];
     newOrders[idx] = order;
-    updateOrdersAndSync(newOrders);
+    
+    // Forçamos a sincronização imediata independente de estar compartilhado ou não
+    saveOpenOrders(newOrders);
+    setOpenOrders(prev => newOrders.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
+    syncOrderToFirestore(order);
+    
     toast({ title: "Enviado para cozinha!" });
   };
 
@@ -278,7 +288,10 @@ export default function OrdersClient() {
     const updated = all.filter(o => o.id !== orderToDelete.id);
     saveOpenOrders(updated);
     setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
-    if (orderToDelete.isShared) await deleteOrderFromFirestore(orderToDelete.id);
+    
+    // Sempre tentamos deletar do firestore para limpar resquícios da cozinha
+    await deleteOrderFromFirestore(orderToDelete.id);
+    
     if (currentOrderId === orderToDelete.id) setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
     setOrderToDelete(null);
     toast({ title: "Comanda Cancelada" });
@@ -367,7 +380,16 @@ export default function OrdersClient() {
             const p = prev.find(prevO => prevO.id === uo.id);
             return p ? { ...uo, viewerCount: 0 } : uo;
         }));
-        await deleteOrderFromFirestore(order.id);
+        
+        // Se não tiver itens de cozinha, removemos do firestore de vez. 
+        // Se tiver, apenas marcamos isShared como false, mas mantemos o doc para a cozinha.
+        const hasKitchenItems = order.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''));
+        if (!hasKitchenItems) {
+            await deleteOrderFromFirestore(order.id);
+        } else {
+            await updateDoc(doc(db, 'open_orders', order.id), { isShared: false });
+        }
+        
         toast({ title: "Compartilhamento Interrompido" });
     }
   };
@@ -511,7 +533,7 @@ export default function OrdersClient() {
                           {KITCHEN_CATEGORIES.includes(item.categoryId || '') && (
                               <Tooltip>
                                   <TooltipTrigger asChild>
-                                      <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={() => handleSendToKitchen(item.lineItemId!)}>
+                                      <Button size="icon" variant="ghost" className={cn("h-6 w-6", item.forceKitchenVisible ? "text-orange-600 animate-pulse" : "text-primary")} onClick={() => handleSendToKitchen(item.lineItemId!)}>
                                           <ChefHat className="h-3.5 w-3.5" />
                                       </Button>
                                   </TooltipTrigger>
