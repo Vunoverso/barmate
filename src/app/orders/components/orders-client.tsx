@@ -42,6 +42,8 @@ import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc } from "firebase/firestore";
 import { OrderStatement } from './order-statement';
 import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
@@ -472,7 +474,15 @@ export default function OrdersClient() {
             <CardHeader className={cn("pb-3 border-b transition-colors rounded-t-lg", orderTotal < 0 ? "bg-yellow-500/20 border-yellow-500/30" : "bg-muted/10")}>
               {currentOrder && (
                 <div className="space-y-3">
-                  <h2 className="text-3xl font-black text-foreground uppercase leading-none truncate">{currentOrder.name}</h2>
+                  <div className="flex justify-between items-start gap-4">
+                      <div className="min-w-0">
+                          <h2 className="text-3xl font-black text-foreground uppercase leading-none truncate">{currentOrder.name}</h2>
+                          <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-1">
+                              Aberto em: {format(new Date(currentOrder.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          </p>
+                      </div>
+                      <div className={cn("text-2xl font-black shrink-0", orderTotal < 0 ? "text-green-600" : "text-primary")}>{formatCurrency(orderTotal)}</div>
+                  </div>
                   <div className="flex justify-between items-center">
                       <div className="flex gap-3">
                         {currentOrder.isShared ? (
@@ -504,7 +514,6 @@ export default function OrdersClient() {
                         <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsPrintDialogOpen(true)} /></TooltipTrigger><TooltipContent>Imprimir Extrato</TooltipContent></Tooltip>
                       </div>
-                      <div className={cn("text-2xl font-black", orderTotal < 0 ? "text-green-600" : "text-primary")}>{formatCurrency(orderTotal)}</div>
                   </div>
                 </div>
               )}
