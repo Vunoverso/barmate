@@ -14,6 +14,9 @@ import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
 import { migrateOldData } from '@/lib/data-access';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { isToday } from 'date-fns';
 
 interface NavItem {
   href: string;
@@ -27,6 +30,8 @@ const settingsNavItem: NavItem = { href: '/settings', label: 'Configurações', 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [barName, setBarName] = useState('BarMate');
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [pendingKitchenCount, setPendingKitchenCount] = useState(0);
   const version = "1.3.2";
 
   useEffect(() => {
@@ -40,13 +45,52 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         if (e.key === 'barName') loadBarName();
     });
   }, []);
+
+  useEffect(() => {
+    if (!db) return;
+
+    // Monitorar solicitações de clientes pendentes
+    const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
+    const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
+      setPendingRequestsCount(snapshot.size);
+    });
+
+    // Monitorar pedidos pendentes na cozinha (apenas itens de hoje ou forçados)
+    const unsubscribeOrders = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
+      let count = 0;
+      const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const items = data.items || [];
+        items.forEach((item: any) => {
+          const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
+          const isNotDelivered = !item.isDelivered;
+          
+          const itemDate = item.addedAt ? new Date(item.addedAt) : null;
+          const isItemToday = itemDate ? isToday(itemDate) : false;
+          const isNewOrForced = isItemToday || item.forceKitchenVisible === true;
+          
+          if (isKitchen && isNotDelivered && isNewOrForced) {
+            count++;
+          }
+        });
+      });
+      setPendingKitchenCount(count);
+    });
+
+    return () => {
+      unsubscribeRequests();
+      unsubscribeOrders();
+    };
+  }, []);
   
   const mainNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Início', icon: Home },
     { href: '/cash-register', label: 'Caixa', icon: Banknote },
     { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
-    { href: '/orders', label: 'Comandas', icon: HandCoins },
-    { href: '/pedidos', label: 'Pedidos', icon: ChefHat },
+    { href: '/orders', label: 'Comandas', icon: HandCoins, badge: pendingRequestsCount },
+    { href: '/pedidos', label: 'Pedidos', icon: ChefHat, badge: pendingKitchenCount },
     { href: '/qrcode', label: 'QR Code Geral', icon: QrCode },
     { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
     { href: '/products', label: 'Produtos', icon: Package },
@@ -65,8 +109,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <Button key={item.href} asChild variant={pathname === item.href ? 'secondary' : 'ghost'} className="justify-start">
           <Link href={item.href} className="flex items-center gap-2 rounded-lg px-3 py-1 text-primary transition-all hover:text-primary">
             <item.icon className="h-4 w-4" />
-            {item.label}
-            {item.badge && item.badge > 0 && <Badge className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">{item.badge}</Badge>}
+            <span className="flex-1 text-left">{item.label}</span>
+            {item.badge && item.badge > 0 ? (
+              <Badge className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white p-0 text-[10px] font-bold border-none animate-pulse">
+                {item.badge}
+              </Badge>
+            ) : null}
           </Link>
         </Button>
       ))}
@@ -106,9 +154,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   <span>{barName}</span>
                 </Link>
                 {allNavItems.map((item) => (
-                  <Link key={item.href} href={item.href} className={`mx-[-0.65rem] flex items-center gap-3 rounded-xl px-3 py-1 ${pathname === item.href ? 'bg-muted text-primary' : 'text-muted-foreground'}`}>
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
+                  <Link key={item.href} href={item.href} className={`mx-[-0.65rem] flex items-center justify-between gap-3 rounded-xl px-3 py-1 ${pathname === item.href ? 'bg-muted text-primary' : 'text-muted-foreground'}`}>
+                    <div className="flex items-center gap-3">
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                    </div>
+                    {item.badge && item.badge > 0 && (
+                        <Badge className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white border-none animate-pulse">
+                            {item.badge}
+                        </Badge>
+                    )}
                   </Link>
                 ))}
               </nav>
