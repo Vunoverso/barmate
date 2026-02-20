@@ -30,7 +30,8 @@ const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 export default function PedidosClient() {
     const [orders, setOrders] = useState<ActiveOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+    const [isShareDialogOpen] = useState(false); // Controlled via parent or internally if needed
+    const [isShareDialogOpenState, setIsShareDialogOpenState] = useState(false);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const { toast } = useToast();
 
@@ -125,7 +126,12 @@ export default function PedidosClient() {
                 const itemsHtml = group.items.map(item => `
                     <div style="margin-bottom: 12px; display: flex; align-items: flex-start; gap: 8px;">
                         <span style="font-size: 28px; font-weight: 900; line-height: 1;">${item.quantity}x</span>
-                        <span style="font-size: 22px; font-weight: bold; line-height: 1.1; text-transform: uppercase;">${item.name}</span>
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-size: 22px; font-weight: bold; line-height: 1.1; text-transform: uppercase;">${item.name}</span>
+                            <span style="font-size: 14px; font-weight: normal; opacity: 0.8; margin-top: 2px;">
+                                VALOR: ${item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                        </div>
                     </div>
                 `).join('');
 
@@ -182,7 +188,7 @@ export default function PedidosClient() {
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-muted/30 p-4 rounded-xl border border-primary/10">
                 <div className="flex gap-2 w-full sm:w-auto">
-                    <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}>
+                    <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpenState(true)}>
                         <QrCode className="mr-2 h-4 w-4" /> Monitor de Cozinha
                     </Button>
                     <Button 
@@ -297,7 +303,7 @@ export default function PedidosClient() {
                 </div>
             )}
 
-            <ShareKitchenDialog isOpen={isShareDialogOpen} onOpenChange={setIsShareDialogOpen} />
+            <ShareKitchenDialog isOpen={isShareDialogOpenState} onOpenChange={setIsShareDialogOpenState} />
         </div>
     );
 }
