@@ -141,7 +141,7 @@ export default function OrdersClient() {
         setOpenOrders(prev => prev.map(o => {
             const cloud = cloudDataMap[o.id];
             if (cloud) {
-                return { ...o, isShared: true, viewerCount: cloud.viewerCount || 0 };
+                return { ...o, isShared: true, viewerCount: cloud.viewerCount || 0, items: cloud.items || o.items };
             }
             return { ...o, viewerCount: 0 };
         }));
@@ -204,7 +204,7 @@ export default function OrdersClient() {
     
     const order = { ...orders[idx] };
     const items = [...order.items];
-    const existingIdx = items.findIndex(i => i.id === product.id && i.price >= 0);
+    const existingIdx = items.findIndex(i => i.id === product.id && i.price >= 0 && !i.isDelivered);
     
     if (existingIdx !== -1) {
         items[existingIdx] = { ...items[existingIdx], quantity: items[existingIdx].quantity + 1 };
@@ -212,7 +212,8 @@ export default function OrdersClient() {
         items.push({ 
             ...product, 
             lineItemId: `li-${product.id}-${Date.now()}`, 
-            quantity: 1 
+            quantity: 1,
+            isDelivered: false
         });
     }
     
@@ -494,6 +495,7 @@ export default function OrdersClient() {
                           <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeFromOrder(item.lineItemId!)}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
                       </div>
+                      {item.isDelivered && <Badge variant="outline" className="w-fit text-[8px] bg-green-50 text-green-700">Entregue</Badge>}
                     </li>
                   ))}
                 </ul>}
@@ -529,7 +531,7 @@ export default function OrdersClient() {
       
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { 
           const order = { ...orders[idx] };
-          const items = [...order.items, { id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}` } as any];
+          const items = [...order.items, { id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}`, isDelivered: true } as any];
           order.items = items;
           const newOrders = [...orders];
           newOrders[idx] = order;

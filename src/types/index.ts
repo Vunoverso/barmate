@@ -33,6 +33,7 @@ export interface OrderItem extends Product {
   claimedQuantity?: number; 
   isClaim?: boolean; 
   claimedFromId?: string;
+  isDelivered?: boolean;
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';
@@ -68,6 +69,7 @@ export interface ActiveOrder {
   user_id?: string;
   isShared?: boolean;
   viewerCount?: number;
+  updatedAt?: string;
 }
 
 export interface CashAdjustment {

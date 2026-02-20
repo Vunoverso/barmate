@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, Store, Banknote, Users, ClipboardCheck, QrCode } from 'lucide-react';
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, Store, Banknote, Users, ClipboardCheck, QrCode, ChefHat } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -46,6 +46,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     { href: '/cash-register', label: 'Caixa', icon: Banknote },
     { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
     { href: '/orders', label: 'Comandas', icon: HandCoins },
+    { href: '/pedidos', label: 'Pedidos', icon: ChefHat },
     { href: '/qrcode', label: 'QR Code Geral', icon: QrCode },
     { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
     { href: '/products', label: 'Produtos', icon: Package },
@@ -54,7 +55,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   ];
   
   const allNavItems = [...mainNavItems, settingsNavItem];
-  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register');
+  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
 
   if (isGuestView) return <main className="flex flex-col min-h-screen bg-background">{children}</main>;
 
