@@ -121,17 +121,32 @@ export default function SettingsClient() {
       const allData: Record<string, any> = {};
       DATA_KEYS.forEach(key => {
         const val = localStorage.getItem(key);
-        if (val) allData[key] = JSON.parse(val);
+        if (val) {
+            try {
+                // Tenta converter para objeto se for JSON
+                allData[key] = JSON.parse(val);
+            } catch (e) {
+                // Salva como texto puro se não for JSON (como barName)
+                allData[key] = val;
+            }
+        }
       });
+      
       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `barmate_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
+      
+      // Essencial para navegadores baseados em Chromium
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      
       URL.revokeObjectURL(url);
-      toast({ title: "Backup Exportado!" });
+      toast({ title: "Backup Exportado!", description: "O arquivo JSON foi baixado com sucesso." });
     } catch (e) {
+      console.error("Export error:", e);
       toast({ title: "Erro ao exportar", variant: "destructive" });
     }
   };
@@ -144,12 +159,14 @@ export default function SettingsClient() {
       try {
         const data = JSON.parse(e.target?.result as string);
         Object.entries(data).forEach(([key, val]) => {
-          localStorage.setItem(key, JSON.stringify(val));
+          // Salva como string JSON se for objeto/array, ou como texto puro se for valor simples
+          const valueToStore = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : String(val);
+          localStorage.setItem(key, valueToStore);
         });
-        toast({ title: "Dados Importados!", description: "Recarregando..." });
+        toast({ title: "Dados Importados!", description: "Recarregando o sistema..." });
         setTimeout(() => window.location.reload(), 1000);
       } catch (err) {
-        toast({ title: "Arquivo inválido", variant: "destructive" });
+        toast({ title: "Arquivo inválido", description: "O arquivo selecionado não é um backup válido do BarMate.", variant: "destructive" });
       }
     };
     reader.readAsText(file);
