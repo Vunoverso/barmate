@@ -12,6 +12,7 @@ import { ChefHat, CheckCircle2, Clock, BellRing } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
@@ -20,7 +21,6 @@ export default function KitchenViewClient() {
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
 
-    // Som de novo pedido
     const playNotificationSound = () => {
         try {
             const context = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -46,7 +46,6 @@ export default function KitchenViewClient() {
                 createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt)
             } as any));
             
-            // Tocar som se houver novo pedido que não estava antes
             if (!isFirstLoad) {
                 const currentKitchenCount = data.reduce((acc, o) => acc + o.items.filter((i: any) => KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered).length, 0);
                 const prevKitchenCount = orders.reduce((acc, o) => acc + o.items.filter((i: any) => KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered).length, 0);
@@ -63,21 +62,25 @@ export default function KitchenViewClient() {
         return () => unsubscribe();
     }, [orders, toast]);
 
-    const kitchenItems = useMemo(() => {
-        const items: { orderId: string, orderName: string, item: OrderItem, createdAt: Date }[] = [];
+    const groupedKitchenOrders = useMemo(() => {
+        const groups: Record<string, { id: string, orderName: string, createdAt: Date, items: OrderItem[] }> = {};
+        
         orders.forEach(order => {
-            order.items.forEach(item => {
-                if (KITCHEN_CATEGORIES.includes(item.categoryId) && !item.isDelivered) {
-                    items.push({
-                        orderId: order.id,
-                        orderName: order.name,
-                        item: item,
-                        createdAt: order.createdAt
-                    });
-                }
-            });
+            const pendingItems = order.items.filter(item => 
+                KITCHEN_CATEGORIES.includes(item.categoryId || '') && !item.isDelivered
+            );
+            
+            if (pendingItems.length > 0) {
+                groups[order.id] = {
+                    id: order.id,
+                    orderName: order.name,
+                    createdAt: order.createdAt,
+                    items: pendingItems
+                };
+            }
         });
-        return items.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        
+        return Object.values(groups).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     }, [orders]);
 
     const handleMarkAsDelivered = async (orderId: string, lineItemId: string) => {
@@ -95,7 +98,7 @@ export default function KitchenViewClient() {
     };
 
     if (isLoading) {
-        return <div className="flex h-screen items-center justify-center"><ChefHat className="h-12 w-12 animate-spin text-primary" /></div>;
+        return <div className="flex h-screen items-center justify-center bg-slate-950"><ChefHat className="h-12 w-12 animate-spin text-primary" /></div>;
     }
 
     return (
@@ -103,43 +106,58 @@ export default function KitchenViewClient() {
             <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
                 <div className="flex items-center gap-3">
                     <ChefHat className="h-8 w-8 text-primary" />
-                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Monitor de Produção</h1>
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Produção</h1>
                 </div>
                 <Badge variant="outline" className="text-white border-white/20 px-4 py-1">
-                    {kitchenItems.length} PENDENTES
+                    {groupedKitchenOrders.length} COMANDAS ATIVAS
                 </Badge>
             </div>
 
-            {kitchenItems.length === 0 ? (
+            {groupedKitchenOrders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-40 text-white/20">
                     <ChefHat className="h-20 w-20 mb-4" />
                     <p className="text-xl font-bold uppercase">Aguardando novos pedidos...</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {kitchenItems.map((entry, idx) => (
-                        <Card key={`${entry.orderId}-${entry.item.lineItemId}-${idx}`} className="bg-slate-900 border-white/10 shadow-2xl">
-                            <CardHeader className="pb-2 border-b border-white/5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {groupedKitchenOrders.map((group) => (
+                        <Card key={group.id} className="bg-slate-900 border-white/10 shadow-2xl flex flex-col">
+                            <CardHeader className="pb-3 border-b border-white/5 bg-white/5">
                                 <div className="flex justify-between items-start">
-                                    <Badge className="text-lg font-black bg-white text-slate-950 px-3">{entry.orderName}</Badge>
-                                    <div className="flex items-center text-[10px] text-white/40 font-bold uppercase">
+                                    <Badge className="text-xl font-black bg-white text-slate-950 px-3 uppercase">{group.orderName}</Badge>
+                                    <div className="flex items-center text-[10px] text-white/40 font-bold uppercase pt-1">
                                         <Clock className="mr-1 h-3 w-3" />
-                                        {formatDistanceToNow(entry.createdAt, { addSuffix: true, locale: ptBR })}
+                                        {formatDistanceToNow(group.createdAt, { locale: ptBR })}
                                     </div>
                                 </div>
                             </CardHeader>
-                            <CardContent className="py-6">
-                                <div className="text-3xl font-black text-white flex items-start gap-3">
-                                    <span className="text-primary">{entry.item.quantity}x</span>
-                                    <span className="uppercase leading-tight">{entry.item.name}</span>
-                                </div>
+                            <CardContent className="flex-grow py-6 space-y-6">
+                                {group.items.map((item) => (
+                                    <div key={item.lineItemId} className="flex items-center justify-between gap-4">
+                                        <div className="text-2xl font-black text-white flex items-start gap-3 min-w-0">
+                                            <span className="text-primary">{item.quantity}x</span>
+                                            <span className="uppercase leading-tight truncate">{item.name}</span>
+                                        </div>
+                                        <Button 
+                                            size="icon" 
+                                            className="h-12 w-12 rounded-xl bg-white/10 hover:bg-green-600 text-white transition-colors shrink-0"
+                                            onClick={() => handleMarkAsDelivered(group.id, item.lineItemId!)}
+                                        >
+                                            <CheckCircle2 className="h-6 w-6" />
+                                        </Button>
+                                    </div>
+                                ))}
                             </CardContent>
-                            <CardFooter className="pt-0">
+                            <CardFooter className="pt-0 pb-4">
                                 <Button 
-                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg h-16 rounded-xl"
-                                    onClick={() => handleMarkAsDelivered(entry.orderId, entry.item.lineItemId!)}
+                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg h-14 rounded-xl"
+                                    onClick={async () => {
+                                        for(const item of group.items) {
+                                            await handleMarkAsDelivered(group.id, item.lineItemId!);
+                                        }
+                                    }}
                                 >
-                                    <CheckCircle2 className="mr-2 h-6 w-6" /> PRONTO!
+                                    <CheckCircle2 className="mr-2 h-6 w-6" /> ENTREGAR TUDO
                                 </Button>
                             </CardFooter>
                         </Card>
