@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChefHat, CheckCircle2, Clock, BellRing } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
@@ -47,8 +47,13 @@ export default function KitchenViewClient() {
             } as any));
             
             if (!isFirstLoad) {
-                const currentKitchenCount = data.reduce((acc, o) => acc + o.items.filter((i: any) => KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered).length, 0);
-                const prevKitchenCount = orders.reduce((acc, o) => acc + o.items.filter((i: any) => KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered).length, 0);
+                const currentKitchenCount = data.reduce((acc, o) => acc + o.items.filter((i: any) => 
+                    KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered && (isToday(new Date(i.addedAt)) || i.forceKitchenVisible)
+                ).length, 0);
+                const prevKitchenCount = orders.reduce((acc, o) => acc + o.items.filter((i: any) => 
+                    KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered && (isToday(new Date(i.addedAt)) || i.forceKitchenVisible)
+                ).length, 0);
+                
                 if (currentKitchenCount > prevKitchenCount) {
                     playNotificationSound();
                     toast({ title: "NOVO PEDIDO!", description: "Um novo item chegou para preparo.", action: <BellRing className="h-4 w-4 text-primary" /> });
@@ -66,9 +71,12 @@ export default function KitchenViewClient() {
         const groups: Record<string, { id: string, orderName: string, createdAt: Date, items: OrderItem[] }> = {};
         
         orders.forEach(order => {
-            const pendingItems = order.items.filter(item => 
-                KITCHEN_CATEGORIES.includes(item.categoryId || '') && !item.isDelivered
-            );
+            const pendingItems = order.items.filter(item => {
+                const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
+                const isNotDelivered = !item.isDelivered;
+                const isNewOrForced = isToday(new Date(item.addedAt || 0)) || item.forceKitchenVisible === true;
+                return isKitchen && isNotDelivered && isNewOrForced;
+            });
             
             if (pendingItems.length > 0) {
                 groups[order.id] = {
@@ -89,7 +97,7 @@ export default function KitchenViewClient() {
         if (!order) return;
 
         const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, isDelivered: true } : item
+            item.lineItemId === lineItemId ? { ...item, isDelivered: true, forceKitchenVisible: false } : item
         );
 
         try {
@@ -108,9 +116,14 @@ export default function KitchenViewClient() {
                     <ChefHat className="h-8 w-8 text-primary" />
                     <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Produção</h1>
                 </div>
-                <Badge variant="outline" className="text-white border-white/20 px-4 py-1">
-                    {groupedKitchenOrders.length} COMANDAS ATIVAS
-                </Badge>
+                <div className="flex items-center gap-4">
+                    <Badge variant="outline" className="text-white border-white/20 px-4 py-1">
+                        PEDIDOS DE HOJE
+                    </Badge>
+                    <Badge className="text-white bg-primary px-4 py-1">
+                        {groupedKitchenOrders.length} COMANDAS
+                    </Badge>
+                </div>
             </div>
 
             {groupedKitchenOrders.length === 0 ? (
@@ -136,7 +149,12 @@ export default function KitchenViewClient() {
                                     <div key={item.lineItemId} className="flex items-center justify-between gap-4">
                                         <div className="text-2xl font-black text-white flex items-start gap-3 min-w-0">
                                             <span className="text-primary">{item.quantity}x</span>
-                                            <span className="uppercase leading-tight truncate">{item.name}</span>
+                                            <div className="min-w-0">
+                                                <span className="uppercase leading-tight truncate block">{item.name}</span>
+                                                {item.forceKitchenVisible && (
+                                                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Manual</span>
+                                                )}
+                                            </div>
                                         </div>
                                         <Button 
                                             size="icon" 

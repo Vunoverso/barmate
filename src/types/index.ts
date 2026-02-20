@@ -34,6 +34,8 @@ export interface OrderItem extends Product {
   isClaim?: boolean; 
   claimedFromId?: string;
   isDelivered?: boolean;
+  addedAt?: string; // ISO string of when the item was added
+  forceKitchenVisible?: boolean; // Manual flag to show in kitchen even if old
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';

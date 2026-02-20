@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -42,6 +42,8 @@ import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc } from "firebase/firestore";
 import { OrderStatement } from './order-statement';
 import { Badge } from '@/components/ui/badge';
+
+const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado.</p>;
@@ -213,7 +215,8 @@ export default function OrdersClient() {
             ...product, 
             lineItemId: `li-${product.id}-${Date.now()}`, 
             quantity: 1,
-            isDelivered: false
+            isDelivered: false,
+            addedAt: new Date().toISOString()
         });
     }
     
@@ -251,6 +254,22 @@ export default function OrdersClient() {
     const newOrders = [...orders];
     newOrders[idx] = order;
     updateOrdersAndSync(newOrders);
+  };
+
+  const handleSendToKitchen = (lineItemId: string) => {
+    const orders = getOpenOrders();
+    const idx = orders.findIndex(o => o.id === currentOrderId);
+    if (idx === -1) return;
+
+    const order = { ...orders[idx] };
+    order.items = order.items.map(i => 
+        i.lineItemId === lineItemId ? { ...i, forceKitchenVisible: true, isDelivered: false } : i
+    );
+    
+    const newOrders = [...orders];
+    newOrders[idx] = order;
+    updateOrdersAndSync(newOrders);
+    toast({ title: "Enviado para cozinha!" });
   };
 
   const handleDeleteOrder = async () => {
@@ -489,6 +508,16 @@ export default function OrdersClient() {
                       <div className="flex justify-between items-center mt-1">
                         <div className="text-[10px] text-muted-foreground">{formatCurrency(item.price)} un.</div>
                         <div className="flex items-center gap-1">
+                          {KITCHEN_CATEGORIES.includes(item.categoryId || '') && (
+                              <Tooltip>
+                                  <TooltipTrigger asChild>
+                                      <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={() => handleSendToKitchen(item.lineItemId!)}>
+                                          <ChefHat className="h-3.5 w-3.5" />
+                                      </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Enviar p/ Cozinha</TooltipContent>
+                              </Tooltip>
+                          )}
                           <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.lineItemId!, item.quantity - 1)}><MinusCircle className="h-3.5 w-3.5" /></Button>
                           <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
                           <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.lineItemId!, item.quantity + 1)}><PlusCircle className="h-3.5 w-3.5" /></Button>
@@ -531,7 +560,7 @@ export default function OrdersClient() {
       
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrder.id); if(idx !== -1) { 
           const order = { ...orders[idx] };
-          const items = [...order.items, { id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}`, isDelivered: true } as any];
+          const items = [...order.items, { id: `credit-${Date.now()}`, name: desc, price: -amt, quantity: 1, categoryId: 'credit', lineItemId: `li-credit-${Date.now()}`, isDelivered: true, addedAt: new Date().toISOString() } as any];
           order.items = items;
           const newOrders = [...orders];
           newOrders[idx] = order;

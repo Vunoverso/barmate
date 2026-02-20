@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChefHat, CheckCircle2, Clock, Printer, QrCode, Copy } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -46,13 +46,23 @@ export default function PedidosClient() {
         return () => unsubscribe();
     }, []);
 
+    const isDateToday = (dateSource?: string | Date) => {
+        if (!dateSource) return false;
+        return isToday(new Date(dateSource));
+    };
+
     const groupedKitchenOrders = useMemo(() => {
         const groups: Record<string, { id: string, orderName: string, createdAt: Date, items: OrderItem[] }> = {};
         
         orders.forEach(order => {
-            const pendingItems = order.items.filter(item => 
-                KITCHEN_CATEGORIES.includes(item.categoryId || '') && !item.isDelivered
-            );
+            const pendingItems = order.items.filter(item => {
+                const isKitchenCategory = KITCHEN_CATEGORIES.includes(item.categoryId || '');
+                const isNotDelivered = !item.isDelivered;
+                // Item shows if: It's from Today OR was manually forced to kitchen
+                const isNewOrForced = isDateToday(item.addedAt) || item.forceKitchenVisible === true;
+                
+                return isKitchenCategory && isNotDelivered && isNewOrForced;
+            });
             
             if (pendingItems.length > 0) {
                 groups[order.id] = {
@@ -73,7 +83,7 @@ export default function PedidosClient() {
         if (!order) return;
 
         const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, isDelivered: true } : item
+            item.lineItemId === lineItemId ? { ...item, isDelivered: true, forceKitchenVisible: false } : item
         );
 
         try {
@@ -123,18 +133,21 @@ export default function PedidosClient() {
 
     return (
         <div className="space-y-6">
-            <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}>
-                    <QrCode className="mr-2 h-4 w-4" /> Monitor de Cozinha (QR Code)
-                </Button>
+            <div className="flex justify-between items-center">
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}>
+                        <QrCode className="mr-2 h-4 w-4" /> Monitor de Cozinha (QR Code)
+                    </Button>
+                </div>
+                <Badge variant="secondary" className="font-bold opacity-70">FILTRANDO PEDIDOS DE HOJE</Badge>
             </div>
 
             {groupedKitchenOrders.length === 0 ? (
                 <Card className="text-center py-20 bg-muted/20 border-dashed border-2">
                     <CardHeader>
                         <ChefHat className="mx-auto h-12 w-12 text-muted-foreground opacity-20" />
-                        <CardTitle className="text-muted-foreground">Nenhum pedido pendente</CardTitle>
-                        <CardDescription>Os lanches e porções aparecerão aqui automaticamente.</CardDescription>
+                        <CardTitle className="text-muted-foreground">Nenhum pedido pendente hoje</CardTitle>
+                        <CardDescription>Os lanches e porções do dia aparecerão aqui automaticamente.</CardDescription>
                     </CardHeader>
                 </Card>
             ) : (
@@ -168,9 +181,14 @@ export default function PedidosClient() {
                                     <div key={item.lineItemId} className="flex items-center justify-between gap-3 group">
                                         <div className="flex items-start gap-2 min-w-0">
                                             <span className="text-primary font-black text-xl leading-none">{item.quantity}x</span>
-                                            <span className="font-bold text-sm uppercase leading-tight truncate">
-                                                {item.name}
-                                            </span>
+                                            <div className="min-w-0">
+                                                <span className="font-bold text-sm uppercase leading-tight truncate block">
+                                                    {item.name}
+                                                </span>
+                                                {item.forceKitchenVisible && (
+                                                    <span className="text-[8px] font-black text-orange-600 uppercase">Envio Manual</span>
+                                                )}
+                                            </div>
                                         </div>
                                         <Button 
                                             size="sm" 
