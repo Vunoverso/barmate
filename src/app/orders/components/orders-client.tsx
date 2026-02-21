@@ -141,13 +141,38 @@ export default function OrdersClient() {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
         const cloudDataMap = snapshot.docs.reduce((acc, d) => ({ ...acc, [d.id]: d.data() }), {} as any);
-        setOpenOrders(prev => prev.map(o => {
-            const cloud = cloudDataMap[o.id];
-            if (cloud) {
-                return { ...o, isShared: cloud.isShared || false, viewerCount: cloud.viewerCount || 0, items: cloud.items || o.items };
+        
+        // SINCRONIZAÇÃO CRÍTICA: Se a cozinha marcou algo como entregue na nuvem,
+        // precisamos atualizar o LocalStorage IMEDIATAMENTE.
+        // Caso contrário, quando o garçom adicionar qualquer outro item, 
+        // ele vai sobrescrever o status de "entregue" com "não entregue" usando dados locais desatualizados.
+        const localOrders = getOpenOrders();
+        let hasChanges = false;
+        
+        const updatedLocal = localOrders.map(lo => {
+            const cloud = cloudDataMap[lo.id];
+            if (cloud && cloud.items) {
+                const cloudItemsStr = JSON.stringify(cloud.items);
+                const localItemsStr = JSON.stringify(lo.items);
+                if (cloudItemsStr !== localItemsStr) {
+                    hasChanges = true;
+                    return { ...lo, items: cloud.items, isShared: cloud.isShared ?? lo.isShared };
+                }
             }
-            return { ...o, viewerCount: 0 };
-        }));
+            return lo;
+        });
+
+        if (hasChanges) {
+            saveOpenOrders(updatedLocal);
+        }
+
+        // Atualizar o estado da UI para refletir as mudanças e manter o contador de visualizadores
+        setOpenOrders(prev => {
+            return updatedLocal.map(lo => {
+                const cloud = cloudDataMap[lo.id];
+                return cloud ? { ...lo, viewerCount: cloud.viewerCount || 0 } : { ...lo, viewerCount: 0 };
+            });
+        });
     });
     return () => unsubscribe();
   }, []);
