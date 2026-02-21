@@ -275,20 +275,39 @@ export default function OrdersClient() {
     if (idx === -1) return;
 
     const order = { ...orders[idx] };
-    order.items = order.items.map(i => {
+    let changed = false;
+    const updatedItems = order.items.map(i => {
         if (i.lineItemId === lineItemId) {
             const totalUnits = (i.comboItems || 0) * i.quantity;
             const current = i.claimedQuantity || 0;
             if (current < totalUnits) {
+                changed = true;
                 return { ...i, claimedQuantity: current + 1 };
             }
         }
         return i;
     });
     
-    const newOrders = [...orders];
-    newOrders[idx] = order;
-    updateOrdersAndSync(newOrders);
+    if (changed) {
+        order.items = updatedItems;
+        const isFullyDelivered = order.items.every(item => 
+            !item.isCombo || (item.claimedQuantity || 0) >= ((item.comboItems || 0) * item.quantity)
+        );
+        const balance = order.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
+        
+        if (isFullyDelivered && balance <= 0) {
+            const updated = getOpenOrders().filter(o => o.id !== order.id);
+            saveOpenOrders(updated);
+            setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
+            deleteOrderFromFirestore(order.id);
+            setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
+            toast({ title: "Combo entregue e comanda encerrada!" });
+        } else {
+            const newOrders = [...orders];
+            newOrders[idx] = order;
+            updateOrdersAndSync(newOrders);
+        }
+    }
   };
 
   const handleResetClaims = (lineItemId: string) => {
@@ -629,20 +648,51 @@ export default function OrdersClient() {
         </div>
       </div>
 
-      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: prev.find(p => p.id === no.id)?.viewerCount || 0 }))); setCurrentOrderId(id); }} clients={clients} />
+      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 }))); setCurrentOrderId(id); }} clients={clients} />
       
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(details) => {
           if (!currentOrder) return;
+          
           addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
-          const updated = getOpenOrders().filter(o => o.id !== currentOrder.id);
-          saveOpenOrders(updated);
-          setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
-          deleteOrderFromFirestore(currentOrder.id);
-          if (details.isPartial) {
+          
+          const hasPendingCombos = currentOrder.items.some(item => 
+            item.isCombo && (item.claimedQuantity || 0) < ((item.comboItems || 0) * item.quantity)
+          );
+
+          if (hasPendingCombos) {
+              const orders = getOpenOrders();
+              const idx = orders.findIndex(o => o.id === currentOrder.id);
+              if (idx !== -1) {
+                  const order = { ...orders[idx] };
+                  const creditAmount = details.sale.totalAmount;
+                  order.items = [...order.items, { 
+                      id: `payment-credit-${Date.now()}`, 
+                      name: 'Pagamento Realizado', 
+                      price: -creditAmount, 
+                      quantity: 1, 
+                      categoryId: 'credit', 
+                      lineItemId: `li-pay-${Date.now()}`, 
+                      isDelivered: true, 
+                      addedAt: new Date().toISOString() 
+                  } as any];
+                  
+                  const newOrders = [...orders];
+                  newOrders[idx] = order;
+                  saveOpenOrders(newOrders);
+                  setOpenOrders(newOrders);
+                  syncOrderToFirestore(order);
+                  setIsPaymentDialogOpen(false);
+                  toast({ title: "Pagamento Registrado! Comanda mantida para entrega de itens." });
+              }
+          } else {
+              const updated = getOpenOrders().filter(o => o.id !== currentOrder.id);
+              saveOpenOrders(updated);
+              setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
+              deleteOrderFromFirestore(currentOrder.id);
               setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
               setIsPaymentDialogOpen(false);
+              toast({ title: "Pagamento Concluído!" });
           }
-          toast({ title: "Pagamento Concluído!" });
       }} />
       
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
