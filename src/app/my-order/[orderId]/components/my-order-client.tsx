@@ -183,6 +183,11 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                                         <TableCell>
                                             <div className="font-semibold text-sm">{item.name}</div>
                                             <div className="text-xs text-muted-foreground">{formatCurrency(item.price)}</div>
+                                            {item.isCombo && (
+                                                <div className="mt-1 text-[10px] font-bold text-primary uppercase">
+                                                    ENTREGUES: {item.claimedQuantity || 0} DE {(item.comboItems || 0) * item.quantity}
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell className="text-center font-medium">{item.quantity}</TableCell>
                                         <TableCell className="text-right font-bold">{formatCurrency(item.price * item.quantity)}</TableCell>

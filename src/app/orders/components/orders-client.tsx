@@ -169,7 +169,6 @@ export default function OrdersClient() {
     setProductCategories(getProductCategories());
     const fetchedOrders = getOpenOrders();
     
-    // Sort fetched orders by creation date descending
     const sortedFetched = [...fetchedOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     setOpenOrders(prev => sortedFetched.map(o => {
@@ -178,7 +177,6 @@ export default function OrdersClient() {
     }));
     setClients(getClients());
     
-    // Auto-select the most recent one if none selected
     if (!currentOrderId && sortedFetched.length > 0) {
         setCurrentOrderId(sortedFetched[0].id);
     }
@@ -230,7 +228,8 @@ export default function OrdersClient() {
             lineItemId: `li-${product.id}-${Date.now()}`, 
             quantity: 1,
             isDelivered: false,
-            addedAt: new Date().toISOString()
+            addedAt: new Date().toISOString(),
+            claimedQuantity: 0
         });
     }
     
@@ -264,6 +263,41 @@ export default function OrdersClient() {
 
     const order = { ...orders[idx] };
     order.items = order.items.filter(i => i.lineItemId !== lineItemId);
+    
+    const newOrders = [...orders];
+    newOrders[idx] = order;
+    updateOrdersAndSync(newOrders);
+  };
+
+  const handleClaimUnit = (lineItemId: string) => {
+    const orders = getOpenOrders();
+    const idx = orders.findIndex(o => o.id === currentOrderId);
+    if (idx === -1) return;
+
+    const order = { ...orders[idx] };
+    order.items = order.items.map(i => {
+        if (i.lineItemId === lineItemId) {
+            const totalUnits = (i.comboItems || 0) * i.quantity;
+            const current = i.claimedQuantity || 0;
+            if (current < totalUnits) {
+                return { ...i, claimedQuantity: current + 1 };
+            }
+        }
+        return i;
+    });
+    
+    const newOrders = [...orders];
+    newOrders[idx] = order;
+    updateOrdersAndSync(newOrders);
+  };
+
+  const handleResetClaims = (lineItemId: string) => {
+    const orders = getOpenOrders();
+    const idx = orders.findIndex(o => o.id === currentOrderId);
+    if (idx === -1) return;
+
+    const order = { ...orders[idx] };
+    order.items = order.items.map(i => i.lineItemId === lineItemId ? { ...i, claimedQuantity: 0 } : i);
     
     const newOrders = [...orders];
     newOrders[idx] = order;
@@ -496,19 +530,14 @@ export default function OrdersClient() {
                   </div>
                   <div className="flex justify-between items-center">
                       <div className="flex gap-3">
-                        {currentOrder.isShared ? (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                {currentOrder.isShared ? (
                                     <Link2Off 
                                         className="h-5 w-5 cursor-pointer text-destructive" 
                                         onClick={() => handleStopSharing(currentOrder)} 
                                     />
-                                </TooltipTrigger>
-                                <TooltipContent>Parar Compartilhamento</TooltipContent>
-                            </Tooltip>
-                        ) : (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
+                                ) : (
                                     <LinkIcon 
                                         className="h-5 w-5 cursor-pointer text-primary" 
                                         onClick={() => { 
@@ -517,10 +546,10 @@ export default function OrdersClient() {
                                             if(target) { target.isShared = true; saveOpenOrders(all); setOpenOrders(prev => all.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 }))); syncOrderToFirestore(target); setOrderToShare(target); }
                                         }} 
                                     />
-                                </TooltipTrigger>
-                                <TooltipContent>Compartilhar</TooltipContent>
-                            </Tooltip>
-                        )}
+                                )}
+                            </TooltipTrigger>
+                            <TooltipContent>{currentOrder.isShared ? "Parar Compartilhamento" : "Compartilhar"}</TooltipContent>
+                        </Tooltip>
                         <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsPrintDialogOpen(true)} /></TooltipTrigger><TooltipContent>Imprimir Extrato</TooltipContent></Tooltip>
@@ -557,6 +586,35 @@ export default function OrdersClient() {
                           <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeFromOrder(item.lineItemId!)}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
                       </div>
+                      
+                      {item.isCombo && (
+                          <div className="mt-2 p-2 bg-primary/5 rounded border border-primary/10 space-y-2">
+                              <div className="flex justify-between items-center">
+                                  <span className="text-[10px] font-black uppercase text-primary">Controle de Combo</span>
+                                  <span className="text-[10px] font-bold">{item.claimedQuantity || 0} de {(item.comboItems || 0) * item.quantity} entregues</span>
+                              </div>
+                              <div className="flex gap-2">
+                                  <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="h-7 flex-1 text-[10px] font-bold gap-1"
+                                      onClick={() => handleClaimUnit(item.lineItemId!)}
+                                      disabled={(item.claimedQuantity || 0) >= ((item.comboItems || 0) * item.quantity)}
+                                  >
+                                      <Check className="h-3 w-3" /> LIBERAR UNIDADE
+                                  </Button>
+                                  <Button 
+                                      size="icon" 
+                                      variant="ghost" 
+                                      className="h-7 w-7 text-muted-foreground"
+                                      onClick={() => handleResetClaims(item.lineItemId!)}
+                                  >
+                                      <X className="h-3 w-3" />
+                                  </Button>
+                              </div>
+                          </div>
+                      )}
+
                       {item.isDelivered && <Badge variant="outline" className="w-fit text-[8px] bg-green-50 text-green-700">Entregue</Badge>}
                     </li>
                   ))}
