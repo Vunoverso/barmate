@@ -101,7 +101,10 @@ export default function KitchenViewClient() {
         );
 
         try {
-            await updateDoc(doc(db, 'open_orders', orderId), { items: updatedItems });
+            await updateDoc(doc(db, 'open_orders', orderId), { 
+                items: updatedItems,
+                updatedAt: new Date().toISOString()
+            });
         } catch (err) {}
     };
 

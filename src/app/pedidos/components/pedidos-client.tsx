@@ -89,7 +89,10 @@ export default function PedidosClient() {
         );
 
         try {
-            await updateDoc(doc(db, 'open_orders', orderId), { items: updatedItems });
+            await updateDoc(doc(db, 'open_orders', orderId), { 
+                items: updatedItems,
+                updatedAt: new Date().toISOString()
+            });
             toast({ title: "Item entregue!" });
         } catch (err) {
             toast({ title: "Erro ao atualizar", variant: "destructive" });
