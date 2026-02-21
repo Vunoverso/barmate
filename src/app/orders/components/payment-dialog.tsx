@@ -56,11 +56,27 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
+  const resetState = () => {
+    setDiscount('');
+    setCashAmount('');
+    setDebitAmount('');
+    setCreditAmount('');
+    setPixAmount('');
+    setCashTendered('');
+    setLeaveChangeAsCredit(false);
+    setError('');
+    setSaleCompleted(null);
+  };
+
+  // Garantir que ao abrir o diálogo, tudo esteja limpo para evitar ver o recibo anterior
   useEffect(() => {
-    if (currentOrder?.name) {
-        setLastOrderName(currentOrder.name);
+    if (isOpen) {
+      resetState();
+      if (currentOrder?.name) {
+          setLastOrderName(currentOrder.name);
+      }
     }
-  }, [currentOrder]);
+  }, [isOpen, currentOrder]);
 
   const numDiscount = parseLocaleFloat(discount);
   const numCashAmount = parseLocaleFloat(cashAmount);
@@ -89,19 +105,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     }
     return Math.max(0, calculatedChange);
   }, [amountToPay, totalPaid, numCashAmount, numDebitAmount, numCreditAmount, numPixAmount, numCashTendered]);
-
-
-  const resetState = () => {
-    setDiscount('');
-    setCashAmount('');
-    setDebitAmount('');
-    setCreditAmount('');
-    setPixAmount('');
-    setCashTendered('');
-    setLeaveChangeAsCredit(false);
-    setError('');
-    setSaleCompleted(null);
-  };
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
