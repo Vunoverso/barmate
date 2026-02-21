@@ -169,6 +169,7 @@ export default function OrdersClient() {
     setProductCategories(getProductCategories());
     const fetchedOrders = getOpenOrders();
     
+    // ORDENAR POR MAIS RECENTES (Decrescente)
     const sortedFetched = [...fetchedOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     setOpenOrders(prev => sortedFetched.map(o => {
@@ -177,6 +178,7 @@ export default function OrdersClient() {
     }));
     setClients(getClients());
     
+    // Selecionar automaticamente a mais recente se nada estiver selecionado
     if (!currentOrderId && sortedFetched.length > 0) {
         setCurrentOrderId(sortedFetched[0].id);
     }
@@ -648,13 +650,14 @@ export default function OrdersClient() {
         </div>
       </div>
 
-      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 }))); setCurrentOrderId(id); }} clients={clients} />
+      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: 0 }))); setCurrentOrderId(id); }} clients={clients} />
       
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(details) => {
           if (!currentOrder) return;
           
           addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
           
+          // VERIFICAR SE HÁ COMBOS PENDENTES
           const hasPendingCombos = currentOrder.items.some(item => 
             item.isCombo && (item.claimedQuantity || 0) < ((item.comboItems || 0) * item.quantity)
           );
