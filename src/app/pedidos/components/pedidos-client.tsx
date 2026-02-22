@@ -8,7 +8,7 @@ import type { ActiveOrder, OrderItem } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChefHat, CheckCircle2, Clock, Printer, QrCode, Copy, CheckSquare, Square } from 'lucide-react';
+import { ChefHat, CheckCircle2, Clock, Printer, QrCode, Copy, CheckSquare, Square, Play } from 'lucide-react';
 import { formatDistanceToNow, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -30,7 +30,6 @@ const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 export default function PedidosClient() {
     const [orders, setOrders] = useState<ActiveOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isShareDialogOpen] = useState(false); // Controlled via parent or internally if needed
     const [isShareDialogOpenState, setIsShareDialogOpenState] = useState(false);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const { toast } = useToast();
@@ -85,7 +84,7 @@ export default function PedidosClient() {
         if (!order) return;
 
         const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, isDelivered: true, forceKitchenVisible: false } : item
+            item.lineItemId === lineItemId ? { ...item, isDelivered: true, isPreparing: false, forceKitchenVisible: false } : item
         );
 
         try {
@@ -94,6 +93,27 @@ export default function PedidosClient() {
                 updatedAt: new Date().toISOString()
             });
             toast({ title: "Item entregue!" });
+        } catch (err) {
+            toast({ title: "Erro ao atualizar", variant: "destructive" });
+        }
+    };
+
+    const handleTogglePreparing = async (orderId: string, lineItemId: string) => {
+        if (!db) return;
+        const order = orders.find(o => o.id === orderId);
+        if (!order) return;
+
+        const updatedItems = order.items.map(item => 
+            item.lineItemId === lineItemId ? { ...item, isPreparing: !item.isPreparing } : item
+        );
+
+        try {
+            await updateDoc(doc(db, 'open_orders', orderId), { 
+                items: updatedItems,
+                updatedAt: new Date().toISOString()
+            });
+            const item = updatedItems.find(i => i.lineItemId === lineItemId);
+            toast({ title: item?.isPreparing ? "Em produção!" : "Aguardando produção" });
         } catch (err) {
             toast({ title: "Erro ao atualizar", variant: "destructive" });
         }
@@ -114,12 +134,18 @@ export default function PedidosClient() {
     };
 
     const handlePrintSelected = () => {
-        const ordersToPrint = selectedOrderIds.length > 0 
+        const ordersToPrintRaw = selectedOrderIds.length > 0 
             ? groupedKitchenOrders.filter(o => selectedOrderIds.includes(o.id))
             : groupedKitchenOrders;
 
+        // Filtrar apenas itens que NÃO estão em produção para a impressão
+        const ordersToPrint = ordersToPrintRaw.map(group => ({
+            ...group,
+            items: group.items.filter(item => !item.isPreparing)
+        })).filter(group => group.items.length > 0);
+
         if (ordersToPrint.length === 0) {
-            toast({ title: "Nenhum pedido para imprimir", variant: "destructive" });
+            toast({ title: "Nada para imprimir", description: "Todos os itens selecionados já estão em produção ou não há novos itens.", variant: "destructive" });
             return;
         }
 
@@ -214,7 +240,7 @@ export default function PedidosClient() {
                         disabled={groupedKitchenOrders.length === 0}
                     >
                         <Printer className="mr-2 h-4 w-4" /> 
-                        {selectedOrderIds.length > 0 ? `IMPRIMIR SELECIONADOS (${selectedOrderIds.length})` : "IMPRIMIR TUDO"}
+                        {selectedOrderIds.length > 0 ? `IMPRIMIR NOVOS (${selectedOrderIds.length})` : "IMPRIMIR TUDO"}
                     </Button>
                 </div>
             </div>
@@ -265,26 +291,45 @@ export default function PedidosClient() {
                                 <Separator />
                                 <CardContent className="flex-grow pt-4 space-y-4">
                                     {group.items.map((item) => (
-                                        <div key={item.lineItemId} className="flex items-center justify-between gap-3 group">
-                                            <div className="flex items-start gap-2 min-w-0">
-                                                <span className="text-primary font-black text-xl leading-none">{item.quantity}x</span>
-                                                <div className="min-w-0">
-                                                    <span className="font-bold text-sm uppercase leading-tight truncate block">
-                                                        {item.name}
-                                                    </span>
-                                                    {item.forceKitchenVisible && (
-                                                        <span className="text-[8px] font-black text-orange-600 uppercase">Envio Manual</span>
-                                                    )}
+                                        <div key={item.lineItemId} className="flex flex-col gap-2 p-2 rounded-lg border border-transparent transition-colors hover:bg-muted/30">
+                                            <div className="flex items-center justify-between gap-3 group">
+                                                <div className="flex items-start gap-2 min-w-0">
+                                                    <span className="text-primary font-black text-xl leading-none">{item.quantity}x</span>
+                                                    <div className="min-w-0">
+                                                        <span className="font-bold text-sm uppercase leading-tight truncate block">
+                                                            {item.name}
+                                                        </span>
+                                                        {item.forceKitchenVisible && (
+                                                            <span className="text-[8px] font-black text-orange-600 uppercase">Envio Manual</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-1 shrink-0">
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant={item.isPreparing ? "default" : "outline"} 
+                                                        className={`h-8 w-8 rounded-full ${item.isPreparing ? 'bg-orange-500 hover:bg-orange-600' : 'text-muted-foreground'}`}
+                                                        onClick={(e) => { e.stopPropagation(); handleTogglePreparing(group.id, item.lineItemId!); }}
+                                                        title={item.isPreparing ? "Em Produção" : "Começar Produção"}
+                                                    >
+                                                        <Clock className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="secondary" 
+                                                        className="h-8 w-8 rounded-full hover:bg-green-600 hover:text-white transition-colors"
+                                                        onClick={(e) => { e.stopPropagation(); handleMarkAsDelivered(group.id, item.lineItemId!); }}
+                                                        title="Marcar como Entregue"
+                                                    >
+                                                        <CheckCircle2 className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
                                             </div>
-                                            <Button 
-                                                size="sm" 
-                                                variant="secondary" 
-                                                className="h-8 w-8 rounded-full shrink-0 hover:bg-green-600 hover:text-white transition-colors"
-                                                onClick={(e) => { e.stopPropagation(); handleMarkAsDelivered(group.id, item.lineItemId!); }}
-                                            >
-                                                <CheckCircle2 className="h-4 w-4" />
-                                            </Button>
+                                            {item.isPreparing && (
+                                                <Badge variant="outline" className="w-fit text-[9px] font-black text-orange-600 border-orange-500/30 bg-orange-500/5 uppercase tracking-widest animate-pulse">
+                                                    Em Produção
+                                                </Badge>
+                                            )}
                                         </div>
                                     ))}
                                 </CardContent>
