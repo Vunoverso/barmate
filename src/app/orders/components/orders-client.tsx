@@ -148,7 +148,6 @@ export default function OrdersClient() {
         const updatedLocal = localOrders.map(lo => {
             const cloud = cloudDataMap[lo.id];
             if (cloud && cloud.items) {
-                // TRAVA DE SEGURANÇA: Só aceita atualização da nuvem se for comprovadamente mais recente
                 const cloudTime = cloud.updatedAt ? new Date(cloud.updatedAt).getTime() : 0;
                 const localTime = lo.updatedAt ? new Date(lo.updatedAt).getTime() : 0;
 
@@ -712,7 +711,7 @@ export default function OrdersClient() {
                   const newOrders = [...orders];
                   newOrders[idx] = order;
                   updateOrdersAndSync(newOrders);
-                  setIsPaymentDialogOpen(false);
+                  // Não fecha o diálogo aqui para mostrar o recibo
                   toast({ title: "Pagamento Registrado! Comanda mantida para entrega de itens." });
               }
           } else {
@@ -721,7 +720,7 @@ export default function OrdersClient() {
               setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
               deleteOrderFromFirestore(currentOrder.id);
               setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
-              setIsPaymentDialogOpen(false);
+              // Não fecha o diálogo aqui para mostrar o recibo
               toast({ title: "Pagamento Concluído!" });
           }
       }} />

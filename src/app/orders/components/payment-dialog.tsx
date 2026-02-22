@@ -68,7 +68,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     setSaleCompleted(null);
   };
 
-  // Garantir que ao abrir o diálogo, tudo esteja limpo para evitar ver o recibo anterior
   useEffect(() => {
     if (isOpen) {
       resetState();
