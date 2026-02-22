@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, ShoppingCart, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -112,7 +112,9 @@ export default function OrdersClient() {
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const [isRequestsDialogOpen, setIsRequestsDialogOpen] = useState(false);
+  const [isEditNameDialogOpen, setIsEditNameDialogOpen] = useState(false);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
+  const [newName, setNewName] = useState('');
 
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -169,9 +171,10 @@ export default function OrdersClient() {
         }
 
         setOpenOrders(prev => {
-            return updatedLocal.map(lo => {
-                const cloud = cloudDataMap[lo.id];
-                return cloud ? { ...lo, viewerCount: cloud.viewerCount || 0 } : { ...lo, viewerCount: 0 };
+            const sortedUpdated = [...updatedLocal].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            return sortedUpdated.map(uo => {
+                const cloud = cloudDataMap[uo.id];
+                return cloud ? { ...uo, viewerCount: cloud.viewerCount || 0 } : { ...uo, viewerCount: 0 };
             });
         });
     });
@@ -218,6 +221,12 @@ export default function OrdersClient() {
   const currentOrder = useMemo(() => openOrders.find(o => o.id === currentOrderId), [openOrders, currentOrderId]);
   const orderTotal = useMemo(() => currentOrder?.items.reduce((acc, i) => acc + i.price * i.quantity, 0) || 0, [currentOrder]);
 
+  useEffect(() => {
+    if (currentOrder) {
+        setNewName(currentOrder.name);
+    }
+  }, [currentOrder?.id]);
+
   const updateOrdersAndSync = (updatedOrders: ActiveOrder[]) => {
       const now = new Date().toISOString();
       const ordersWithTime = updatedOrders.map(uo => 
@@ -228,7 +237,7 @@ export default function OrdersClient() {
       setOpenOrders(prev => ordersWithTime.map(uo => {
           const p = prev.find(prevO => prevO.id === uo.id);
           return p ? { ...uo, viewerCount: p.viewerCount } : uo;
-      }));
+      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
       const active = ordersWithTime.find(o => o.id === currentOrderId);
       if (active) {
@@ -302,6 +311,32 @@ export default function OrdersClient() {
     updateOrdersAndSync(newOrders);
   };
 
+  const handleUpdateOrderName = async () => {
+    if (!currentOrder || !newName.trim()) return;
+    const orders = getOpenOrders();
+    const idx = orders.findIndex(o => o.id === currentOrderId);
+    if (idx === -1) return;
+
+    const updatedOrder = { 
+        ...orders[idx], 
+        name: newName.trim(),
+        updatedAt: new Date().toISOString()
+    };
+    
+    const newOrders = [...orders];
+    newOrders[idx] = updatedOrder;
+    
+    saveOpenOrders(newOrders);
+    setOpenOrders(prev => newOrders.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    
+    if (updatedOrder.isShared || updatedOrder.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''))) {
+        await syncOrderToFirestore(updatedOrder);
+    }
+    
+    setIsEditNameDialogOpen(false);
+    toast({ title: "Nome atualizado!" });
+  };
+
   const handleClaimUnit = (lineItemId: string) => {
     const orders = getOpenOrders();
     const idx = orders.findIndex(o => o.id === currentOrderId);
@@ -331,7 +366,7 @@ export default function OrdersClient() {
         if (isFullyDelivered && balance <= 0) {
             const updated = getOpenOrders().filter(o => o.id !== order.id);
             saveOpenOrders(updated);
-            setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
+            setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
             deleteOrderFromFirestore(order.id);
             setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
             toast({ title: "Combo entregue e comanda encerrada!" });
@@ -378,7 +413,7 @@ export default function OrdersClient() {
     const all = getOpenOrders();
     const updated = all.filter(o => o.id !== orderToDelete.id);
     saveOpenOrders(updated);
-    setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
+    setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     await deleteOrderFromFirestore(orderToDelete.id);
     if (currentOrderId === orderToDelete.id) setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
     setOrderToDelete(null);
@@ -441,7 +476,7 @@ export default function OrdersClient() {
       const currentOrders = getOpenOrders();
       const updatedOrders = [...currentOrders, newOrder];
       saveOpenOrders(updatedOrders);
-      setOpenOrders(updatedOrders);
+      setOpenOrders(updatedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       setCurrentOrderId(newOrderId);
       
       await syncOrderToFirestore(newOrder);
@@ -469,7 +504,7 @@ export default function OrdersClient() {
         setOpenOrders(prev => all.map(uo => {
             const p = prev.find(prevO => prevO.id === uo.id);
             return p ? { ...uo, viewerCount: 0 } : uo;
-        }));
+        }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
         const hasKitchenItems = order.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''));
         if (!hasKitchenItems) {
             await deleteOrderFromFirestore(order.id);
@@ -509,7 +544,6 @@ export default function OrdersClient() {
                 <div className="space-y-2">
                     {openOrders
                       .filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase()))
-                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                       .map(o => {
                         const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
                         const hasCredit = balance < 0;
@@ -594,13 +628,14 @@ export default function OrdersClient() {
                                         onClick={() => { 
                                             const all = getOpenOrders();
                                             const target = all.find(o => o.id === currentOrder.id);
-                                            if(target) { target.isShared = true; target.updatedAt = new Date().toISOString(); saveOpenOrders(all); setOpenOrders(prev => all.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 }))); syncOrderToFirestore(target); setOrderToShare(target); }
+                                            if(target) { target.isShared = true; target.updatedAt = new Date().toISOString(); saveOpenOrders(all); setOpenOrders(prev => all.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); syncOrderToFirestore(target); setOrderToShare(target); }
                                         }} 
                                     />
                                 )}
                             </TooltipTrigger>
                             <TooltipContent>{currentOrder.isShared ? "Parar Compartilhamento" : "Compartilhar"}</TooltipContent>
                         </Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Edit className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsEditNameDialogOpen(true)} /></TooltipTrigger><TooltipContent>Editar Nome</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Merge className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsMergeDialogOpen(true)} /></TooltipTrigger><TooltipContent>Juntar</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 cursor-pointer text-primary" onClick={() => setIsPrintDialogOpen(true)} /></TooltipTrigger><TooltipContent>Imprimir Extrato</TooltipContent></Tooltip>
@@ -680,7 +715,7 @@ export default function OrdersClient() {
         </div>
       </div>
 
-      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date(), updatedAt: new Date().toISOString() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: 0 }))); setCurrentOrderId(id); }} clients={clients} />
+      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date(), updatedAt: new Date().toISOString() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); setCurrentOrderId(id); }} clients={clients} />
       
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} allowPartialPayment={true} onSubmit={(details) => {
           if (!currentOrder) return;
@@ -738,7 +773,7 @@ export default function OrdersClient() {
           } else {
               const updated = getOpenOrders().filter(o => o.id !== currentOrder.id);
               saveOpenOrders(updated);
-              setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
+              setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
               deleteOrderFromFirestore(currentOrder.id);
               setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
               toast({ title: "Pagamento Concluído!" });
@@ -747,7 +782,7 @@ export default function OrdersClient() {
       
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
       
-      <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { const withTime = merged.map(m => ({ ...m, updatedAt: new Date().toISOString() })); saveOpenOrders(withTime); setOpenOrders(prev => withTime.map(m => ({ ...m, viewerCount: prev.find(p => p.id === m.id)?.viewerCount || 0 }))); setIsMergeDialogOpen(false); }} />
+      <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { const withTime = merged.map(m => ({ ...m, updatedAt: new Date().toISOString() })); saveOpenOrders(withTime); setOpenOrders(prev => withTime.map(m => ({ ...m, viewerCount: prev.find(p => p.id === m.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); setIsMergeDialogOpen(false); }} />
       
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrderId); if(idx !== -1) { 
           const order = { ...orders[idx] };
@@ -759,6 +794,20 @@ export default function OrdersClient() {
           setIsCreditDialogOpen(false); 
       } }} />
       
+      <Dialog open={isEditNameDialogOpen} onOpenChange={setIsEditNameDialogOpen}>
+        <DialogContent>
+            <DialogHeader><DialogTitle>Editar Nome da Comanda</DialogTitle><DialogDescription>Altere a identificação desta mesa ou cliente.</DialogDescription></DialogHeader>
+            <div className="py-4 space-y-2">
+                <Label>Novo Nome</Label>
+                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Ex: Mesa 10" autoFocus />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsEditNameDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={handleUpdateOrderName}>Salvar Alteração</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <GuestRequestsDialog 
         isOpen={isRequestsDialogOpen} 
         onOpenChange={setIsRequestsDialogOpen} 
