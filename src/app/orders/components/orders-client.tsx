@@ -142,12 +142,18 @@ export default function OrdersClient() {
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
+        const cloudIds = snapshot.docs.map(d => d.id);
         const cloudDataMap = snapshot.docs.reduce((acc, d) => ({ ...acc, [d.id]: d.data() }), {} as any);
         
         const localOrders = getOpenOrders();
         let hasChanges = false;
         
-        const updatedLocal = localOrders.map(lo => {
+        // Remove comandas que não existem mais na nuvem (foram fechadas)
+        let updatedLocal = localOrders.filter(lo => cloudIds.includes(lo.id));
+        if (localOrders.length !== updatedLocal.length) hasChanges = true;
+
+        // Atualiza comandas existentes se a nuvem for mais recente
+        updatedLocal = updatedLocal.map(lo => {
             const cloud = cloudDataMap[lo.id];
             if (cloud && cloud.items) {
                 const cloudTime = cloud.updatedAt ? new Date(cloud.updatedAt).getTime() : 0;
@@ -157,6 +163,7 @@ export default function OrdersClient() {
                     hasChanges = true;
                     return { 
                         ...lo, 
+                        name: cloud.name || lo.name,
                         items: cloud.items, 
                         isShared: cloud.isShared ?? lo.isShared,
                         updatedAt: cloud.updatedAt 
@@ -164,6 +171,22 @@ export default function OrdersClient() {
                 }
             }
             return lo;
+        });
+
+        // Adiciona comandas que estão na nuvem mas não no local (abertas em outro dispositivo)
+        snapshot.docs.forEach(doc => {
+            if (!localOrders.find(lo => lo.id === doc.id)) {
+                const data = doc.data();
+                updatedLocal.push({
+                    id: doc.id,
+                    name: data.name,
+                    items: data.items || [],
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+                    isShared: data.isShared,
+                    updatedAt: data.updatedAt
+                } as any);
+                hasChanges = true;
+            }
         });
 
         if (hasChanges) {
