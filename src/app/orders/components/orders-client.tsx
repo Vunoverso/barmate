@@ -682,11 +682,33 @@ export default function OrdersClient() {
 
       <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date(), updatedAt: new Date().toISOString() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: 0 }))); setCurrentOrderId(id); }} clients={clients} />
       
-      <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} onSubmit={(details) => {
+      <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} allowPartialPayment={true} onSubmit={(details) => {
           if (!currentOrder) return;
           
           addSale({ ...details.sale, name: `Comanda: ${currentOrder.name}` });
           
+          if (details.isPartial) {
+              const orders = getOpenOrders();
+              const idx = orders.findIndex(o => o.id === currentOrder.id);
+              if (idx !== -1) {
+                  const order = { ...orders[idx] };
+                  const amountPaid = details.sale.totalAmount;
+                  order.items = [...order.items, { 
+                      id: `payment-partial-${Date.now()}`, 
+                      name: 'Pagamento Parcial', 
+                      price: -amountPaid, 
+                      quantity: 1, 
+                      categoryId: 'credit', 
+                      lineItemId: `li-part-${Date.now()}`, 
+                      isDelivered: true, 
+                      addedAt: new Date().toISOString() 
+                  } as any];
+                  updateOrdersAndSync(orders);
+                  toast({ title: "Pagamento Parcial Registrado!" });
+              }
+              return;
+          }
+
           const hasPendingCombos = currentOrder.items.some(item => 
             item.isCombo && (item.claimedQuantity || 0) < ((item.comboItems || 0) * item.quantity)
           );
@@ -711,7 +733,6 @@ export default function OrdersClient() {
                   const newOrders = [...orders];
                   newOrders[idx] = order;
                   updateOrdersAndSync(newOrders);
-                  // Não fecha o diálogo aqui para mostrar o recibo
                   toast({ title: "Pagamento Registrado! Comanda mantida para entrega de itens." });
               }
           } else {
@@ -720,7 +741,6 @@ export default function OrdersClient() {
               setOpenOrders(prev => updated.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })));
               deleteOrderFromFirestore(currentOrder.id);
               setCurrentOrderId(updated.length > 0 ? updated[0].id : null);
-              // Não fecha o diálogo aqui para mostrar o recibo
               toast({ title: "Pagamento Concluído!" });
           }
       }} />

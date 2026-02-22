@@ -40,7 +40,11 @@ interface PaymentDialogProps {
   }) => void;
 }
 
-const parseLocaleFloat = (value: string) => parseFloat(value.replace(',', '.')) || 0;
+const parseLocaleFloat = (value: string) => {
+  if (!value) return 0;
+  const normalized = value.replace(/\./g, '').replace(',', '.');
+  return parseFloat(normalized) || 0;
+};
 
 export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, currentOrder, onSubmit, allowCredit = false, allowPartialPayment = false }: PaymentDialogProps) {
   const [discount, setDiscount] = useState<string>('');
@@ -54,6 +58,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [saleCompleted, setSaleCompleted] = useState<Sale | null>(null);
   const [lastOrderName, setLastOrderName] = useState<string>('');
   const receiptRef = useRef<HTMLDivElement>(null);
+  const isInitialOpen = useRef(true);
   const { toast } = useToast();
 
   const resetState = () => {
@@ -70,10 +75,15 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
   useEffect(() => {
     if (isOpen) {
-      resetState();
-      if (currentOrder?.name) {
+      if (isInitialOpen.current) {
+        resetState();
+        if (currentOrder?.name) {
           setLastOrderName(currentOrder.name);
+        }
+        isInitialOpen.current = false;
       }
+    } else {
+      isInitialOpen.current = true;
     }
   }, [isOpen, currentOrder]);
 
@@ -106,9 +116,6 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   }, [amountToPay, totalPaid, numCashAmount, numDebitAmount, numCreditAmount, numPixAmount, numCashTendered]);
 
   const handleOpenChange = (open: boolean) => {
-    if (!open) {
-       resetState();
-    }
     onOpenChange(open);
   };
 
@@ -130,7 +137,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const isSubmitDisabled = useMemo(() => {
     const roundedRemaining = Math.round(remainingToPay * 100) / 100;
     if (totalPaid <= 0 && amountToPay > 0) return true;
-    if (!allowPartialPayment && roundedRemaining !== 0 && Math.abs(roundedRemaining) > 0.01) {
+    if (!allowPartialPayment && roundedRemaining > 0.01) {
         return true;
     }
     return false;
@@ -143,7 +150,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
     if (isSubmitDisabled) {
       if (totalPaid <= 0 && amountToPay > 0) setError('Nenhum valor de pagamento foi inserido.');
-      else if (!allowPartialPayment && roundedRemaining !== 0) setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
+      else if (!allowPartialPayment && roundedRemaining > 0.01) setError(`O valor pago não corresponde ao total. Faltam ${formatCurrency(remainingToPay)}.`);
       return;
     }
 
@@ -170,17 +177,13 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         leaveChangeAsCredit: leaveChangeAsCredit, 
     }
     
-    if (isPartialNow) {
-        onSubmit({ sale: saleObject, leaveChangeAsCredit: false, isPartial: true });
-        onOpenChange(false);
-    } else {
-        setSaleCompleted({
-            id: currentOrder?.id || `sale-${Date.now()}`,
-            timestamp: new Date(),
-            ...saleObject,
-        });
-        onSubmit({ sale: saleObject, leaveChangeAsCredit, isPartial: false });
-    }
+    setSaleCompleted({
+        id: currentOrder?.id || `sale-${Date.now()}`,
+        timestamp: new Date(),
+        ...saleObject,
+    } as Sale);
+
+    onSubmit({ sale: saleObject, leaveChangeAsCredit, isPartial: isPartialNow });
   };
 
   const handlePrintReceipt = () => {

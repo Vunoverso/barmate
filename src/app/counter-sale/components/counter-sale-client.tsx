@@ -135,7 +135,7 @@ export default function CounterSaleClient() {
   }, [currentOrderItems]);
 
   const handlePayment = (details: { sale: Omit<Sale, 'id' | 'timestamp' | 'name'>; leaveChangeAsCredit: boolean; isPartial: boolean; }) => {
-    const { sale } = details;
+    const { sale, isPartial } = details;
 
     addSale({
       ...sale,
@@ -143,11 +143,13 @@ export default function CounterSaleClient() {
       name: 'Venda Balcão',
     });
     
-    setCurrentOrderItems([]); 
-    localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+    if (!isPartial) {
+        setCurrentOrderItems([]); 
+        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+    }
     
     toast({
-      title: "Venda Balcão Concluída!",
+      title: isPartial ? "Pagamento Parcial Registrado!" : "Venda Balcão Concluída!",
       description: `Venda de ${formatCurrency(sale.totalAmount)} registrada com sucesso.`,
       action: <CheckCircle className="text-green-500" />,
     });
@@ -292,7 +294,7 @@ export default function CounterSaleClient() {
         totalAmount={orderTotal}
         currentOrder={currentCounterOrder}
         onSubmit={handlePayment}
-        allowPartialPayment={false}
+        allowPartialPayment={true}
       />
     </div>
   );
@@ -354,5 +356,3 @@ function ProductDisplay({ products, productCategories, addToOrder, viewMode }: P
     </div>
   );
 }
-
-    
