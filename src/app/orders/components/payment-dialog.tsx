@@ -85,7 +85,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
     } else {
       isInitialOpen.current = true;
     }
-  }, [isOpen, currentOrder]);
+    // Removemos currentOrder das dependências para evitar reset quando a comanda atualiza após o pagamento parcial
+  }, [isOpen]);
 
   const numDiscount = parseLocaleFloat(discount);
   const numCashAmount = parseLocaleFloat(cashAmount);
@@ -135,11 +136,15 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   }
 
   const isSubmitDisabled = useMemo(() => {
+    // Se o valor total for positivo e nada foi inserido, bloqueia
+    if (amountToPay > 0 && totalPaid <= 0) return true;
+    
+    // Se não permite pagamento parcial e o valor pago é menor que o total (com pequena tolerância de arredondamento)
     const roundedRemaining = Math.round(remainingToPay * 100) / 100;
-    if (totalPaid <= 0 && amountToPay > 0) return true;
     if (!allowPartialPayment && roundedRemaining > 0.01) {
         return true;
     }
+    
     return false;
   }, [totalPaid, amountToPay, allowPartialPayment, remainingToPay]);
 
@@ -238,7 +243,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
             
             <div className="flex justify-between items-center text-base font-bold">
               <span>Total a Pagar:</span>
-              <span className="text-primary">{formatCurrency(amountToPay)}</span>
+              <span className="text-primary font-black">{formatCurrency(amountToPay)}</span>
             </div>
 
             <Separator />
@@ -333,7 +338,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
           ) : (
             <>
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
-                <Button onClick={handleProcessPayment} disabled={isSubmitDisabled}>
+                <Button 
+                  onClick={handleProcessPayment} 
+                  disabled={isSubmitDisabled}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8"
+                >
                     Realizar Pagamento
                 </Button>
             </>
