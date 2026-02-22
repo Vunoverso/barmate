@@ -127,7 +127,7 @@ export default function OrdersClient() {
     try { 
         await setDoc(doc(db, 'open_orders', order.id), prepareForFirestore({ 
             ...order, 
-            updatedAt: order.updatedAt || new Date().toISOString()
+            updatedAt: new Date().toISOString() // Sempre gera um novo timestamp ao sincronizar
         }), { merge: true }); 
     } catch (e) {
         console.error("Erro ao sincronizar:", e);
@@ -142,63 +142,23 @@ export default function OrdersClient() {
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
-        const cloudIds = snapshot.docs.map(d => d.id);
-        const cloudDataMap = snapshot.docs.reduce((acc, d) => ({ ...acc, [d.id]: d.data() }), {} as any);
-        
-        const localOrders = getOpenOrders();
-        let hasChanges = false;
-        
-        // Remove comandas que não existem mais na nuvem (foram fechadas)
-        let updatedLocal = localOrders.filter(lo => cloudIds.includes(lo.id));
-        if (localOrders.length !== updatedLocal.length) hasChanges = true;
-
-        // Atualiza comandas existentes se a nuvem for mais recente
-        updatedLocal = updatedLocal.map(lo => {
-            const cloud = cloudDataMap[lo.id];
-            if (cloud && cloud.items) {
-                const cloudTime = cloud.updatedAt ? new Date(cloud.updatedAt).getTime() : 0;
-                const localTime = lo.updatedAt ? new Date(lo.updatedAt).getTime() : 0;
-
-                if (cloudTime > localTime) {
-                    hasChanges = true;
-                    return { 
-                        ...lo, 
-                        name: cloud.name || lo.name,
-                        items: cloud.items, 
-                        isShared: cloud.isShared ?? lo.isShared,
-                        updatedAt: cloud.updatedAt 
-                    };
-                }
-            }
-            return lo;
+        const cloudOrders = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+                updatedAt: data.updatedAt || new Date().toISOString(),
+                viewerCount: data.viewerCount || 0
+            } as ActiveOrder;
         });
 
-        // Adiciona comandas que estão na nuvem mas não no local (abertas em outro dispositivo)
-        snapshot.docs.forEach(doc => {
-            if (!localOrders.find(lo => lo.id === doc.id)) {
-                const data = doc.data();
-                updatedLocal.push({
-                    id: doc.id,
-                    name: data.name,
-                    items: data.items || [],
-                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-                    isShared: data.isShared,
-                    updatedAt: data.updatedAt
-                } as any);
-                hasChanges = true;
-            }
-        });
-
-        if (hasChanges) {
-            saveOpenOrders(updatedLocal);
-        }
-
+        // REGRA DE SOBERANIA: A nuvem é a verdade absoluta.
+        // Qualquer comanda local que não esteja no snapshot da nuvem é deletada.
+        saveOpenOrders(cloudOrders);
+        
         setOpenOrders(prev => {
-            const sortedUpdated = [...updatedLocal].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            return sortedUpdated.map(uo => {
-                const cloud = cloudDataMap[uo.id];
-                return cloud ? { ...uo, viewerCount: cloud.viewerCount || 0 } : { ...uo, viewerCount: 0 };
-            });
+            return [...cloudOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         });
     });
     return () => unsubscribe();
@@ -252,23 +212,19 @@ export default function OrdersClient() {
 
   const updateOrdersAndSync = (updatedOrders: ActiveOrder[]) => {
       const now = new Date().toISOString();
-      const ordersWithTime = updatedOrders.map(uo => 
-          uo.id === currentOrderId ? { ...uo, updatedAt: now } : uo
-      );
+      const targetOrder = updatedOrders.find(o => o.id === currentOrderId);
+      
+      if (targetOrder) {
+          const updatedTarget = { ...targetOrder, updatedAt: now };
+          const ordersWithTime = updatedOrders.map(uo => uo.id === currentOrderId ? updatedTarget : uo);
+          
+          saveOpenOrders(ordersWithTime);
+          setOpenOrders(prev => ordersWithTime.map(uo => {
+              const p = prev.find(prevO => prevO.id === uo.id);
+              return p ? { ...uo, viewerCount: p.viewerCount } : uo;
+          }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
-      saveOpenOrders(ordersWithTime);
-      setOpenOrders(prev => ordersWithTime.map(uo => {
-          const p = prev.find(prevO => prevO.id === uo.id);
-          return p ? { ...uo, viewerCount: p.viewerCount } : uo;
-      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-
-      const active = ordersWithTime.find(o => o.id === currentOrderId);
-      if (active) {
-          const hasKitchenItems = active.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''));
-          const hasCombos = active.items.some(i => i.isCombo);
-          if (active.isShared || hasKitchenItems || hasCombos) {
-              syncOrderToFirestore(active);
-          }
+          syncOrderToFirestore(updatedTarget);
       }
   };
 
@@ -352,9 +308,7 @@ export default function OrdersClient() {
     saveOpenOrders(newOrders);
     setOpenOrders(prev => newOrders.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     
-    if (updatedOrder.isShared || updatedOrder.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''))) {
-        await syncOrderToFirestore(updatedOrder);
-    }
+    await syncOrderToFirestore(updatedOrder);
     
     setIsEditNameDialogOpen(false);
     toast({ title: "Nome atualizado!" });
@@ -528,12 +482,8 @@ export default function OrdersClient() {
             const p = prev.find(prevO => prevO.id === uo.id);
             return p ? { ...uo, viewerCount: 0 } : uo;
         }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-        const hasKitchenItems = order.items.some(i => KITCHEN_CATEGORIES.includes(i.categoryId || ''));
-        if (!hasKitchenItems) {
-            await deleteOrderFromFirestore(order.id);
-        } else {
-            await updateDoc(doc(db, 'open_orders', order.id), { isShared: false, updatedAt: target.updatedAt });
-        }
+        
+        await syncOrderToFirestore(target);
         toast({ title: "Compartilhamento Interrompido" });
     }
   };
@@ -651,7 +601,13 @@ export default function OrdersClient() {
                                         onClick={() => { 
                                             const all = getOpenOrders();
                                             const target = all.find(o => o.id === currentOrder.id);
-                                            if(target) { target.isShared = true; target.updatedAt = new Date().toISOString(); saveOpenOrders(all); setOpenOrders(prev => all.map(uo => ({ ...uo, viewerCount: prev.find(p => p.id === uo.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); syncOrderToFirestore(target); setOrderToShare(target); }
+                                            if(target) { 
+                                                target.isShared = true; 
+                                                target.updatedAt = new Date().toISOString(); 
+                                                saveOpenOrders(all); 
+                                                syncOrderToFirestore(target); 
+                                                setOrderToShare(target); 
+                                            }
                                         }} 
                                     />
                                 )}
@@ -738,7 +694,15 @@ export default function OrdersClient() {
         </div>
       </div>
 
-      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { const id = `ord-${Date.now()}`; const newOrders = [...getOpenOrders(), { id, ...d, items: [], createdAt: new Date(), updatedAt: new Date().toISOString() }]; saveOpenOrders(newOrders); setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); setCurrentOrderId(id); }} clients={clients} />
+      <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={(d: any) => { 
+          const id = `ord-${Date.now()}`; 
+          const newOrder = { id, ...d, items: [], createdAt: new Date(), updatedAt: new Date().toISOString() };
+          const newOrders = [...getOpenOrders(), newOrder]; 
+          saveOpenOrders(newOrders); 
+          setOpenOrders(prev => newOrders.map(no => ({ ...no, viewerCount: 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); 
+          setCurrentOrderId(id);
+          syncOrderToFirestore(newOrder); // Sincroniza imediatamente na criação
+      }} clients={clients} />
       
       <PaymentDialog isOpen={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} totalAmount={orderTotal} currentOrder={currentOrder} allowPartialPayment={true} onSubmit={(details) => {
           if (!currentOrder) return;
@@ -805,7 +769,17 @@ export default function OrdersClient() {
       
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
       
-      <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { const withTime = merged.map(m => ({ ...m, updatedAt: new Date().toISOString() })); saveOpenOrders(withTime); setOpenOrders(prev => withTime.map(m => ({ ...m, viewerCount: prev.find(p => p.id === m.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); setIsMergeDialogOpen(false); }} />
+      <MergeOrdersDialog isOpen={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} currentOrder={currentOrder} openOrders={openOrders} onMerge={(merged) => { 
+          const withTime = merged.map(m => ({ ...m, updatedAt: new Date().toISOString() })); 
+          saveOpenOrders(withTime); 
+          setOpenOrders(prev => withTime.map(m => ({ ...m, viewerCount: prev.find(p => p.id === m.id)?.viewerCount || 0 })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); 
+          setIsMergeDialogOpen(false); 
+          // Sincroniza a comanda que recebeu os itens
+          if (currentOrder) {
+              const target = withTime.find(o => merged.some(mergedItem => mergedItem.id === o.id));
+              if (target) syncOrderToFirestore(target);
+          }
+      }} />
       
       <AddCreditDialog isOpen={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} onAdd={(amt, desc) => { if(!currentOrder) return; const orders = getOpenOrders(); const idx = orders.findIndex(o => o.id === currentOrderId); if(idx !== -1) { 
           const order = { ...orders[idx] };
