@@ -3,18 +3,18 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, query, where } from 'firebase/firestore';
 import type { ActiveOrder, OrderItem } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChefHat, CheckCircle2, Clock, BellRing } from 'lucide-react';
+import { ChefHat, CheckCircle2, Clock, BellRing, Utensils } from 'lucide-react';
 import { formatDistanceToNow, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Separator } from '@/components/ui/separator';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { getCurrentOrgId } from '@/lib/data-access';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
@@ -22,6 +22,7 @@ export default function KitchenViewClient() {
     const [orders, setOrders] = useState<ActiveOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
+    const orgId = getCurrentOrgId();
 
     const playNotificationSound = () => {
         try {
@@ -39,11 +40,12 @@ export default function KitchenViewClient() {
     };
 
     useEffect(() => {
-        if (!db) return;
+        if (!db || !orgId) return;
         let isFirstLoad = true;
-        const ordersRef = collection(db, 'open_orders');
+        // Filtro por organizationId para evitar ver pedidos de outros bares
+        const q = query(collection(db, 'open_orders'), where('organizationId', '==', orgId));
         
-        const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
+        const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
@@ -69,13 +71,13 @@ export default function KitchenViewClient() {
             isFirstLoad = false;
         }, async (err) => {
             const permissionError = new FirestorePermissionError({
-                path: ordersRef.path,
+                path: 'open_orders',
                 operation: 'list',
             } satisfies SecurityRuleContext);
             errorEmitter.emit('permission-error', permissionError);
         });
         return () => unsubscribe();
-    }, [orders, toast]);
+    }, [orgId, orders, toast]);
 
     const groupedKitchenOrders = useMemo(() => {
         const groups: Record<string, { id: string, orderName: string, createdAt: Date, items: OrderItem[] }> = {};
@@ -101,39 +103,13 @@ export default function KitchenViewClient() {
         return Object.values(groups).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     }, [orders]);
 
-    const handleMarkAsDelivered = async (orderId: string, lineItemId: string) => {
+    const handleUpdateStatus = async (orderId: string, lineItemId: string, updates: Partial<OrderItem>) => {
         if (!db) return;
         const order = orders.find(o => o.id === orderId);
         if (!order) return;
 
         const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, isDelivered: true, isPreparing: false, forceKitchenVisible: false } : item
-        );
-
-        const docRef = doc(db, 'open_orders', orderId);
-        const data = { 
-            items: updatedItems,
-            updatedAt: new Date().toISOString()
-        };
-
-        updateDoc(docRef, data)
-            .catch(async (err) => {
-                const permissionError = new FirestorePermissionError({
-                    path: docRef.path,
-                    operation: 'update',
-                    requestResourceData: data,
-                } satisfies SecurityRuleContext);
-                errorEmitter.emit('permission-error', permissionError);
-            });
-    };
-
-    const handleTogglePreparing = async (orderId: string, lineItemId: string) => {
-        if (!db) return;
-        const order = orders.find(o => o.id === orderId);
-        if (!order) return;
-
-        const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, isPreparing: !item.isPreparing } : item
+            item.lineItemId === lineItemId ? { ...item, ...updates } : item
         );
 
         const docRef = doc(db, 'open_orders', orderId);
@@ -199,7 +175,7 @@ export default function KitchenViewClient() {
                                             <div className="text-2xl font-black text-white flex items-start gap-3 min-w-0">
                                                 <span className="text-primary">{item.quantity}x</span>
                                                 <div className="min-w-0">
-                                                    <span className="uppercase leading-tight truncate block">{item.name}</span>
+                                                    <span className={item.isReady ? "text-blue-400 line-through" : "uppercase leading-tight truncate block"}>{item.name}</span>
                                                     {item.forceKitchenVisible && (
                                                         <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Manual</span>
                                                     )}
@@ -209,14 +185,24 @@ export default function KitchenViewClient() {
                                                 <Button 
                                                     size="icon" 
                                                     className={`h-12 w-12 rounded-xl transition-colors ${item.isPreparing ? 'bg-orange-500 hover:bg-orange-600' : 'bg-white/5 hover:bg-white/20'} text-white`}
-                                                    onClick={() => handleTogglePreparing(group.id, item.lineItemId!)}
+                                                    onClick={() => handleUpdateStatus(group.id, item.lineItemId!, { isPreparing: !item.isPreparing, isReady: false })}
+                                                    title="Marcar em Preparo"
                                                 >
                                                     <Clock className="h-6 w-6" />
                                                 </Button>
                                                 <Button 
                                                     size="icon" 
+                                                    className={`h-12 w-12 rounded-xl transition-colors ${item.isReady ? 'bg-blue-600 hover:bg-blue-700' : 'bg-white/5 hover:bg-white/20'} text-white`}
+                                                    onClick={() => handleUpdateStatus(group.id, item.lineItemId!, { isReady: !item.isReady, isPreparing: false })}
+                                                    title="Pedido Pronto"
+                                                >
+                                                    <Utensils className="h-6 w-6" />
+                                                </Button>
+                                                <Button 
+                                                    size="icon" 
                                                     className="h-12 w-12 rounded-xl bg-white/10 hover:bg-green-600 text-white transition-colors"
-                                                    onClick={() => handleMarkAsDelivered(group.id, item.lineItemId!)}
+                                                    onClick={() => handleUpdateStatus(group.id, item.lineItemId!, { isDelivered: true, isPreparing: false, isReady: false, forceKitchenVisible: false })}
+                                                    title="Entregar ao Cliente"
                                                 >
                                                     <CheckCircle2 className="h-6 w-6" />
                                                 </Button>
@@ -227,6 +213,11 @@ export default function KitchenViewClient() {
                                                 Em Produção
                                             </Badge>
                                         )}
+                                        {item.isReady && (
+                                            <Badge variant="outline" className="w-fit text-[9px] font-black text-blue-400 border-blue-500/30 bg-blue-500/5 uppercase tracking-widest animate-bounce ml-10">
+                                                PRONTO NA BANCADA
+                                            </Badge>
+                                        )}
                                     </div>
                                 ))}
                             </CardContent>
@@ -235,7 +226,7 @@ export default function KitchenViewClient() {
                                     className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg h-14 rounded-xl"
                                     onClick={async () => {
                                         for(const item of group.items) {
-                                            await handleMarkAsDelivered(group.id, item.lineItemId!);
+                                            await handleUpdateStatus(group.id, item.lineItemId!, { isDelivered: true, isPreparing: false, isReady: false });
                                         }
                                     }}
                                 >

@@ -57,6 +57,17 @@ export interface SupportTicket {
   createdAt: string;
 }
 
+export interface Testimonial {
+  id: string;
+  organizationId: string;
+  barName: string;
+  authorName: string;
+  content: string;
+  rating: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
+}
+
 export interface CancellationRequest {
   id: string;
   organizationId: string;
@@ -106,6 +117,7 @@ export interface OrderItem extends Product {
   claimedFromId?: string;
   isDelivered?: boolean;
   isPreparing?: boolean;
+  isReady?: boolean;
   addedAt?: string;
   forceKitchenVisible?: boolean;
   isPaid?: boolean;

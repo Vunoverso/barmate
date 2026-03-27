@@ -25,14 +25,18 @@ export default function LoginPage() {
     
     // Simulação de delay de rede
     setTimeout(() => {
-      const isMasterUser = email === 'semnomelogan@gmail.com' && password === 'cocofidido1981';
+      // Lista de usuários com privilégios de Admin SaaS
+      const isMasterUser1 = email === 'semnomelogan@gmail.com' && password === 'cocofidido1981';
+      const isMasterUser2 = email === 'agenciaaktm@gmail.com' && password === 'cocofidido1981';
       const isDemoAdmin = email === 'admin@barmate.com' && password === 'admin123';
 
-      if (isMasterUser || isDemoAdmin) {
+      const isAnyMaster = isMasterUser1 || isMasterUser2;
+
+      if (isAnyMaster || isDemoAdmin) {
         localStorage.setItem('barmate_admin_session', 'true');
         
         if (loginMode === 'admin') {
-          if (isMasterUser) {
+          if (isAnyMaster) {
             localStorage.setItem('barmate_user_role', 'super_admin');
             localStorage.setItem('barmate_current_org_id', 'master_org');
             toast({ title: "Acesso Admin SaaS Liberado", description: "Bem-vindo ao Backoffice Global." });
@@ -45,8 +49,13 @@ export default function LoginPage() {
         } else {
           // Acesso como Estabelecimento (Bar)
           localStorage.setItem('barmate_user_role', 'owner');
-          // Se for o usuário master entrando no bar, damos um ID especial, senão usamos um demo
-          localStorage.setItem('barmate_current_org_id', isMasterUser ? 'master_bar_org' : 'demo_org_1');
+          
+          // Definição de ID de Organização isolado por e-mail para evitar conflitos
+          let orgId = 'demo_org_1';
+          if (email === 'semnomelogan@gmail.com') orgId = 'master_bar_org';
+          if (email === 'agenciaaktm@gmail.com') orgId = 'aktm_bar_org';
+
+          localStorage.setItem('barmate_current_org_id', orgId);
           toast({ title: "Acesso ao Bar Liberado", description: "Iniciando painel operacional." });
           router.push('/dashboard');
         }

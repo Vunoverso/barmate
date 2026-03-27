@@ -4,12 +4,12 @@
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, UserCircle2, Clock } from 'lucide-react';
+import { Loader2, UserCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -22,7 +22,10 @@ export default function GuestRegisterPage() {
     const [barInfo, setBarInfo] = useState({ name: 'BarMate', logo: '', logoScale: 1 });
     
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { toast } = useToast();
+    
+    const orgId = searchParams.get('orgId');
 
     useEffect(() => {
         const savedName = localStorage.getItem('barmate_guest_name');
@@ -42,9 +45,12 @@ export default function GuestRegisterPage() {
         }
     }, [router]);
 
+    // Busca informações do bar baseadas no orgId da URL
     useEffect(() => {
-        if (!db) return;
-        const settingsRef = doc(db, 'settings', 'global');
+        if (!db || !orgId) return;
+        
+        // Em um sistema multi-tenant real, buscamos da coleção settings pelo orgId
+        const settingsRef = doc(db, 'settings', orgId);
         const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -54,15 +60,11 @@ export default function GuestRegisterPage() {
                     logoScale: data.barLogoScale || 1
                 });
             }
-        }, async (err) => {
-            const permissionError = new FirestorePermissionError({
-                path: settingsRef.path,
-                operation: 'get',
-            } satisfies SecurityRuleContext);
-            errorEmitter.emit('permission-error', permissionError);
+        }, (err) => {
+            console.error("Erro ao carregar info do bar:", err);
         });
         return () => unsubscribe();
-    }, []);
+    }, [orgId]);
 
     useEffect(() => {
         if (!requestId || !db) return;
@@ -92,11 +94,16 @@ export default function GuestRegisterPage() {
     }, [requestId, router, toast]);
 
     const handleSendRequest = async (intent: 'create' | 'view') => {
-        if (!name.trim() || !db) return;
+        if (!name.trim() || !db || !orgId) {
+            if (!orgId) toast({ title: "Erro", description: "QR Code inválido. Por favor, solicite um novo ao atendente.", variant: "destructive" });
+            return;
+        }
+        
         setIsSubmitting(true);
         localStorage.setItem('barmate_guest_name', name.trim());
         
         const requestData = {
+            organizationId: orgId, // Crucial para o bar certo receber a notificação
             name: name.trim(),
             status: 'pending',
             intent: intent,
@@ -112,17 +119,30 @@ export default function GuestRegisterPage() {
                 setStatus('pending');
             })
             .catch(async (error) => {
-                const permissionError = new FirestorePermissionError({
-                    path: requestsCol.path,
-                    operation: 'create',
-                    requestResourceData: requestData,
-                } satisfies SecurityRuleContext);
-                errorEmitter.emit('permission-error', permissionError);
+                console.error("Erro ao enviar solicitação:", error);
+                toast({ title: "Erro na conexão", description: "Não foi possível enviar sua solicitação.", variant: "destructive" });
             })
             .finally(() => { 
                 setIsSubmitting(false); 
             });
     };
+
+    if (!orgId && status !== 'approved') {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
+                <Card className="w-full max-w-md text-center shadow-xl border-t-4 border-t-destructive">
+                    <CardHeader>
+                        <div className="mx-auto bg-destructive/10 rounded-full p-4 w-fit mb-4"><AlertTriangle className="h-10 w-10 text-destructive" /></div>
+                        <CardTitle className="text-2xl">QR Code Inválido</CardTitle>
+                        <CardDescription>Este link de acesso não possui a identificação do estabelecimento.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground">Por favor, utilize o QR Code impresso na sua mesa ou peça ajuda a um funcionário.</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     if (status === 'pending') {
         return (

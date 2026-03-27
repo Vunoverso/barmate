@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, query, where } from 'firebase/firestore';
 import type { ActiveOrder, OrderItem } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChefHat, CheckCircle2, Clock, Printer, QrCode, Copy, CheckSquare, Square, Play } from 'lucide-react';
+import { ChefHat, CheckCircle2, Clock, Printer, QrCode, Copy, CheckSquare, Square, Utensils } from 'lucide-react';
 import { formatDistanceToNow, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -26,6 +26,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { getCurrentOrgId } from '@/lib/data-access';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
@@ -35,12 +36,15 @@ export default function PedidosClient() {
     const [isShareDialogOpenState, setIsShareDialogOpenState] = useState(false);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const { toast } = useToast();
+    const orgId = getCurrentOrgId();
 
     useEffect(() => {
-        if (!db) return;
-        const ordersRef = collection(db, 'open_orders');
+        if (!db || !orgId) return;
         
-        const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
+        // Filtro por organizationId para isolar dados de diferentes bares
+        const q = query(collection(db, 'open_orders'), where('organizationId', '==', orgId));
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
@@ -50,13 +54,13 @@ export default function PedidosClient() {
             setIsLoading(false);
         }, async (err) => {
             const permissionError = new FirestorePermissionError({
-                path: ordersRef.path,
+                path: 'open_orders',
                 operation: 'list',
             } satisfies SecurityRuleContext);
             errorEmitter.emit('permission-error', permissionError);
         });
         return () => unsubscribe();
-    }, []);
+    }, [orgId]);
 
     const isDateToday = (dateSource?: string | Date) => {
         if (!dateSource) return false;
@@ -88,13 +92,13 @@ export default function PedidosClient() {
         return Object.values(groups).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     }, [orders]);
 
-    const handleMarkAsDelivered = async (orderId: string, lineItemId: string) => {
+    const handleUpdateItemStatus = async (orderId: string, lineItemId: string, updates: Partial<OrderItem>) => {
         if (!db) return;
         const order = orders.find(o => o.id === orderId);
         if (!order) return;
 
         const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, isDelivered: true, isPreparing: false, forceKitchenVisible: false } : item
+            item.lineItemId === lineItemId ? { ...item, ...updates } : item
         );
 
         const docRef = doc(db, 'open_orders', orderId);
@@ -105,37 +109,8 @@ export default function PedidosClient() {
 
         updateDoc(docRef, data)
             .then(() => {
-                toast({ title: "Item entregue!" });
-            })
-            .catch(async (err) => {
-                const permissionError = new FirestorePermissionError({
-                    path: docRef.path,
-                    operation: 'update',
-                    requestResourceData: data,
-                } satisfies SecurityRuleContext);
-                errorEmitter.emit('permission-error', permissionError);
-            });
-    };
-
-    const handleTogglePreparing = async (orderId: string, lineItemId: string) => {
-        if (!db) return;
-        const order = orders.find(o => o.id === orderId);
-        if (!order) return;
-
-        const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, isPreparing: !item.isPreparing } : item
-        );
-
-        const docRef = doc(db, 'open_orders', orderId);
-        const data = { 
-            items: updatedItems,
-            updatedAt: new Date().toISOString()
-        };
-
-        updateDoc(docRef, data)
-            .then(() => {
-                const item = updatedItems.find(i => i.lineItemId === lineItemId);
-                toast({ title: item?.isPreparing ? "Em produção!" : "Aguardando produção" });
+                if (updates.isDelivered) toast({ title: "Item entregue!" });
+                else if (updates.isReady) toast({ title: "Sinalizado como pronto!" });
             })
             .catch(async (err) => {
                 const permissionError = new FirestorePermissionError({
@@ -323,7 +298,7 @@ export default function PedidosClient() {
                                                 <div className="flex items-start gap-2 min-w-0">
                                                     <span className="text-primary font-black text-xl leading-none">{item.quantity}x</span>
                                                     <div className="min-w-0">
-                                                        <span className="font-bold text-sm uppercase leading-tight truncate block">
+                                                        <span className={item.isReady ? "text-blue-600 line-through font-bold text-sm uppercase leading-tight truncate block" : "font-bold text-sm uppercase leading-tight truncate block"}>
                                                             {item.name}
                                                         </span>
                                                         {item.forceKitchenVisible && (
@@ -336,16 +311,25 @@ export default function PedidosClient() {
                                                         size="sm" 
                                                         variant={item.isPreparing ? "default" : "outline"} 
                                                         className={`h-8 w-8 rounded-full ${item.isPreparing ? 'bg-orange-500 hover:bg-orange-600' : 'text-muted-foreground'}`}
-                                                        onClick={(e) => { e.stopPropagation(); handleTogglePreparing(group.id, item.lineItemId!); }}
+                                                        onClick={(e) => { e.stopPropagation(); handleUpdateItemStatus(group.id, item.lineItemId!, { isPreparing: !item.isPreparing, isReady: false }); }}
                                                         title={item.isPreparing ? "Em Produção" : "Começar Produção"}
                                                     >
                                                         <Clock className="h-4 w-4" />
                                                     </Button>
                                                     <Button 
                                                         size="sm" 
+                                                        variant={item.isReady ? "default" : "outline"} 
+                                                        className={`h-8 w-8 rounded-full ${item.isReady ? 'bg-blue-600 hover:bg-blue-700' : 'text-muted-foreground'}`}
+                                                        onClick={(e) => { e.stopPropagation(); handleUpdateItemStatus(group.id, item.lineItemId!, { isReady: !item.isReady, isPreparing: false }); }}
+                                                        title="Pronto para Mesa"
+                                                    >
+                                                        <Utensils className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button 
+                                                        size="sm" 
                                                         variant="secondary" 
                                                         className="h-8 w-8 rounded-full hover:bg-green-600 hover:text-white transition-colors"
-                                                        onClick={(e) => { e.stopPropagation(); handleMarkAsDelivered(group.id, item.lineItemId!); }}
+                                                        onClick={(e) => { e.stopPropagation(); handleUpdateItemStatus(group.id, item.lineItemId!, { isDelivered: true, isPreparing: false, isReady: false }); }}
                                                         title="Marcar como Entregue"
                                                     >
                                                         <CheckCircle2 className="h-4 w-4" />
@@ -357,6 +341,11 @@ export default function PedidosClient() {
                                                     Em Produção
                                                 </Badge>
                                             )}
+                                            {item.isReady && (
+                                                <Badge variant="outline" className="w-fit text-[9px] font-black text-blue-600 border-blue-500/30 bg-blue-500/5 uppercase tracking-widest animate-bounce">
+                                                    PRONTO P/ SERVIR
+                                                </Badge>
+                                            )}
                                         </div>
                                     ))}
                                 </CardContent>
@@ -365,7 +354,7 @@ export default function PedidosClient() {
                                         className="w-full bg-green-600 hover:bg-green-700 text-white font-black uppercase text-xs h-10"
                                         onClick={async () => {
                                             for(const item of group.items) {
-                                                await handleMarkAsDelivered(group.id, item.lineItemId!);
+                                                await handleUpdateItemStatus(group.id, item.lineItemId!, { isDelivered: true, isPreparing: false, isReady: false });
                                             }
                                         }}
                                     >

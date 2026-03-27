@@ -1,10 +1,37 @@
 
+"use client";
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Zap, Flame, Crown } from 'lucide-react';
 
 export default function PlanosPage() {
+  const [prices, setPrices] = useState({
+    essential: '99',
+    pro: '199'
+  });
+
+  useEffect(() => {
+    try {
+      const savedPrices = localStorage.getItem('barmate_saas_prices');
+      if (savedPrices) {
+        const parsed = JSON.parse(savedPrices);
+        // Remove os decimais se existirem para manter o visual limpo da landing page
+        const cleanEssential = parsed.essential ? parsed.essential.split('.')[0] : '99';
+        const cleanPro = parsed.pro ? parsed.pro.split('.')[0] : '199';
+        
+        setPrices({
+          essential: cleanEssential,
+          pro: cleanPro
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao carregar preços do storage:", error);
+    }
+  }, []);
+
   return (
     <div className="container mx-auto px-4 py-20 max-w-6xl">
       <div className="text-center space-y-4 mb-16">
@@ -24,7 +51,7 @@ export default function PlanosPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-black">R$ 99</span>
+              <span className="text-4xl font-black">R$ {prices.essential}</span>
               <span className="text-muted-foreground">/mês</span>
             </div>
             <ul className="space-y-3">
@@ -52,7 +79,7 @@ export default function PlanosPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-black">R$ 199</span>
+              <span className="text-4xl font-black">R$ {prices.pro}</span>
               <span className="text-muted-foreground">/mês</span>
             </div>
             <ul className="space-y-3 font-medium">
@@ -72,7 +99,8 @@ export default function PlanosPage() {
         </Card>
 
         {/* Enterprise */}
-        <Card className="relative overflow-hidden border-2">
+        <Card className="relative overflow-hidden border-2 opacity-80">
+          <div className="absolute top-0 right-0 bg-zinc-800 text-zinc-300 px-4 py-1 text-[10px] font-black uppercase tracking-widest">Em Breve</div>
           <CardHeader>
             <div className="bg-muted w-fit p-3 rounded-xl mb-4"><Crown className="h-6 w-6 text-yellow-600" /></div>
             <CardTitle className="text-2xl font-black uppercase">Enterprise</CardTitle>
@@ -91,7 +119,7 @@ export default function PlanosPage() {
             </ul>
           </CardContent>
           <CardFooter>
-            <Button variant="outline" className="w-full h-12 font-bold uppercase">Falar com Consultor</Button>
+            <Button variant="outline" className="w-full h-12 font-bold uppercase" disabled>Em Breve</Button>
           </CardFooter>
         </Card>
       </div>

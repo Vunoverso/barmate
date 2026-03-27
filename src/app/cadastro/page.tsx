@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useState } from 'react';
@@ -7,18 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Zap, ChevronRight, CheckCircle2, Store, User, Loader2 } from 'lucide-react';
+import { Zap, ChevronRight, CheckCircle2, Store, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 
 export default function CadastroPage() {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ name: '', email: '', barName: '', password: '' });
-  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleNext = async () => {
+  const handleNext = () => {
     if (step === 1 && (!formData.name || !formData.email)) {
       toast({ title: "Preencha seus dados", variant: "destructive" });
       return;
@@ -28,36 +25,12 @@ export default function CadastroPage() {
         toast({ title: "Preencha os dados do bar", variant: "destructive" });
         return;
       }
-      setLoading(true);
-      try {
-        const newOrgId = `org-${Math.random().toString(36).substr(2, 9)}`;
-        const now = new Date().toISOString();
-        const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-        if (db) {
-          await setDoc(doc(db, 'organizations', newOrgId), {
-            id: newOrgId,
-            tradeName: formData.barName,
-            ownerName: formData.name,
-            ownerEmail: formData.email,
-            ownerId: newOrgId,
-            planId: 'trial',
-            status: 'trial',
-            createdAt: now,
-            updatedAt: now,
-            trialEndsAt,
-          });
-        }
-
-        localStorage.setItem('barmate_admin_session', 'true');
-        localStorage.setItem('barmate_current_org_id', newOrgId);
-        localStorage.setItem('barName', formData.barName);
-        localStorage.setItem('barmate_user_role', 'owner');
-      } catch (err) {
-        console.error('Erro ao criar organizaÃ§Ã£o:', err);
-      } finally {
-        setLoading(false);
-      }
+      // Simulação de criação de conta SaaS Real
+      const newOrgId = `org-${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('barmate_admin_session', 'true');
+      localStorage.setItem('barmate_current_org_id', newOrgId);
+      localStorage.setItem('barName', formData.barName);
+      localStorage.setItem('barmate_user_role', 'owner');
     }
     setStep(step + 1);
   };
@@ -82,14 +55,14 @@ export default function CadastroPage() {
             <>
               <CardHeader>
                 <CardTitle className="text-2xl font-black uppercase flex items-center gap-2">
-                  <User className="h-6 w-6 text-primary" /> Passo 1: Sobre vocÃª
+                  <User className="h-6 w-6 text-primary" /> Passo 1: Sobre você
                 </CardTitle>
                 <CardDescription>Comece criando seu perfil de administrador.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Seu Nome Completo</Label>
-                  <Input placeholder="Ex: JoÃ£o da Silva" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                  <Input placeholder="Ex: João da Silva" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Email Profissional</Label>
@@ -115,14 +88,11 @@ export default function CadastroPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Crie uma Senha Forte</Label>
-                  <Input type="password" placeholder="MÃ­nimo 8 caracteres" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                  <Input type="password" placeholder="Mínimo 8 caracteres" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
                 </div>
                 <div className="flex gap-4">
                   <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-12">Voltar</Button>
-                  <Button onClick={handleNext} disabled={loading} className="flex-1 h-12 font-bold uppercase">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Finalizar Cadastro
-                  </Button>
+                  <Button onClick={handleNext} className="flex-1 h-12 font-bold uppercase">Finalizar Cadastro</Button>
                 </div>
               </CardContent>
             </>
@@ -134,7 +104,7 @@ export default function CadastroPage() {
                 <CheckCircle2 className="h-16 w-16 text-green-600" />
               </div>
               <h2 className="text-3xl font-black uppercase">Tudo pronto, {formData.name.split(' ')[0]}!</h2>
-              <p className="text-muted-foreground">Seu perÃ­odo de teste grÃ¡tis de 7 dias comeÃ§ou agora. Vamos configurar seus primeiros produtos?</p>
+              <p className="text-muted-foreground">Seu período de teste grátis de 7 dias começou agora. Vamos configurar seus primeiros produtos?</p>
               <Link href="/dashboard" className="block">
                 <Button size="lg" className="w-full h-16 text-xl font-black uppercase shadow-xl shadow-primary/20">Acessar Meu Bar</Button>
               </Link>
@@ -143,7 +113,7 @@ export default function CadastroPage() {
         </Card>
 
         <p className="text-center text-sm text-muted-foreground">
-          JÃ¡ tem uma conta? <Link href="/login" className="text-primary font-bold underline">FaÃ§a login aqui</Link>
+          Já tem uma conta? <Link href="/login" className="text-primary font-bold underline">Faça login aqui</Link>
         </p>
       </div>
     </div>

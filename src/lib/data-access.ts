@@ -73,22 +73,21 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
 };
 
 /**
- * Cloud Sync Engine Otimizado
- * Garante que apenas dados necessários subam para a nuvem
+ * Cloud Sync Engine Otimizado para coleções raiz (compatível com firestore.rules)
  */
 const syncToCloud = (collectionPath: string, id: string, data: any) => {
     if (!db) return;
     const orgId = getCurrentOrgId();
     if (!orgId) return;
 
-    // Remove campos nulos/undefined para economizar bytes e evitar erros no Firestore
     const cleanData = JSON.parse(JSON.stringify({ 
         ...data, 
         organizationId: orgId, 
         updatedAt: new Date().toISOString() 
     }, (k, v) => v === undefined ? null : v));
 
-    const docRef = doc(db, 'organizations', orgId, collectionPath, id);
+    // Usando coleção raiz para compatibilidade com as regras atuais
+    const docRef = doc(db, collectionPath, id);
     
     setDoc(docRef, cleanData, { merge: true })
         .catch(async (err) => {
@@ -107,14 +106,14 @@ export function getProductCategories(): ProductCategory[] {
     return data.map(c => ({ ...c, organizationId: orgId || 'default' }));
 }
 export function saveProductCategories(categories: ProductCategory[]) {
+    const orgId = getRequiredOrgId();
     saveToLocalStorage(KEY_PRODUCT_CATEGORIES, categories);
-    syncToCloud('config', 'categories', { items: categories });
+    syncToCloud('product_categories', orgId, { items: categories });
 }
 
 export function getProducts(): Product[] {
     const orgId = getCurrentOrgId();
     const data = getFromLocalStorage(KEY_PRODUCTS, INITIAL_PRODUCTS);
-    // Lógica de Isolamento: Se for um novo bar, ele começa limpo.
     if (orgId && !orgId.startsWith('demo_') && !orgId.startsWith('master_') && !localStorage.getItem(`init_${orgId}`)) {
         localStorage.setItem(`init_${orgId}`, 'true');
         return []; 
@@ -122,8 +121,9 @@ export function getProducts(): Product[] {
     return data;
 }
 export function saveProducts(products: Product[]) {
+    const orgId = getRequiredOrgId();
     saveToLocalStorage(KEY_PRODUCTS, products);
-    syncToCloud('config', 'products', { items: products });
+    syncToCloud('products', orgId, { items: products });
 }
 
 export function getSales(): Sale[] {
@@ -151,8 +151,9 @@ export function getClients(): Client[] {
     return getFromLocalStorage(KEY_CLIENTS, INITIAL_CLIENTS);
 }
 export function saveClients(clients: Client[]) {
+    const orgId = getRequiredOrgId();
     saveToLocalStorage(KEY_CLIENTS, clients);
-    syncToCloud('config', 'clients', { items: clients });
+    syncToCloud('clients', orgId, { items: clients });
 }
 
 export function getFinancialEntries(): FinancialEntry[] {
@@ -173,8 +174,9 @@ export function getTransactionFees(): TransactionFees {
     return getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
 }
 export function saveTransactionFees(fees: TransactionFees, options?: { silent?: boolean }) {
+    const orgId = getRequiredOrgId();
     saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
-    syncToCloud('config', 'fees', fees);
+    syncToCloud('settings', orgId, fees);
 }
 
 export function getVisuallyRemovedFinancialEntries(): string[] {
@@ -191,35 +193,22 @@ export function saveVisuallyRemovedAdjustments(ids: string[]) {
     saveToLocalStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
 }
 
-/**
- * Função de Bootstrap: Carrega dados essenciais da nuvem ao iniciar
- */
 export async function loadEssentialDataFromCloud() {
     if (!db) return;
     const orgId = getCurrentOrgId();
     if (!orgId) return;
 
     try {
-        const orgRef = doc(db, 'organizations', orgId);
-        
-        // Sincroniza Categorias
-        const catRef = doc(orgRef, 'config', 'categories');
-        const catSnap = await getDoc(catRef).catch(() => null);
+        const catSnap = await getDoc(doc(db, 'product_categories', orgId)).catch(() => null);
         if (catSnap?.exists()) saveToLocalStorage(KEY_PRODUCT_CATEGORIES, catSnap.data().items, { silent: true });
 
-        // Sincroniza Produtos
-        const prodRef = doc(orgRef, 'config', 'products');
-        const prodSnap = await getDoc(prodRef).catch(() => null);
+        const prodSnap = await getDoc(doc(db, 'products', orgId)).catch(() => null);
         if (prodSnap?.exists()) saveToLocalStorage(KEY_PRODUCTS, prodSnap.data().items, { silent: true });
 
-        // Sincroniza Clientes
-        const clientRef = doc(orgRef, 'config', 'clients');
-        const clientSnap = await getDoc(clientRef).catch(() => null);
+        const clientSnap = await getDoc(doc(db, 'clients', orgId)).catch(() => null);
         if (clientSnap?.exists()) saveToLocalStorage(KEY_CLIENTS, clientSnap.data().items, { silent: true });
 
-        // Sincroniza Taxas
-        const feeRef = doc(orgRef, 'config', 'fees');
-        const feeSnap = await getDoc(feeRef).catch(() => null);
+        const feeSnap = await getDoc(doc(db, 'settings', orgId)).catch(() => null);
         if (feeSnap?.exists()) saveToLocalStorage(KEY_TRANSACTION_FEES, feeSnap.data() as TransactionFees, { silent: true });
 
         window.dispatchEvent(new Event('storage'));

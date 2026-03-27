@@ -26,7 +26,8 @@ import {
   LayoutDashboard,
   Frown,
   Search,
-  ChevronRight
+  ChevronRight,
+  MessageSquareHeart
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { migrateOldData, loadEssentialDataFromCloud } from '@/lib/data-access';
+import { migrateOldData, loadEssentialDataFromCloud, getCurrentOrgId } from '@/lib/data-access';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { isToday } from 'date-fns';
@@ -90,26 +91,45 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!db || !isAuthenticated || userRole === 'super_admin') return;
+    const orgId = getCurrentOrgId();
+    if (!db || !isAuthenticated || userRole === 'super_admin' || !orgId) return;
     
-    const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
+    // Ouvinte para solicitações de hóspedes filtrado por organização
+    const qRequests = query(
+      collection(db, 'guest_requests'), 
+      where('status', '==', 'pending'),
+      where('organizationId', '==', orgId)
+    );
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
       setPendingRequestsCount(snapshot.size);
+    }, (error) => {
+      console.error("Firestore Permission Error (Requests):", error);
     });
 
-    const unsubscribeOrders = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
+    // Ouvinte para pedidos na cozinha filtrado por organização
+    const qOrders = query(
+      collection(db, 'open_orders'),
+      where('organizationId', '==', orgId)
+    );
+    const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
       let count = 0;
       const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const items = data.items || [];
         items.forEach((item: any) => {
-          if (KITCHEN_CATEGORIES.includes(item.categoryId || '') && !item.isDelivered && (item.addedAt ? isToday(new Date(item.addedAt)) : false || item.forceKitchenVisible === true)) {
+          const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
+          const isNotDelivered = !item.isDelivered;
+          const isRelevant = (item.addedAt ? isToday(new Date(item.addedAt)) : false) || item.forceKitchenVisible === true;
+          
+          if (isKitchen && isNotDelivered && isRelevant) {
             count++;
           }
         });
       });
       setPendingKitchenCount(count);
+    }, (error) => {
+      console.error("Firestore Permission Error (Orders):", error);
     });
 
     return () => { unsubscribeRequests(); unsubscribeOrders(); };
@@ -143,6 +163,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     { href: '/admin', label: 'Visão Geral', icon: LayoutDashboard },
     { href: '/admin/accounts', label: 'Organizações', icon: Users },
     { href: '/admin/revenue', label: 'Receita SaaS', icon: TrendingUp },
+    { href: '/admin/testimonials', label: 'Depoimentos', icon: MessageSquareHeart },
     { href: '/admin/cancelamentos', label: 'Churn', icon: Frown },
     { href: '/admin/tickets', label: 'Suporte Global', icon: LifeBuoy },
     { href: '/admin/settings', label: 'Config. SaaS', icon: Settings },
