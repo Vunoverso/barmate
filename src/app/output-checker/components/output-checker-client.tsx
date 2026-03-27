@@ -1,0 +1,495 @@
+
+
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { FinancialEntry, CashRegisterStatus, CashAdjustment } from '@/types';
+import { formatCurrency, SOURCE_MAP } from '@/lib/constants';
+import { getFinancialEntries, getCashRegisterStatus, addFinancialEntry, saveCashRegisterStatus, saveFinancialEntries } from '@/lib/data-access';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Search, Loader2, AlertTriangle, CheckCircle, PlusCircle, Banknote, PiggyBank, Landmark, Calendar as CalendarIcon } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DatePickerWithRange } from '@/components/ui/date-picker-range';
+import { addDays, format } from 'date-fns';
+import type { DateRange } from "react-day-picker";
+import { ptBR } from 'date-fns/locale';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+type ParsedExpense = {
+  id: string;
+  text: string;
+  amount: number;
+  description: string;
+  suggestedSource: 'secondary_cash' | 'bank_account' | null;
+  duplicates: FinancialEntry[];
+  status: 'pending' | 'added';
+};
+
+const parseExpenses = (text: string): Omit<ParsedExpense, 'id' | 'duplicates' | 'status'>[] => {
+  const lines = text.split('\n').filter(line => line.trim() !== '');
+  return lines.map(line => {
+    const originalLine = line;
+    line = line.replace(/^[\s*-]+/, '').trim();
+    
+    const match = line.match(/(\d[\d,.]*)/);
+    const amount = match ? parseFloat(match[0].replace(/\./g, '').replace(',', '.')) : 0;
+    
+    let description = line.replace(match ? match[0] : '', '').replace(/\s\s+/g, ' ').trim();
+    description = description.replace(/R\$\s*/i, '').trim();
+    description = description.replace(/[\s–-]+$/g, '').trim();
+
+    let suggestedSource: 'secondary_cash' | 'bank_account' | null = null;
+    const lowerLine = originalLine.toLowerCase();
+
+    if (lowerLine.includes('dinheiro')) {
+      suggestedSource = 'secondary_cash';
+      if (lowerLine.includes('(dinheiro)')) {
+        description = description.replace(/\(dinheiro\)/ig, '').trim();
+      }
+    } else if (lowerLine.includes('pix') || lowerLine.includes('cartão')) {
+      suggestedSource = 'bank_account';
+    }
+
+    return { text: originalLine, amount, description: description || 'Despesa sem descrição', suggestedSource };
+  });
+};
+
+export default function OutputCheckerClient() {
+  const [allEntries, setAllEntries] = useState<FinancialEntry[]>([]);
+  const [cashStatus, setCashStatus] = useState<CashRegisterStatus>({ status: 'closed' });
+  const [pastedText, setPastedText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<ParsedExpense[] | null>(null);
+  const [viewingDuplicates, setViewingDuplicates] = useState<{ expense: ParsedExpense, duplicates: FinancialEntry[] } | null>(null);
+  const [selectedExpenses, setSelectedExpenses] = useState<Record<string, boolean>>({});
+
+  const [bulkSource, setBulkSource] = useState<'secondary_cash' | 'bank_account'>('secondary_cash');
+  const [bulkDate, setBulkDate] = useState<Date>(new Date());
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: addDays(new Date(), -30),
+    to: new Date(),
+  });
+  
+  const { toast } = useToast();
+
+  const loadData = useCallback(() => {
+    setAllEntries(getFinancialEntries());
+    setCashStatus(getCashRegisterStatus());
+  }, []);
+  
+  useEffect(() => {
+    loadData();
+    window.addEventListener('storage', loadData);
+    return () => {
+      window.removeEventListener('storage', loadData);
+    }
+  }, [loadData]);
+  
+  const secondaryCashBoxBalance = useMemo(() => {
+    return allEntries
+      .filter(e => e.source === 'secondary_cash')
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+  }, [allEntries]);
+  
+  const bankAccountBalance = useMemo(() => {
+    return allEntries
+      .filter(e => e.source === 'bank_account')
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+  }, [allEntries]);
+  
+  const expectedCashInDrawer = useMemo(() => {
+    if (cashStatus.status !== 'open' || !cashStatus.openingTime) return 0;
+    const openingTime = new Date(cashStatus.openingTime);
+    return allEntries
+      .filter(e => e.source === 'daily_cash' && new Date(e.timestamp) >= openingTime)
+      .reduce((acc, e) => acc + (e.type === 'income' ? e.amount : -e.amount), 0);
+  }, [allEntries, cashStatus]);
+
+  const selectedExpenseIds = useMemo(() => Object.keys(selectedExpenses).filter(id => selectedExpenses[id]), [selectedExpenses]);
+  const numSelected = selectedExpenseIds.length;
+
+  useEffect(() => {
+    if (numSelected > 0 && verificationResult) {
+      const selected = verificationResult.filter(res => selectedExpenseIds.includes(res.id));
+      const firstSource = selected[0]?.suggestedSource;
+
+      const allHaveSameSource = selected.every(exp => exp.suggestedSource === firstSource);
+
+      if (firstSource && allHaveSameSource) {
+        setBulkSource(firstSource);
+      }
+    }
+  }, [selectedExpenseIds, verificationResult, numSelected]);
+
+  const handleCheckExpense = () => {
+    if (!pastedText.trim()) {
+        toast({ title: "Texto vazio", description: "Por favor, cole a despesa que deseja verificar.", variant: "destructive" });
+        return;
+    }
+    if (!dateRange?.from) {
+         toast({ title: "Período inválido", description: "Por favor, selecione um período de datas para a verificação.", variant: "destructive" });
+        return;
+    }
+
+    setIsLoading(true);
+    setVerificationResult(null);
+    setSelectedExpenses({});
+
+    const from = dateRange.from;
+    const to = dateRange.to || from;
+
+    const existingFinancialEntries = getFinancialEntries();
+
+    const relevantEntries = existingFinancialEntries.filter(entry => {
+        const entryDate = new Date(entry.timestamp);
+        const fromDate = new Date(from);
+        fromDate.setHours(0, 0, 0, 0);
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        return entry.type === 'expense' && entryDate >= fromDate && entryDate <= toDate;
+    });
+
+    const parsed = parseExpenses(pastedText);
+
+    const results: ParsedExpense[] = parsed.map((p, index) => {
+        const duplicates = relevantEntries.filter(re => {
+            if (p.amount > 0 && Math.abs(re.amount - p.amount) < 0.01) return true;
+            const parsedWords = p.description.toLowerCase().split(' ').filter(w => w.length > 3);
+            if (p.description && parsedWords.length > 0 && parsedWords.some(pw => re.description.toLowerCase().includes(pw))) return true;
+            return false;
+        });
+
+        return { ...p, id: `res-${Date.now()}-${index}`, duplicates, status: 'pending' };
+    });
+
+    setVerificationResult(results);
+    setIsLoading(false);
+  };
+  
+  const handleBulkLaunch = () => {
+      if (numSelected === 0) return;
+      
+      const expensesToLaunch = verificationResult?.filter(exp => selectedExpenseIds.includes(exp.id)) || [];
+      if (expensesToLaunch.length === 0) return;
+
+      const totalAmountToLaunch = expensesToLaunch.reduce((sum, exp) => sum + exp.amount, 0);
+
+      const balances = {
+        secondary_cash: secondaryCashBoxBalance,
+        bank_account: bankAccountBalance
+      };
+      
+      if (balances[bulkSource] < totalAmountToLaunch) {
+          toast({ title: "Saldo Insuficiente", description: `A conta de origem não tem saldo suficiente para lançar ${formatCurrency(totalAmountToLaunch)}.`, variant: "destructive" });
+          return;
+      }
+
+      const entriesToAdd: Omit<FinancialEntry, 'id'>[] = expensesToLaunch.map(expense => ({
+          description: expense.description,
+          amount: expense.amount,
+          type: 'expense',
+          source: bulkSource,
+          saleId: null,
+          adjustmentId: null, // No adjustments for these bulk launches
+          timestamp: bulkDate,
+      }));
+
+      addFinancialEntry(entriesToAdd);
+
+      toast({ title: `${numSelected} Despesa(s) Lançada(s)!`, description: `${formatCurrency(totalAmountToLaunch)} foi registrado como saída.` });
+
+      const launchedIds = expensesToLaunch.map(e => e.id);
+      setVerificationResult(prev => prev!.map(res => launchedIds.includes(res.id) ? { ...res, status: 'added' } : res));
+      
+      setSelectedExpenses({});
+  };
+
+  const toggleAllSelection = (checked: boolean) => {
+      if (!verificationResult) return;
+      const newSelection: Record<string, boolean> = {};
+      if (checked) {
+          verificationResult.forEach(res => {
+              if (res.status === 'pending' && res.amount > 0) {
+                  newSelection[res.id] = true;
+              }
+          });
+      }
+      setSelectedExpenses(newSelection);
+  };
+
+  const toggleRowSelection = (id: string) => {
+      setSelectedExpenses(prev => ({
+          ...prev,
+          [id]: !prev[id]
+      }));
+  };
+
+  const handleSelectBySource = (source: 'secondary_cash' | 'bank_account') => {
+    if (!verificationResult) return;
+    const newSelection: Record<string, boolean> = {};
+    let itemsFound = 0;
+    verificationResult.forEach(res => {
+        if (res.suggestedSource === source && res.status === 'pending' && res.amount > 0) {
+            newSelection[res.id] = true;
+            itemsFound++;
+        }
+    });
+    setSelectedExpenses(newSelection);
+    if (itemsFound === 0) {
+        toast({
+            title: "Nenhum item encontrado",
+            description: `Nenhuma despesa pendente foi encontrada com a origem sugerida "${SOURCE_MAP[source]}".`,
+            variant: "default"
+        });
+    }
+  };
+
+  const handleCancel = () => {
+    setPastedText('');
+    setVerificationResult(null);
+    setSelectedExpenses({});
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Conferência e Lançamento de Saídas</CardTitle>
+          <CardDescription>
+            Cole suas despesas, verifique se já existem, e lance as novas com apenas alguns cliques.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="output-paste">Cole as despesas aqui (uma por linha)</Label>
+                  <Textarea
+                  id="output-paste"
+                  placeholder="Ex: 150,25 mercado&#10;conta de luz 280,40"
+                  className="min-h-24"
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  disabled={isLoading || !!verificationResult}
+                  />
+              </div>
+              <div className="space-y-2">
+                  <Label>Período de Verificação</Label>
+                  <DatePickerWithRange 
+                      date={dateRange} 
+                      onDateChange={setDateRange} 
+                      className="w-full"
+                      disabled={(date) => date > new Date() || date < new Date("2000-01-01")}
+                  />
+              </div>
+          </div>
+
+          {verificationResult && (
+              <div>
+                  <h3 className="font-semibold mb-2">Resultado da Análise</h3>
+                  {verificationResult.length === 0 ? (
+                      <Alert>
+                        <CheckCircle className="h-4 w-4" />
+                        <AlertTitle>Nenhuma despesa para analisar</AlertTitle>
+                        <AlertDescription>O texto colado não continha despesas válidas.</AlertDescription>
+                      </Alert>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 my-4">
+                        <span className="text-sm font-medium text-muted-foreground">Seleção Rápida:</span>
+                        <Button variant="outline" size="sm" onClick={() => handleSelectBySource('bank_account')}>
+                            <Landmark className="mr-2 h-3 w-3" />
+                            Todas de Conta Bancária
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleSelectBySource('secondary_cash')}>
+                            <PiggyBank className="mr-2 h-3 w-3" />
+                            Todas de Caixa 02
+                        </Button>
+                      </div>
+                      <div className="border rounded-md overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[50px]">
+                                  <Checkbox 
+                                      onCheckedChange={(checked) => toggleAllSelection(Boolean(checked))}
+                                      checked={numSelected > 0 && numSelected === verificationResult?.filter(r => r.status === 'pending' && r.amount > 0).length}
+                                      aria-label="Selecionar tudo"
+                                  />
+                              </TableHead>
+                              <TableHead>Despesa Colada</TableHead>
+                              <TableHead>Valor Extraído</TableHead>
+                              <TableHead>Origem Sugerida</TableHead>
+                              <TableHead className="text-center">Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {verificationResult.map(res => (
+                              <TableRow key={res.id} className={cn(res.status === 'added' && 'bg-muted/50')}>
+                                <TableCell>
+                                  <Checkbox 
+                                      checked={!!selectedExpenses[res.id]}
+                                      onCheckedChange={() => toggleRowSelection(res.id)}
+                                      disabled={res.status === 'added' || res.amount <= 0}
+                                      aria-label={`Selecionar ${res.description}`}
+                                  />
+                                </TableCell>
+                                <TableCell className={cn("text-muted-foreground text-xs", res.status === 'added' && 'line-through')}>{res.text}</TableCell>
+                                <TableCell className={cn(res.status === 'added' && 'line-through text-muted-foreground')}>{formatCurrency(res.amount)}</TableCell>
+                                <TableCell className={cn(res.status === 'added' && 'opacity-60')}>
+                                  {res.suggestedSource ? (
+                                      <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                                          {res.suggestedSource === 'bank_account' && <Landmark className="h-3 w-3" />}
+                                          {res.suggestedSource === 'secondary_cash' && <PiggyBank className="h-3 w-3" />}
+                                          {SOURCE_MAP[res.suggestedSource]}
+                                      </Badge>
+                                  ) : (
+                                      <span className={cn("text-muted-foreground text-xs italic", res.status === 'added' && 'line-through')}>Selecionar</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {res.status === 'added' ? (
+                                    <Badge variant="secondary">Lançado</Badge>
+                                  ) : res.duplicates.length > 0 ? (
+                                    <Button variant="outline" size="sm" onClick={() => setViewingDuplicates({ expense: res, duplicates: res.duplicates })}>
+                                      <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
+                                      Ver {res.duplicates.length} suspeita(s) em Saídas
+                                    </Button>
+                                  ) : (
+                                    <Badge variant="default" className="bg-green-100 text-green-800">
+                                      OK
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
+                  )}
+
+                  {numSelected > 0 && (
+                    <Card className="mt-4 border-primary">
+                        <CardHeader>
+                            <CardTitle>Lançar Despesas Selecionadas</CardTitle>
+                            <CardDescription>
+                                Você selecionou {numSelected} despesa(s) totalizando <strong>{formatCurrency(verificationResult!.filter(res => selectedExpenseIds.includes(res.id)).reduce((sum, res) => sum + res.amount, 0))}</strong>.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div className="space-y-2">
+                                <Label htmlFor="bulk-source">Origem do dinheiro</Label>
+                                <Select onValueChange={(value) => setBulkSource(value as any)} value={bulkSource}>
+                                    <SelectTrigger id="bulk-source">
+                                        <SelectValue placeholder="Selecione a origem..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="secondary_cash">Caixa 02 ({formatCurrency(secondaryCashBoxBalance)})</SelectItem>
+                                        <SelectItem value="bank_account">Conta Bancária ({formatCurrency(bankAccountBalance)})</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="bulk-date">Data do Lançamento</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button id="bulk-date" variant="outline" className={cn("w-full justify-start text-left font-normal", !bulkDate && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {bulkDate ? format(bulkDate, "dd/MM/yyyy", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar mode="single" selected={bulkDate} onSelect={(d) => setBulkDate(d || new Date())} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button onClick={handleBulkLaunch}>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Lançar {numSelected} despesa(s)
+                            </Button>
+                        </CardContent>
+                    </Card>
+                   )}
+              </div>
+          )}
+
+        </CardContent>
+        <CardFooter className="flex justify-end gap-2">
+          {verificationResult ? (
+            <Button variant="outline" onClick={handleCancel}>Fazer Nova Verificação</Button>
+          ) : (
+              <Button onClick={handleCheckExpense} disabled={isLoading}>
+                  {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Verificando...</> : <><Search className="mr-2 h-4 w-4" />Analisar Despesas</>}
+              </Button>
+          )}
+        </CardFooter>
+      </Card>
+      
+      {viewingDuplicates && (
+        <Dialog open={!!viewingDuplicates} onOpenChange={() => setViewingDuplicates(null)}>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Despesas Suspeitas Encontradas nas Saídas</DialogTitle>
+                    <DialogDescription>
+                        Compare a despesa que você está tentando lançar com as despesas já cadastradas que encontramos no período.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 max-h-[60vh] overflow-y-auto space-y-4">
+                    <Card className="bg-muted/50 border-primary">
+                        <CardHeader className="pb-2 pt-4">
+                            <CardTitle className="text-base">Despesa para Lançar:</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex justify-between items-center">
+                                <p className="font-medium">{viewingDuplicates.expense.description}</p>
+                                <p className="font-bold text-lg">{formatCurrency(viewingDuplicates.expense.amount)}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Texto original: "{viewingDuplicates.expense.text}"</p>
+                        </CardContent>
+                    </Card>
+                    
+                    <div>
+                        <h4 className="text-sm font-semibold mb-2">Despesas já cadastradas (suspeitas):</h4>
+                        <div className="border rounded-md overflow-hidden bg-background">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Data</TableHead>
+                                        <TableHead>Descrição</TableHead>
+                                        <TableHead className="text-right">Valor</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {viewingDuplicates.duplicates.map(entry => (
+                                        <TableRow key={entry.id}>
+                                            <TableCell>{format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}</TableCell>
+                                            <TableCell>{entry.description}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(entry.amount)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button>Fechar</Button></DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}

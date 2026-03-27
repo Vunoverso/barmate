@@ -1,0 +1,103 @@
+
+{
+  "entities": {
+    "Organization": {
+      "title": "Organization",
+      "description": "Dados mestre do estabelecimento no modelo SaaS.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tradeName": { "type": "string" },
+        "legalName": { "type": "string" },
+        "document": { "type": "string", "description": "CNPJ ou CPF." },
+        "ownerId": { "type": "string", "description": "UID do usuário criador." },
+        "status": { "type": "string", "enum": ["active", "suspended", "trial", "past_due"] },
+        "planId": { "type": "string", "enum": ["trial", "essential", "pro", "enterprise"] },
+        "stripeCustomerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tradeName", "ownerId", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Perfil global do usuário na plataforma.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Membership": {
+      "title": "Membership",
+      "description": "Vincula usuário a uma organização com um papel específico.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "admin", "staff"] },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      }
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Controle de assinatura e faturamento.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "past_due", "canceled", "trialing"] },
+        "currentPeriodEnd": { "type": "string", "format": "date-time" },
+        "planId": { "type": "string" }
+      }
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Chamado de suporte aberto por um tenant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "subject": { "type": "string" },
+        "category": { "type": "string", "enum": ["technical", "billing", "feature"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "status": { "type": "string", "enum": ["open", "in_progress", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["password", "google"]
+  },
+  "firestore": {
+    "/organizations/{orgId}": {
+      "schema": "Organization",
+      "description": "Configurações e metadados da empresa (Tenant Root)."
+    },
+    "/organizations/{orgId}/config/{configId}": {
+      "schema": "object",
+      "description": "Configurações operacionais isoladas (produtos, taxas)."
+    },
+    "/organizations/{orgId}/open_orders/{orderId}": {
+      "schema": "object",
+      "description": "Comandas em aberto específicas do tenant."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Perfil global do usuário."
+    },
+    "/memberships/{membershipId}": {
+      "schema": "Membership",
+      "description": "Vínculos entre usuários e organizações."
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Chamados globais para o Admin SaaS."
+    }
+  }
+}

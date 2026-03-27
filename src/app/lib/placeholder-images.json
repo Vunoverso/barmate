@@ -1,0 +1,24 @@
+
+{
+  "landing-hero": {
+    "url": "https://picsum.photos/seed/bar1/1200/800",
+    "width": 1200,
+    "height": 800,
+    "alt": "Interior de um bar moderno e movimentado",
+    "data-ai-hint": "bar interior"
+  },
+  "feature-orders": {
+    "url": "https://picsum.photos/seed/orders/600/400",
+    "width": 600,
+    "height": 400,
+    "alt": "Gestão de comandas digital",
+    "data-ai-hint": "digital orders"
+  },
+  "feature-cash": {
+    "url": "https://picsum.photos/seed/cash/600/400",
+    "width": 600,
+    "height": 400,
+    "alt": "Controle de caixa",
+    "data-ai-hint": "cash register"
+  }
+}
