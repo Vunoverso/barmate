@@ -15,6 +15,21 @@ export const metadata: Metadata = {
   keywords: ['gestão de bar', 'sistema para restaurante', 'comanda digital', 'pdv bar', 'barmate'],
   authors: [{ name: 'BarMate Team' }],
   robots: 'index, follow',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
+      { url: '/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: [{ url: '/apple-icon.svg', sizes: '180x180', type: 'image/svg+xml' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'BarMate',
+    statusBarStyle: 'default',
+  },
 };
 
 export const viewport: Viewport = {
@@ -32,9 +47,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <head>
-        <link rel="icon" href="https://picsum.photos/seed/zap/32/32" />
-      </head>
       <body className={`${inter.className} antialiased`} suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
       </body>
