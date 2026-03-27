@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="BarMate">
+  <rect width="180" height="180" rx="32" fill="#192245"/>
+  <rect x="20" y="20" width="140" height="140" rx="24" fill="#3F51B5"/>
+  <path fill="#ffffff" d="M103 18L57 92h32l-17 69 51-75h-32z"/>
+</svg>

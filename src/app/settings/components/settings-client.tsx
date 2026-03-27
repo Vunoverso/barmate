@@ -1,7 +1,7 @@
 
 "use client";
 
-import { DATA_KEYS } from '@/lib/constants';
+import { DATA_KEYS, KEY_OPEN_ORDERS } from '@/lib/constants';
 import { clearFinancialData, getTransactionFees, saveTransactionFees, getCurrentOrgId } from '@/lib/data-access';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, serverTimestamp, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -52,6 +52,48 @@ export default function SettingsClient() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const safeDeserialize = (raw: string) => {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  };
+
+  const persistBackupEntry = (key: string, value: unknown) => {
+    // Chaves "bar*" são string pura; as demais chaves de dados são JSON.
+    if (key.startsWith('bar') && typeof value === 'string') {
+      localStorage.setItem(key, value);
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(value));
+  };
+
+  const restoreOpenOrdersToCloud = async (orders: unknown) => {
+    const orgId = getCurrentOrgId();
+    if (!db || !orgId || !Array.isArray(orders)) return;
+
+    const q = query(collection(db, 'open_orders'), where('organizationId', '==', orgId));
+    const existing = await getDocs(q);
+    const batch = writeBatch(db);
+
+    existing.docs.forEach(docSnap => batch.delete(docSnap.ref));
+
+    orders.forEach((order: any) => {
+      if (!order?.id) return;
+      const createdAt = order.createdAt || new Date().toISOString();
+      batch.set(doc(db, 'open_orders', String(order.id)), {
+        ...order,
+        items: Array.isArray(order.items) ? order.items : [],
+        organizationId: orgId,
+        createdAt,
+        updatedAt: new Date().toISOString(),
+      });
+    });
+
+    await batch.commit();
+  };
 
   const loadData = useCallback(() => {
     setBarName(localStorage.getItem('barName') || 'BarMate');
@@ -182,7 +224,7 @@ export default function SettingsClient() {
     const fullData: Record<string, any> = {};
     DATA_KEYS.forEach(key => {
         const val = localStorage.getItem(key);
-        if (val) fullData[key] = JSON.parse(val);
+        if (val !== null) fullData[key] = safeDeserialize(val);
     });
 
     const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'application/json' });
@@ -199,16 +241,27 @@ export default function SettingsClient() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
         try {
             const data = JSON.parse(event.target?.result as string);
             Object.entries(data).forEach(([key, value]) => {
-                localStorage.setItem(key, JSON.stringify(value));
+                persistBackupEntry(key, value);
             });
-            toast({ title: "Restauração Concluída!", description: "O sistema será reiniciado para aplicar as mudanças." });
+
+            // As comandas ativas são carregadas do Firebase nas telas de operação.
+            // Por isso, além do localStorage, restauramos também em open_orders.
+            await restoreOpenOrdersToCloud(data[KEY_OPEN_ORDERS]);
+
+            const importedOrders = Array.isArray(data[KEY_OPEN_ORDERS]) ? data[KEY_OPEN_ORDERS].length : 0;
+            toast({
+              title: "Restauração Concluída!",
+              description: `Backup aplicado. ${importedOrders} comanda(s) restaurada(s) na nuvem.`,
+            });
             setTimeout(() => window.location.reload(), 1500);
         } catch (err) {
             toast({ title: "Erro na Importação", description: "O arquivo selecionado é inválido.", variant: "destructive" });
+        } finally {
+            e.target.value = '';
         }
     };
     reader.readAsText(file);

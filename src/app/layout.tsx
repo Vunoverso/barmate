@@ -18,12 +18,13 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
-      { url: '/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
-      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.svg?v=2', type: 'image/svg+xml' },
+      { url: '/favicon.svg?v=2', type: 'image/svg+xml' },
+      { url: '/icon-192.svg?v=2', sizes: '192x192', type: 'image/svg+xml' },
+      { url: '/icon-512.svg?v=2', sizes: '512x512', type: 'image/svg+xml' },
     ],
-    apple: [{ url: '/apple-icon.svg', sizes: '180x180', type: 'image/svg+xml' }],
+    shortcut: ['/icon.svg?v=2'],
+    apple: [{ url: '/apple-icon.svg?v=2', sizes: '180x180', type: 'image/svg+xml' }],
   },
   appleWebApp: {
     capable: true,
