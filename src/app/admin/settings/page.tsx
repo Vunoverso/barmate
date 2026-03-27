@@ -1,14 +1,49 @@
 
 "use client";
 
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, ShieldCheck, Zap, Server, Database, Lock } from 'lucide-react';
+import { Settings, ShieldCheck, Zap, Lock, Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { getAdminSettings, saveAdminSettings, DEFAULT_SETTINGS, type AdminSettings } from '@/lib/admin-data-access';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminSettingsPage() {
+  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    getAdminSettings().then(s => {
+      setSettings(s);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveAdminSettings(settings);
+      toast({ title: 'Configurações salvas com sucesso!' });
+    } catch {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -29,15 +64,28 @@ export default function AdminSettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Plano Essencial (R$)</Label>
-              <Input className="bg-zinc-950 border-zinc-800" defaultValue="99.00" />
+              <Input
+                className="bg-zinc-950 border-zinc-800"
+                type="number"
+                value={settings.essentialPrice}
+                onChange={e => setSettings(s => ({ ...s, essentialPrice: Number(e.target.value) }))}
+              />
             </div>
             <div className="space-y-2">
               <Label>Plano Profissional (R$)</Label>
-              <Input className="bg-zinc-950 border-zinc-800" defaultValue="199.00" />
+              <Input
+                className="bg-zinc-950 border-zinc-800"
+                type="number"
+                value={settings.proPrice}
+                onChange={e => setSettings(s => ({ ...s, proPrice: Number(e.target.value) }))}
+              />
             </div>
           </CardContent>
           <CardFooter>
-            <Button className="w-full bg-orange-600 hover:bg-orange-700">Salvar Alterações</Button>
+            <Button onClick={handleSave} disabled={saving} className="w-full bg-orange-600 hover:bg-orange-700">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Salvar Alterações
+            </Button>
           </CardFooter>
         </Card>
 
@@ -54,23 +102,38 @@ export default function AdminSettingsPage() {
                 <Label>Modo de Manutenção</Label>
                 <p className="text-[10px] text-zinc-500">Bloqueia o acesso de todos os bares.</p>
               </div>
-              <Switch />
+              <Switch
+                checked={settings.maintenanceMode}
+                onCheckedChange={v => setSettings(s => ({ ...s, maintenanceMode: v }))}
+              />
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Novos Cadastros</Label>
                 <p className="text-[10px] text-zinc-500">Permite ou suspende a criação de novas contas.</p>
               </div>
-              <Switch defaultChecked />
+              <Switch
+                checked={settings.allowNewRegistrations}
+                onCheckedChange={v => setSettings(s => ({ ...s, allowNewRegistrations: v }))}
+              />
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Backup Automático Cloud</Label>
                 <p className="text-[10px] text-zinc-500">Executa backup total a cada 24h.</p>
               </div>
-              <Switch defaultChecked />
+              <Switch
+                checked={settings.autoBackup}
+                onCheckedChange={v => setSettings(s => ({ ...s, autoBackup: v }))}
+              />
             </div>
           </CardContent>
+          <CardFooter>
+            <Button onClick={handleSave} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Salvar Configurações
+            </Button>
+          </CardFooter>
         </Card>
       </div>
 
