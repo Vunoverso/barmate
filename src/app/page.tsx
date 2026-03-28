@@ -295,9 +295,20 @@ export default function LandingPage() {
           </div>
           <div className="pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-bold uppercase opacity-40 tracking-widest">
             <p>© 2024 BarMate SaaS - Todos os direitos reservados.</p>
-            <div className="flex gap-8">
+            <div className="flex gap-8 items-center">
               <span>Brasil</span>
               <span>v1.3.3 Stable</span>
+              <span>
+                Desenvolvido por{' '}
+                <a
+                  href="https://www.vunostudio.com.br"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:opacity-70 transition-opacity"
+                >
+                  VunoStudio
+                </a>
+              </span>
             </div>
           </div>
         </div>
