@@ -299,7 +299,7 @@ export default function LandingPage() {
               <span>Brasil</span>
               <span>v1.3.3 Stable</span>
               <span>
-                Desenvolvido por{' '}
+                Refinamento técnico por{' '}
                 <a
                   href="https://www.vunostudio.com.br"
                   target="_blank"
