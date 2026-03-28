@@ -5,7 +5,10 @@ export interface HeroContent {
   title: string;
   subtitle: string;
   ctaText: string;
-  videoUrl: string;
+  videoUrl: string; // YouTube URL ou Firebase Storage URL
+  heroImageUrl?: string; // Firebase Storage URL para imagem de fundo
+  heroImageFile?: File; // Para upload temporário
+  videoFile?: File; // Para upload temporário de vídeo
 }
 
 export interface PlanFeature {

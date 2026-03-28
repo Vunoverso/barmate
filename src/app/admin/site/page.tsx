@@ -9,12 +9,17 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { loadSiteContent, saveSiteContent, getDefaultContent, type SiteContent, type Plan, type PlanFeature } from '@/lib/site-content-access';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { uploadMediaFile, deleteMediaFile, isValidMediaFile, validateFileSize } from '@/lib/storage-upload';
+import { Plus, Trash2, Save, Upload, X } from 'lucide-react';
 
 export default function SiteContentPage() {
   const [content, setContent] = useState<SiteContent | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [heroImagePreview, setHeroImagePreview] = useState<string | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -25,7 +30,16 @@ export default function SiteContentPage() {
     try {
       setIsLoading(true);
       const savedContent = await loadSiteContent();
-      setContent(savedContent || getDefaultContent());
+      const contentToSet = savedContent || getDefaultContent();
+      setContent(contentToSet);
+      
+      // Carregar previews se existirem URLs
+      if (contentToSet.hero.heroImageUrl) {
+        setHeroImagePreview(contentToSet.hero.heroImageUrl);
+      }
+      if (contentToSet.hero.videoUrl && !contentToSet.hero.videoUrl.includes('youtube')) {
+        setVideoPreview(contentToSet.hero.videoUrl);
+      }
     } catch (error) {
       console.error("Erro ao carregar conteúdo:", error);
       toast({
@@ -38,6 +52,180 @@ export default function SiteContentPage() {
       setIsLoading(false);
     }
   };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !content) return;
+
+    // Validar
+    if (!isValidMediaFile(file, 'image')) {
+      toast({
+        title: 'Erro',
+        description: 'Apenas JPG, PNG, WebP e GIF são aceitos.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const sizeCheck = validateFileSize(file, 10); // 10MB para imagem
+    if (!sizeCheck.valid) {
+      toast({
+        title: 'Erro',
+        description: sizeCheck.error,
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      
+      // Deletar imagem antiga se existir
+      if (content.hero.heroImageUrl) {
+        await deleteMediaFile(content.hero.heroImageUrl);
+      }
+
+      // Upload
+      const url = await uploadMediaFile(file, 'image');
+      
+      // Atualizar conteúdo
+      setContent({
+        ...content,
+        hero: {
+          ...content.hero,
+          heroImageUrl: url
+        }
+      });
+
+      // Preview
+      setHeroImagePreview(url);
+      
+      toast({
+        title: 'Sucesso!',
+        description: 'Imagem enviada com sucesso.'
+      });
+    } catch (error) {
+      console.error('Erro no upload:', error);
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Erro ao fazer upload da imagem.',
+        variant: 'destructive'
+      });
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !content) return;
+
+    // Validar
+    if (!isValidMediaFile(file, 'video')) {
+      toast({
+        title: 'Erro',
+        description: 'Apenas MP4, WebM e MOV são aceitos.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const sizeCheck = validateFileSize(file, 100); // 100MB para vídeo
+    if (!sizeCheck.valid) {
+      toast({
+        title: 'Erro',
+        description: sizeCheck.error,
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setUploadingVideo(true);
+      
+      // Deletar vídeo antigo se existir (e não for YouTube)
+      if (content.hero.videoUrl && !content.hero.videoUrl.includes('youtube')) {
+        await deleteMediaFile(content.hero.videoUrl);
+      }
+
+      // Upload
+      const url = await uploadMediaFile(file, 'video');
+      
+      // Atualizar conteúdo
+      setContent({
+        ...content,
+        hero: {
+          ...content.hero,
+          videoUrl: url
+        }
+      });
+
+      // Preview
+      setVideoPreview(url);
+      
+      toast({
+        title: 'Sucesso!',
+        description: 'Vídeo enviado com sucesso.'
+      });
+    } catch (error) {
+      console.error('Erro no upload:', error);
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Erro ao fazer upload do vídeo.',
+        variant: 'destructive'
+      });
+    } finally {
+      setUploadingVideo(false);
+      event.target.value = '';
+    }
+  };
+
+  const removeImage = async () => {
+    if (!content) return;
+    try {
+      if (content.hero.heroImageUrl) {
+        await deleteMediaFile(content.hero.heroImageUrl);
+      }
+      setContent({
+        ...content,
+        hero: {
+          ...content.hero,
+          heroImageUrl: undefined
+        }
+      });
+      setHeroImagePreview(null);
+      toast({
+        title: 'Removido',
+        description: 'Imagem removida com sucesso.'
+      });
+    } catch (error) {
+      console.error('Erro ao remover imagem:', error);
+    }
+  };
+
+  const removeVideo = async () => {
+    if (!content) return;
+    try {
+      if (content.hero.videoUrl && !content.hero.videoUrl.includes('youtube')) {
+        await deleteMediaFile(content.hero.videoUrl);
+      }
+      setContent({
+        ...content,
+        hero: {
+          ...content.hero,
+          videoUrl: ''
+        }
+      });
+      setVideoPreview(null);
+      toast({
+        title: 'Removido',
+        description: 'Vídeo removido com sucesso.'
+      });
+    } catch (error) {
+      console.error('Erro ao remover vídeo:', error);
+    }
+  }
 
   const handleSave = async () => {
     if (!content) return;
@@ -189,6 +377,98 @@ export default function SiteContentPage() {
               </div>
 
               <div className="space-y-2">
+                <Label>Imagem de Fundo do Hero</Label>
+                <div className="border-2 border-dashed border-muted-foreground rounded-lg p-6 text-center space-y-4">
+                  {heroImagePreview ? (
+                    <div className="relative inline-block">
+                      <img 
+                        src={heroImagePreview} 
+                        alt="Preview da imagem" 
+                        className="max-w-xs h-auto rounded-lg"
+                      />
+                      <button
+                        onClick={removeImage}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="py-4">
+                      <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground">Clique para fazer upload</p>
+                      <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WebP, GIF | Máx 10MB</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    style={{ position: 'absolute' }}
+                  />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="block w-full mt-2 text-sm"
+                  />
+                  {uploadingImage && <p className="text-sm text-primary">Enviando imagem...</p>}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="hero-video-youtube">URL do Vídeo (YouTube)</Label>
+                  <Input
+                    id="hero-video-youtube"
+                    value={content.hero.videoUrl && content.hero.videoUrl.includes('youtube') ? content.hero.videoUrl : ''}
+                    onChange={(e) => updateHero('videoUrl', e.target.value)}
+                    placeholder="Ex: https://www.youtube.com/watch?v=..."
+                    type="url"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Deixe em branco se preferir usar upload local</p>
+                </div>
+
+                <div className="border-t pt-4">
+                  <Label>Ou Fazer Upload de Vídeo Local</Label>
+                  <div className="border-2 border-dashed border-muted-foreground rounded-lg p-6 text-center space-y-4 mt-2">
+                    {videoPreview && !content.hero.videoUrl?.includes('youtube') ? (
+                      <div className="relative inline-block">
+                        <video 
+                          src={videoPreview}
+                          className="max-w-xs h-auto rounded-lg"
+                          controls
+                        />
+                        <button
+                          onClick={removeVideo}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="py-4">
+                        <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground">Clique para fazer upload</p>
+                        <p className="text-xs text-muted-foreground mt-1">MP4, WebM, MOV | Máx 100MB</p>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoUpload}
+                      disabled={uploadingVideo}
+                      className="block w-full mt-2 text-sm"
+                    />
+                    {uploadingVideo && <p className="text-sm text-primary">Enviando vídeo...</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="hero-cta">Texto do Botão CTA</Label>
                 <Input
                   id="hero-cta"
@@ -196,20 +476,6 @@ export default function SiteContentPage() {
                   onChange={(e) => updateHero('ctaText', e.target.value)}
                   placeholder="Ex: Teste Grátis"
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="hero-video">URL do Vídeo (YouTube)</Label>
-                <Input
-                  id="hero-video"
-                  value={content.hero.videoUrl}
-                  onChange={(e) => updateHero('videoUrl', e.target.value)}
-                  placeholder="Ex: https://www.youtube.com/watch?v=..."
-                  type="url"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Deixe em branco para não mostrar vídeo. Aceita URLs completas do YouTube.
-                </p>
               </div>
             </CardContent>
           </Card>
