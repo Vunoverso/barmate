@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Zap, ChevronLeft, ShieldCheck, Scale, FileText, Gavel } from 'lucide-react';
+import { SiteFooter } from '@/components/layout/site-footer';
 
 export default function TermosDeUsoPage() {
   const lastUpdate = "22 de Maio de 2024";
@@ -115,11 +116,7 @@ export default function TermosDeUsoPage() {
         </div>
       </main>
 
-      <footer className="mt-20 py-10 bg-muted/50 border-t">
-        <div className="container mx-auto px-4 text-center text-xs text-muted-foreground font-bold uppercase tracking-widest opacity-40">
-          © 2024 BarMate SaaS - Software de Gestão Inteligente
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

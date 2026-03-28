@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Zap, Flame, Crown } from 'lucide-react';
 import { loadSiteContent, getDefaultContent, type Plan } from '@/lib/site-content-access';
+import { SiteFooter } from '@/components/layout/site-footer';
 
 const ICON_MAP = {
   'zap': Zap,
@@ -46,6 +47,7 @@ export default function PlanosPage() {
   }
 
   return (
+    <>
     <div className="container mx-auto px-4 py-20 max-w-6xl">
       <div className="text-center space-y-4 mb-16">
         <h1 className="text-4xl md:text-6xl font-black uppercase">Escolha o <span className="text-primary">plano ideal</span></h1>
@@ -138,6 +140,8 @@ export default function PlanosPage() {
         </Link>
       </div>
     </div>
+      <SiteFooter />
+    </>
   );
 }
 

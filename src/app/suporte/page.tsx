@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LifeBuoy, MessageSquare, BookOpen, Clock, CheckCircle2, ChevronRight, HelpCircle } from 'lucide-react';
+import { SiteFooter } from '@/components/layout/site-footer';
 import { useToast } from '@/hooks/use-toast';
 
 export default function SupportPage() {
@@ -22,6 +23,7 @@ export default function SupportPage() {
   };
 
   return (
+    <>
     <div className="space-y-8 max-w-5xl mx-auto">
       <div className="text-center md:text-left">
         <h1 className="text-3xl font-black uppercase tracking-tighter flex items-center justify-center md:justify-start gap-3">
@@ -118,6 +120,8 @@ export default function SupportPage() {
         </Card>
       )}
     </div>
+      <SiteFooter />
+    </>
   );
 }
 
