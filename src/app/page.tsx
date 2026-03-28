@@ -10,23 +10,46 @@ import { Zap, BarChart3, Users2, ArrowRight, Play, Star, Quote } from 'lucide-re
 import images from '@/app/lib/placeholder-images.json';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, limit } from 'firebase/firestore';
+import { loadSiteContent, getDefaultContent } from '@/lib/site-content-access';
 import type { Testimonial } from '@/types';
 
 export default function LandingPage() {
   const [videoUrl, setVideoUrl] = useState('');
+  const [heroTitle, setHeroTitle] = useState('Pare de perder dinheiro com gestão lenta.');
+  const [heroSubtitle, setHeroSubtitle] = useState('O BarMate é o único sistema que une agilidade de lançamento, monitor de cozinha em tempo real e financeiro blindado em uma só plataforma.');
+  const [heroCta, setHeroCta] = useState('Começar Agora');
   const [showVideo, setShowVideo] = useState(false);
   const [approvedTestimonials, setApprovedTestimonials] = useState<Testimonial[]>([]);
 
   useEffect(() => {
-    try {
-      const savedContent = localStorage.getItem('barmate_saas_content');
-      if (savedContent) {
-        const { homeVideoUrl } = JSON.parse(savedContent);
-        setVideoUrl(homeVideoUrl);
+    // Carrega conteúdo do site do Firestore
+    const loadHeroContent = async () => {
+      try {
+        const siteContent = await loadSiteContent();
+        if (siteContent && siteContent.hero) {
+          setHeroTitle(siteContent.hero.title);
+          setHeroSubtitle(siteContent.hero.subtitle);
+          setHeroCta(siteContent.hero.ctaText);
+          setVideoUrl(siteContent.hero.videoUrl);
+        } else {
+          // Fallback para conteúdo padrão
+          const defaultContent = getDefaultContent();
+          setHeroTitle(defaultContent.hero.title);
+          setHeroSubtitle(defaultContent.hero.subtitle);
+          setHeroCta(defaultContent.hero.ctaText);
+          setVideoUrl(defaultContent.hero.videoUrl);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar conteúdo do site:", error);
+        // Usa valores padrão em caso de erro
+        const defaultContent = getDefaultContent();
+        setHeroTitle(defaultContent.hero.title);
+        setHeroSubtitle(defaultContent.hero.subtitle);
+        setHeroCta(defaultContent.hero.ctaText);
       }
-    } catch (e) {
-      console.error("Erro ao carregar conteúdo da home:", e);
-    }
+    };
+
+    loadHeroContent();
 
     if (db) {
       const q = query(
@@ -92,10 +115,10 @@ export default function LandingPage() {
                 🚀 A Revolução na Gestão de Bares
               </div>
               <h1 id="hero-title" className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9]">
-                Pare de perder dinheiro com <span className="text-primary italic">gestão lenta.</span>
+                {heroTitle}
               </h1>
               <p className="text-xl text-muted-foreground max-w-xl mx-auto lg:mx-0 font-medium">
-                O BarMate é o único sistema que une agilidade de lançamento, monitor de cozinha em tempo real e financeiro blindado em uma só plataforma.
+                {heroSubtitle}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link href="/cadastro">
