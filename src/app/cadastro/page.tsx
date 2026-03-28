@@ -7,15 +7,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Zap, ChevronRight, CheckCircle2, Store, User } from 'lucide-react';
+import { Zap, ChevronRight, CheckCircle2, Store, User, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { auth, db } from '@/lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function CadastroPage() {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ name: '', email: '', barName: '', password: '' });
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleNext = () => {
+  const getSignupErrorMessage = (code: string) => {
+    switch (code) {
+      case 'auth/email-already-in-use':
+        return 'Este e-mail já está cadastrado.';
+      case 'auth/invalid-email':
+        return 'E-mail inválido.';
+      case 'auth/weak-password':
+        return 'Senha fraca. Use pelo menos 6 caracteres.';
+      default:
+        return 'Não foi possível finalizar o cadastro.';
+    }
+  };
+
+  const handleNext = async () => {
     if (step === 1 && (!formData.name || !formData.email)) {
       toast({ title: "Preencha seus dados", variant: "destructive" });
       return;
@@ -25,12 +42,44 @@ export default function CadastroPage() {
         toast({ title: "Preencha os dados do bar", variant: "destructive" });
         return;
       }
-      // Simulação de criação de conta SaaS Real
-      const newOrgId = `org-${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('barmate_admin_session', 'true');
-      localStorage.setItem('barmate_current_org_id', newOrgId);
-      localStorage.setItem('barName', formData.barName);
-      localStorage.setItem('barmate_user_role', 'owner');
+
+      setIsLoading(true);
+      try {
+        const normalizedEmail = formData.email.trim().toLowerCase();
+        const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, formData.password);
+
+        const orgId = `org_${cred.user.uid.slice(0, 12)}`;
+        const now = new Date().toISOString();
+        const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        await setDoc(doc(db, 'organizations', orgId), {
+          id: orgId,
+          tradeName: formData.barName.trim(),
+          ownerId: cred.user.uid,
+          ownerName: formData.name.trim(),
+          ownerEmail: normalizedEmail,
+          planId: 'trial',
+          status: 'trial',
+          createdAt: now,
+          updatedAt: now,
+          trialEndsAt,
+        });
+
+        localStorage.setItem('barmate_admin_session', 'true');
+        localStorage.setItem('barmate_current_org_id', orgId);
+        localStorage.setItem('barName', formData.barName.trim());
+        localStorage.setItem('barmate_user_role', 'owner');
+      } catch (err: any) {
+        toast({
+          title: 'Erro no cadastro',
+          description: getSignupErrorMessage(err?.code || 'unknown'),
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      } finally {
+        setIsLoading(false);
+      }
     }
     setStep(step + 1);
   };
@@ -92,7 +141,10 @@ export default function CadastroPage() {
                 </div>
                 <div className="flex gap-4">
                   <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-12">Voltar</Button>
-                  <Button onClick={handleNext} className="flex-1 h-12 font-bold uppercase">Finalizar Cadastro</Button>
+                  <Button onClick={handleNext} disabled={isLoading} className="flex-1 h-12 font-bold uppercase">
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Finalizar Cadastro
+                  </Button>
                 </div>
               </CardContent>
             </>

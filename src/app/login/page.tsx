@@ -10,60 +10,142 @@ import { Label } from '@/components/ui/label';
 import { Zap, Lock, Mail, Loader2, ShieldCheck, Store } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { auth, db } from '@/lib/firebase';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loginMode, setLoginMode] = useState<'bar' | 'admin'>('bar');
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetLoading, setIsResetLoading] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const superAdmins = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS || 'semnomelogan@gmail.com,agenciaaktm@gmail.com')
+    .split(',')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean);
+
+  const getAuthErrorMessage = (code: string) => {
+    switch (code) {
+      case 'auth/invalid-email':
+        return 'E-mail inválido.';
+      case 'auth/user-disabled':
+        return 'Usuário desativado.';
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+      case 'auth/invalid-credential':
+        return 'E-mail ou senha incorretos.';
+      case 'auth/too-many-requests':
+        return 'Muitas tentativas. Aguarde e tente novamente.';
+      default:
+        return 'Não foi possível autenticar agora.';
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulação de delay de rede
-    setTimeout(() => {
-      // Lista de usuários com privilégios de Admin SaaS
-      const isMasterUser1 = email === 'semnomelogan@gmail.com' && password === 'cocofidido1981';
-      const isMasterUser2 = email === 'agenciaaktm@gmail.com' && password === 'cocofidido1981';
-      const isDemoAdmin = email === 'admin@barmate.com' && password === 'admin123';
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const cred = await signInWithEmailAndPassword(auth, normalizedEmail, password);
 
-      const isAnyMaster = isMasterUser1 || isMasterUser2;
-
-      if (isAnyMaster || isDemoAdmin) {
-        localStorage.setItem('barmate_admin_session', 'true');
-        
-        if (loginMode === 'admin') {
-          if (isAnyMaster) {
-            localStorage.setItem('barmate_user_role', 'super_admin');
-            localStorage.setItem('barmate_current_org_id', 'master_org');
-            toast({ title: "Acesso Admin SaaS Liberado", description: "Bem-vindo ao Backoffice Global." });
-            router.push('/admin');
-          } else {
-            toast({ title: "Erro de Permissão", description: "Você não tem permissão para acessar o Backoffice SaaS.", variant: "destructive" });
-            setIsLoading(false);
-            return;
-          }
-        } else {
-          // Acesso como Estabelecimento (Bar)
-          localStorage.setItem('barmate_user_role', 'owner');
-          
-          // Definição de ID de Organização isolado por e-mail para evitar conflitos
-          let orgId = 'demo_org_1';
-          if (email === 'semnomelogan@gmail.com') orgId = 'master_bar_org';
-          if (email === 'agenciaaktm@gmail.com') orgId = 'aktm_bar_org';
-
-          localStorage.setItem('barmate_current_org_id', orgId);
-          toast({ title: "Acesso ao Bar Liberado", description: "Iniciando painel operacional." });
-          router.push('/dashboard');
+      if (loginMode === 'admin') {
+        if (!superAdmins.includes(normalizedEmail)) {
+          await signOut(auth);
+          toast({
+            title: 'Erro de Permissão',
+            description: 'Você não tem permissão para acessar o Backoffice SaaS.',
+            variant: 'destructive',
+          });
+          return;
         }
-      } else {
-        toast({ title: "Erro de autenticação", description: "E-mail ou senha incorretos.", variant: "destructive" });
+
+        localStorage.setItem('barmate_admin_session', 'true');
+        localStorage.setItem('barmate_user_role', 'super_admin');
+        localStorage.setItem('barmate_current_org_id', 'master_org');
+        toast({ title: 'Acesso Admin SaaS Liberado', description: 'Bem-vindo ao Backoffice Global.' });
+        router.push('/admin');
+        return;
       }
+
+      const q = query(
+        collection(db, 'organizations'),
+        where('ownerEmail', '==', normalizedEmail),
+        limit(1),
+      );
+      const orgSnap = await getDocs(q);
+
+      if (orgSnap.empty) {
+        await signOut(auth);
+        toast({
+          title: 'Conta sem organização',
+          description: 'Nenhuma organização vinculada a este e-mail foi encontrada.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const orgDoc = orgSnap.docs[0];
+      const orgData = orgDoc.data() as any;
+
+      localStorage.setItem('barmate_admin_session', 'true');
+      localStorage.setItem('barmate_user_role', 'owner');
+      localStorage.setItem('barmate_current_org_id', orgDoc.id);
+      localStorage.setItem('barName', orgData.tradeName || 'BarMate');
+
+      toast({ title: 'Acesso ao Bar Liberado', description: 'Iniciando painel operacional.' });
+      router.push('/dashboard');
+    } catch (err: any) {
+      toast({
+        title: 'Erro de autenticação',
+        description: getAuthErrorMessage(err?.code || 'unknown'),
+        variant: 'destructive',
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    const normalizedEmail = resetEmail.trim().toLowerCase();
+    if (!normalizedEmail) {
+      toast({ title: 'Informe um e-mail', variant: 'destructive' });
+      return;
+    }
+
+    setIsResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, normalizedEmail);
+      toast({
+        title: 'E-mail enviado',
+        description: 'Enviamos um link seguro para redefinição de senha.',
+      });
+      setResetDialogOpen(false);
+      setResetEmail('');
+    } catch {
+      // Mensagem genérica para evitar enumeração de e-mails.
+      toast({
+        title: 'Solicitação recebida',
+        description: 'Se o e-mail existir, enviaremos instruções de recuperação.',
+      });
+      setResetDialogOpen(false);
+      setResetEmail('');
+    } finally {
+      setIsResetLoading(false);
+    }
   };
 
   return (
@@ -117,7 +199,17 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password" className="flex items-center gap-2 font-bold uppercase text-[10px] opacity-60"><Lock className="h-3 w-3" /> Senha de Acesso</Label>
-                  <Button variant="link" className="px-0 h-auto text-[10px] font-bold uppercase opacity-40 hover:opacity-100">Esqueceu?</Button>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="px-0 h-auto text-[10px] font-bold uppercase opacity-40 hover:opacity-100"
+                    onClick={() => {
+                      setResetEmail(email.trim().toLowerCase());
+                      setResetDialogOpen(true);
+                    }}
+                  >
+                    Esqueceu?
+                  </Button>
                 </div>
                 <Input 
                   id="password" 
@@ -148,6 +240,38 @@ export default function LoginPage() {
             )}
           </CardFooter>
         </Card>
+
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Recuperar senha</DialogTitle>
+              <DialogDescription>
+                Informe seu e-mail de acesso. Você receberá um link seguro para redefinir sua senha.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">E-mail</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                placeholder="nome@exemplo.com"
+                value={resetEmail}
+                onChange={e => setResetEmail(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Se você também perdeu o e-mail de acesso, fale com o suporte para recuperação de conta.
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setResetDialogOpen(false)}>Cancelar</Button>
+              <Button type="button" onClick={handleResetPassword} disabled={isResetLoading}>
+                {isResetLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enviar link'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

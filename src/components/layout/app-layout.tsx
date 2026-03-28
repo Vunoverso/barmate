@@ -39,8 +39,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
 import { migrateOldData, loadEssentialDataFromCloud, getCurrentOrgId } from '@/lib/data-access';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { isToday } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -72,21 +73,33 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const storedName = localStorage.getItem('barName') || 'BarMate';
         setBarName(storedName);
     });
-    
-    const checkSession = () => {
-      const session = localStorage.getItem('barmate_admin_session');
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        localStorage.setItem('barmate_admin_session', 'true');
+        const role = localStorage.getItem('barmate_user_role') || 'owner';
+        setIsAuthenticated(true);
+        setUserRole(role);
+      } else {
+        localStorage.removeItem('barmate_admin_session');
+        setIsAuthenticated(false);
+        setUserRole(null);
+      }
+    });
+
+    const checkRole = () => {
       const role = localStorage.getItem('barmate_user_role');
-      setIsAuthenticated(session === 'true');
-      setUserRole(role);
+      if (role) setUserRole(role);
+      const storedName = localStorage.getItem('barName') || 'BarMate';
+      setBarName(storedName);
     };
 
-    checkSession();
-    window.addEventListener('storage', checkSession);
-    const interval = setInterval(checkSession, 1000);
+    checkRole();
+    window.addEventListener('storage', checkRole);
 
     return () => {
-      window.removeEventListener('storage', checkSession);
-      clearInterval(interval);
+      window.removeEventListener('storage', checkRole);
+      unsubscribeAuth();
     };
   }, []);
 
@@ -135,7 +148,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => { unsubscribeRequests(); unsubscribeOrders(); };
   }, [isAuthenticated, userRole]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      // Continua limpeza local mesmo se a chamada remota falhar.
+    }
     localStorage.removeItem('barmate_admin_session');
     localStorage.removeItem('barmate_user_role');
     localStorage.removeItem('barmate_current_org_id');
