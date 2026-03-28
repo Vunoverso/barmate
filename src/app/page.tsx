@@ -186,17 +186,17 @@ export default function LandingPage() {
             </header>
             <div className="grid md:grid-cols-3 gap-8">
               <FeatureCard 
-                icon={<Zap className="h-10 w-10 text-primary" />}
+                icon={<Zap className="h-10 w-10" />}
                 title="Comandas em Tempo Real"
                 desc="Acabe com a gritaria e erros. O pedido cai instantaneamente na cozinha ou bar."
               />
               <FeatureCard 
-                icon={<BarChart3 className="h-10 w-10 text-primary" />}
+                icon={<BarChart3 className="h-10 w-10" />}
                 title="Financeiro Automatizado"
                 desc="Fluxo de caixa, DRE e taxas de cartão calculadas automaticamente a cada venda."
               />
               <FeatureCard 
-                icon={<Users2 className="h-10 w-10 text-primary" />}
+                icon={<Users2 className="h-10 w-10" />}
                 title="Experiência do Cliente"
                 desc="QR Code por mesa para autoatendimento e acompanhamento de consumo pelo celular."
               />
@@ -310,7 +310,7 @@ function FeatureCard({ icon, title, desc }: { icon: React.ReactNode, title: stri
   return (
     <Card className="border-none shadow-2xl shadow-black/5 hover:translate-y-[-10px] transition-all duration-500 group bg-background">
       <CardContent className="pt-12 pb-10 px-8 space-y-6">
-        <div className="bg-primary/10 w-fit p-5 rounded-3xl group-hover:bg-primary group-hover:text-white transition-colors duration-500">{icon}</div>
+        <div className="bg-primary/10 text-primary w-fit p-5 rounded-3xl group-hover:bg-primary group-hover:text-white transition-colors duration-500">{icon}</div>
         <h3 className="text-2xl font-black uppercase tracking-tighter">{title}</h3>
         <p className="text-muted-foreground leading-relaxed font-medium">{desc}</p>
       </CardContent>
