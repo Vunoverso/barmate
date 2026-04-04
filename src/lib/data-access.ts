@@ -129,15 +129,30 @@ async function loadCompatibilityDataFromSupabase() {
     const orgId = getCurrentOrgId();
     if (!orgId) return;
 
-    const { data, error } = await supabase
-        .from('app_documents')
-        .select('collection_name, document_key, payload')
-        .eq('organization_id', orgId)
-        .limit(20000);
+    const pageSize = 1000;
+    const data: AppDocumentRow[] = [];
+    let offset = 0;
 
-    if (error) {
-        console.error('Supabase compatibility boot error:', error);
-        return;
+    while (true) {
+        const { data: page, error } = await supabase
+            .from('app_documents')
+            .select('collection_name, document_key, payload')
+            .eq('organization_id', orgId)
+            .order('collection_name', { ascending: true })
+            .order('document_key', { ascending: true })
+            .range(offset, offset + pageSize - 1);
+
+        if (error) {
+            console.error('Supabase compatibility boot error:', error);
+            return;
+        }
+
+        if (!page || page.length === 0) break;
+
+        data.push(...(page as AppDocumentRow[]));
+
+        if (page.length < pageSize) break;
+        offset += page.length;
     }
 
     const groupedRows = new Map<string, AppDocumentRow[]>();
