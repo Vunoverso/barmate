@@ -16,6 +16,7 @@ Diagnosticar o erro de login publicado em https://barmate.vercel.app/login e aju
 - src/lib/firebase-auth-errors.ts
 - src/app/login/page.tsx
 - src/app/cadastro/page.tsx
+- tsconfig.json
 
 ## Decisao tomada
 - Criado helper central para extrair codigos reais do backend do Firebase Auth.
@@ -31,3 +32,6 @@ Diagnosticar o erro de login publicado em https://barmate.vercel.app/login e aju
 1. Conferir no console do Firebase se o provedor Email/Password esta habilitado para o projeto publicado.
 2. Conferir se a API key e o app publicado na Vercel pertencem ao mesmo projeto Firebase.
 3. Fazer novo deploy apos o push para refletir a mensagem de erro melhorada.
+
+## Atualizacao complementar
+- Adicionado compilerOptions.ignoreDeprecations = 6.0 no tsconfig para silenciar o aviso deprecado de baseUrl no TypeScript atual, sem alterar o mapeamento de paths ja usado pelo projeto.
