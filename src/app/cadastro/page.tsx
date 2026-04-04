@@ -9,8 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Zap, ChevronRight, CheckCircle2, Store, User, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { isSupabaseProvider } from '@/lib/backend-provider';
 import { auth, db } from '@/lib/firebase';
 import { getFirebaseAuthErrorMessage } from '@/lib/firebase-auth-errors';
+import { getSupabaseAuthErrorMessage } from '@/lib/supabase-auth-errors';
+import { supabase } from '@/lib/supabaseClient';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -34,6 +37,44 @@ export default function CadastroPage() {
       setIsLoading(true);
       try {
         const normalizedEmail = formData.email.trim().toLowerCase();
+
+        if (isSupabaseProvider && supabase) {
+          const registerResponse = await fetch('/api/auth/register-organization', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: formData.name,
+              email: normalizedEmail,
+              barName: formData.barName,
+              password: formData.password,
+            }),
+          });
+
+          const registerPayload = await registerResponse.json();
+          if (!registerResponse.ok) {
+            throw new Error(registerPayload.error || 'Nao foi possivel criar a conta.');
+          }
+
+          const signInResult = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password: formData.password,
+          });
+
+          if (signInResult.error) {
+            throw signInResult.error;
+          }
+
+          localStorage.setItem('barmate_admin_session', 'true');
+          localStorage.setItem('barmate_current_org_id', registerPayload.orgId);
+          localStorage.setItem('barName', registerPayload.barName || formData.barName.trim());
+          localStorage.setItem('barmate_user_role', 'owner');
+
+          setStep(step + 1);
+          return;
+        }
+
         const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, formData.password);
 
         const orgId = `org_${cred.user.uid.slice(0, 12)}`;
@@ -60,7 +101,9 @@ export default function CadastroPage() {
       } catch (err: any) {
         toast({
           title: 'Erro no cadastro',
-          description: getFirebaseAuthErrorMessage(err, 'Nao foi possivel finalizar o cadastro.'),
+          description: isSupabaseProvider
+            ? getSupabaseAuthErrorMessage(err, 'Nao foi possivel finalizar o cadastro.')
+            : getFirebaseAuthErrorMessage(err, 'Nao foi possivel finalizar o cadastro.'),
           variant: 'destructive',
         });
         setIsLoading(false);

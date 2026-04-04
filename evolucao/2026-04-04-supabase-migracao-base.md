@@ -50,3 +50,10 @@ Criar a fundacao tecnica e documental para migrar o BarMate de Firebase para Sup
 2. Instalar e aplicar a migration inicial no Supabase.
 3. Migrar login/cadastro para Supabase Auth mantendo o restante do app no Firebase temporariamente.
 4. Criar scripts de backfill dos dados atuais.
+
+## Atualizacao fase 2
+- Credenciais do Supabase recebidas para desenvolvimento local.
+- Login e cadastro passaram a ter rota de migracao por Supabase Auth quando NEXT_PUBLIC_BACKEND_PROVIDER estiver em supabase.
+- Foram adicionadas rotas server-side para criacao do usuario/organizacao e resolucao do contexto da organizacao.
+- O restante do app continua dependente de Firebase para dados operacionais, reduzindo o risco da troca inicial.
+- A migration inicial foi aplicada no banco remoto do Supabase com sucesso via CLI.

@@ -38,8 +38,10 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState, useEffect } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
+import { isSupabaseProvider } from '@/lib/backend-provider';
 import { migrateOldData, loadEssentialDataFromCloud, getCurrentOrgId } from '@/lib/data-access';
 import { auth, db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { isToday } from 'date-fns';
@@ -74,8 +76,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         setBarName(storedName);
     });
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
+    const syncAuthState = (hasUser: boolean) => {
+      if (hasUser) {
         localStorage.setItem('barmate_admin_session', 'true');
         const role = localStorage.getItem('barmate_user_role') || 'owner';
         setIsAuthenticated(true);
@@ -85,7 +87,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         setIsAuthenticated(false);
         setUserRole(null);
       }
-    });
+    };
+
+    let unsubscribeAuth = () => {};
+    if (isSupabaseProvider && supabase) {
+      supabase.auth.getSession().then(({ data }) => {
+        syncAuthState(Boolean(data.session?.user));
+      });
+
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        syncAuthState(Boolean(session?.user));
+      });
+
+      unsubscribeAuth = () => data.subscription.unsubscribe();
+    } else {
+      unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+        syncAuthState(Boolean(user));
+      });
+    }
 
     const checkRole = () => {
       const role = localStorage.getItem('barmate_user_role');
@@ -150,7 +169,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (isSupabaseProvider && supabase) {
+        await supabase.auth.signOut();
+      } else {
+        await signOut(auth);
+      }
     } catch {
       // Continua limpeza local mesmo se a chamada remota falhar.
     }

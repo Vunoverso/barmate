@@ -10,8 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Zap, Lock, Mail, Loader2, ShieldCheck, Store } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { isSupabaseProvider } from '@/lib/backend-provider';
 import { auth, db } from '@/lib/firebase';
 import { getFirebaseAuthErrorMessage } from '@/lib/firebase-auth-errors';
+import { getSupabaseAuthErrorMessage } from '@/lib/supabase-auth-errors';
+import { supabase } from '@/lib/supabaseClient';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import {
@@ -44,11 +47,25 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const cred = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      const loginResult = isSupabaseProvider && supabase
+        ? await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
+        : { data: { userCredential: await signInWithEmailAndPassword(auth, normalizedEmail, password) }, error: null };
+
+      if (isSupabaseProvider && loginResult.error) {
+        throw loginResult.error;
+      }
+
+      const signedUserId = isSupabaseProvider
+        ? loginResult.data.user?.id
+        : loginResult.data.userCredential.user.uid;
 
       if (loginMode === 'admin') {
         if (!superAdmins.includes(normalizedEmail)) {
-          await signOut(auth);
+          if (isSupabaseProvider && supabase) {
+            await supabase.auth.signOut();
+          } else {
+            await signOut(auth);
+          }
           toast({
             title: 'Erro de Permissão',
             description: 'Você não tem permissão para acessar o Backoffice SaaS.',
@@ -62,6 +79,36 @@ export default function LoginPage() {
         localStorage.setItem('barmate_current_org_id', 'master_org');
         toast({ title: 'Acesso Admin SaaS Liberado', description: 'Bem-vindo ao Backoffice Global.' });
         router.push('/admin');
+        return;
+      }
+
+      if (isSupabaseProvider) {
+        const response = await fetch('/api/auth/resolve-organization', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: normalizedEmail, userId: signedUserId }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.orgId) {
+          if (supabase) await supabase.auth.signOut();
+          toast({
+            title: 'Conta sem organização',
+            description: 'Nenhuma organização vinculada a este e-mail foi encontrada.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        localStorage.setItem('barmate_admin_session', 'true');
+        localStorage.setItem('barmate_user_role', 'owner');
+        localStorage.setItem('barmate_current_org_id', payload.orgId);
+        localStorage.setItem('barName', payload.tradeName || 'BarMate');
+
+        toast({ title: 'Acesso ao Bar Liberado', description: 'Iniciando painel operacional.' });
+        router.push('/dashboard');
         return;
       }
 
@@ -95,7 +142,7 @@ export default function LoginPage() {
     } catch (err: any) {
       toast({
         title: 'Erro de autenticação',
-        description: getFirebaseAuthErrorMessage(err),
+        description: isSupabaseProvider ? getSupabaseAuthErrorMessage(err) : getFirebaseAuthErrorMessage(err),
         variant: 'destructive',
       });
     } finally {
@@ -112,7 +159,14 @@ export default function LoginPage() {
 
     setIsResetLoading(true);
     try {
-      await sendPasswordResetEmail(auth, normalizedEmail);
+      if (isSupabaseProvider && supabase) {
+        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined,
+        });
+        if (error) throw error;
+      } else {
+        await sendPasswordResetEmail(auth, normalizedEmail);
+      }
       toast({
         title: 'E-mail enviado',
         description: 'Enviamos um link seguro para redefinição de senha.',
