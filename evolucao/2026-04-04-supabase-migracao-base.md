@@ -68,3 +68,20 @@ Criar a fundacao tecnica e documental para migrar o BarMate de Firebase para Sup
 1. Validar login com uma conta real ja provisionada no Supabase.
 2. Validar cadastro completo em producao e conferir criacao de organization_members.
 3. Migrar os primeiros modulos operacionais hoje presos ao Firebase.
+
+## Atualizacao importacao de backup
+- Foi criado o script scripts/import-backup-to-supabase.mjs para importar backups JSON legados do BarMate para o Supabase.
+- O backup barmate_backup_2025-09-21.json foi importado em public.app_documents com 7368 registros.
+- Para evitar sobrescrita da organization existente, a importacao criou a organization separada org_import_therapia_bar_36070525 com trade_name THERAPIA BAR.
+- Os dados foram persistidos como tabela de compatibilidade em app_documents, preservando as chaves legadas do backup.
+
+## Observacao funcional da importacao
+- A organization importada ainda nao esta vinculada a um usuario em organization_members.
+- O fluxo atual de login resolve apenas uma organization por userId ou owner_email.
+- Para usar esse backup dentro da interface publicada, ainda sera necessario decidir a estrategia de acesso: vincular a organization a um usuario especifico e ajustar a resolucao, ou implementar seletor de organization no login/app.
+
+## Atualizacao conta THERAPIA BAR
+- Usuario Supabase provisionado para THERAPIA BAR com e-mail semnomelogan@gmail.com.
+- A organization org_import_therapia_bar_36070525 foi atualizada com owner_email, owner_name e owner_user_id.
+- Foi criado o vinculo owner em organization_members para permitir login pelo fluxo atual de resolve-organization.
+- O bootstrap do app passou a hidratar o localStorage a partir de public.app_documents quando o provider ativo for Supabase, permitindo que a interface carregue o backup importado.

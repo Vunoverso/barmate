@@ -14,6 +14,7 @@ import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import {
+    DATA_KEYS,
     INITIAL_PRODUCT_CATEGORIES,
     INITIAL_PRODUCTS,
     INITIAL_SALES,
@@ -35,6 +36,22 @@ import {
     KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES,
     KEY_VISUALLY_REMOVED_ADJUSTMENTS,
 } from './constants';
+import { isSupabaseProvider } from './backend-provider';
+import { supabase } from './supabaseClient';
+
+const RAW_LOCAL_STORAGE_KEYS = new Set([
+    'barName',
+    'barCnpj',
+    'barAddress',
+    'barLogo',
+    'barLogoScale',
+]);
+
+type AppDocumentRow = {
+    collection_name: string;
+    document_key: string;
+    payload: unknown;
+};
 
 export function getCurrentOrgId(): string | null {
     if (typeof window === 'undefined') return null;
@@ -71,6 +88,85 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     return defaultValue;
   }
 };
+
+function saveRawToLocalStorage(key: string, value: unknown, options?: { silent?: boolean }) {
+    if (typeof window === 'undefined') return;
+
+    if (value === null || value === undefined) {
+        window.localStorage.removeItem(key);
+    } else {
+        window.localStorage.setItem(key, String(value));
+    }
+
+    if (!options?.silent) {
+        window.dispatchEvent(new StorageEvent('storage', { key }));
+    }
+}
+
+function compareDocumentKeys(a: string, b: string) {
+    const aMatch = /^index_(\d+)$/.exec(a);
+    const bMatch = /^index_(\d+)$/.exec(b);
+
+    if (aMatch && bMatch) return Number(aMatch[1]) - Number(bMatch[1]);
+    if (aMatch) return -1;
+    if (bMatch) return 1;
+    return a.localeCompare(b, 'pt-BR');
+}
+
+function reconstructCollectionPayload(rows: AppDocumentRow[]) {
+    if (rows.length === 1 && rows[0].document_key === 'singleton') {
+        return rows[0].payload;
+    }
+
+    return [...rows]
+        .sort((left, right) => compareDocumentKeys(left.document_key, right.document_key))
+        .map((row) => row.payload);
+}
+
+async function loadCompatibilityDataFromSupabase() {
+    if (!supabase) return;
+
+    const orgId = getCurrentOrgId();
+    if (!orgId) return;
+
+    const { data, error } = await supabase
+        .from('app_documents')
+        .select('collection_name, document_key, payload')
+        .eq('organization_id', orgId)
+        .limit(20000);
+
+    if (error) {
+        console.error('Supabase compatibility boot error:', error);
+        return;
+    }
+
+    const groupedRows = new Map<string, AppDocumentRow[]>();
+    for (const row of data || []) {
+        const bucket = groupedRows.get(row.collection_name) || [];
+        bucket.push(row as AppDocumentRow);
+        groupedRows.set(row.collection_name, bucket);
+    }
+
+    DATA_KEYS.forEach((key) => {
+        const rows = groupedRows.get(key);
+        if (!rows || rows.length === 0) return;
+
+        const payload = reconstructCollectionPayload(rows);
+
+        if (RAW_LOCAL_STORAGE_KEYS.has(key)) {
+            saveRawToLocalStorage(key, payload, { silent: true });
+            return;
+        }
+
+        saveToLocalStorage(key, payload, { silent: true });
+    });
+
+    if (groupedRows.has(KEY_PRODUCTS) || groupedRows.has(KEY_PRODUCT_CATEGORIES)) {
+        localStorage.setItem(`init_${orgId}`, 'true');
+    }
+
+    window.dispatchEvent(new Event('storage'));
+}
 
 /**
  * Cloud Sync Engine Otimizado para coleções raiz (compatível com firestore.rules)
@@ -194,9 +290,15 @@ export function saveVisuallyRemovedAdjustments(ids: string[]) {
 }
 
 export async function loadEssentialDataFromCloud() {
-    if (!db) return;
     const orgId = getCurrentOrgId();
     if (!orgId) return;
+
+    if (isSupabaseProvider && supabase) {
+        await loadCompatibilityDataFromSupabase();
+        return;
+    }
+
+    if (!db) return;
 
     try {
         const catSnap = await getDoc(doc(db, 'product_categories', orgId)).catch(() => null);
