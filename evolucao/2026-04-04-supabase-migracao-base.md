@@ -85,3 +85,10 @@ Criar a fundacao tecnica e documental para migrar o BarMate de Firebase para Sup
 - A organization org_import_therapia_bar_36070525 foi atualizada com owner_email, owner_name e owner_user_id.
 - Foi criado o vinculo owner em organization_members para permitir login pelo fluxo atual de resolve-organization.
 - O bootstrap do app passou a hidratar o localStorage a partir de public.app_documents quando o provider ativo for Supabase, permitindo que a interface carregue o backup importado.
+
+## Atualizacao bootstrap financeiro
+- O backup importado continha 2393 vendas e 4571 lancamentos financeiros validos no Supabase.
+- A primeira versao do bootstrap em Supabase carregava apenas os primeiros 1000 registros de public.app_documents por causa do limite padrao da API do Supabase.
+- Isso causava hidratacao parcial no navegador: produtos apareciam, mas vendas e financeiro ficavam truncados.
+- O carregamento foi corrigido com paginacao em lotes de 1000 registros ate consumir toda a organization.
+- Validacao em producao concluida com a conta do THERAPIA BAR: localStorage passou a refletir 2393 vendas e 4571 lancamentos financeiros.
