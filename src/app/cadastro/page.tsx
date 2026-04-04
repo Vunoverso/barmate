@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Zap, ChevronRight, CheckCircle2, Store, User, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, db } from '@/lib/firebase';
+import { getFirebaseAuthErrorMessage } from '@/lib/firebase-auth-errors';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -18,19 +19,6 @@ export default function CadastroPage() {
   const [formData, setFormData] = useState({ name: '', email: '', barName: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-
-  const getSignupErrorMessage = (code: string) => {
-    switch (code) {
-      case 'auth/email-already-in-use':
-        return 'Este e-mail já está cadastrado.';
-      case 'auth/invalid-email':
-        return 'E-mail inválido.';
-      case 'auth/weak-password':
-        return 'Senha fraca. Use pelo menos 6 caracteres.';
-      default:
-        return 'Não foi possível finalizar o cadastro.';
-    }
-  };
 
   const handleNext = async () => {
     if (step === 1 && (!formData.name || !formData.email)) {
@@ -72,7 +60,7 @@ export default function CadastroPage() {
       } catch (err: any) {
         toast({
           title: 'Erro no cadastro',
-          description: getSignupErrorMessage(err?.code || 'unknown'),
+          description: getFirebaseAuthErrorMessage(err, 'Nao foi possivel finalizar o cadastro.'),
           variant: 'destructive',
         });
         setIsLoading(false);

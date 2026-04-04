@@ -11,6 +11,7 @@ import { Zap, Lock, Mail, Loader2, ShieldCheck, Store } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
+import { getFirebaseAuthErrorMessage } from '@/lib/firebase-auth-errors';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import {
@@ -37,23 +38,6 @@ export default function LoginPage() {
     .split(',')
     .map(v => v.trim().toLowerCase())
     .filter(Boolean);
-
-  const getAuthErrorMessage = (code: string) => {
-    switch (code) {
-      case 'auth/invalid-email':
-        return 'E-mail inválido.';
-      case 'auth/user-disabled':
-        return 'Usuário desativado.';
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-      case 'auth/invalid-credential':
-        return 'E-mail ou senha incorretos.';
-      case 'auth/too-many-requests':
-        return 'Muitas tentativas. Aguarde e tente novamente.';
-      default:
-        return 'Não foi possível autenticar agora.';
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +95,7 @@ export default function LoginPage() {
     } catch (err: any) {
       toast({
         title: 'Erro de autenticação',
-        description: getAuthErrorMessage(err?.code || 'unknown'),
+        description: getFirebaseAuthErrorMessage(err),
         variant: 'destructive',
       });
     } finally {
