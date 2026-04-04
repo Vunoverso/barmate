@@ -2,7 +2,7 @@
 "use client";
 
 import { DATA_KEYS, KEY_OPEN_ORDERS } from '@/lib/constants';
-import { clearFinancialData, getTransactionFees, saveTransactionFees, getCurrentOrgId } from '@/lib/data-access';
+import { clearFinancialData, getTransactionFees, saveTransactionFees, getCurrentOrgId, saveCompatibilityKeyValue } from '@/lib/data-access';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { db } from '@/lib/firebase';
+import { isSupabaseProvider } from '@/lib/backend-provider';
 import { doc, setDoc, collection, addDoc, serverTimestamp, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
@@ -62,12 +63,7 @@ export default function SettingsClient() {
   };
 
   const persistBackupEntry = (key: string, value: unknown) => {
-    // Chaves "bar*" são string pura; as demais chaves de dados são JSON.
-    if (key.startsWith('bar') && typeof value === 'string') {
-      localStorage.setItem(key, value);
-      return;
-    }
-    localStorage.setItem(key, JSON.stringify(value));
+    saveCompatibilityKeyValue(key, value);
   };
 
   const restoreOpenOrdersToCloud = async (orders: unknown) => {
@@ -131,13 +127,13 @@ export default function SettingsClient() {
     const orgId = getCurrentOrgId();
     if (!orgId) return;
 
-    localStorage.setItem('barName', barName.trim());
-    localStorage.setItem('barCnpj', barCnpj.trim());
-    localStorage.setItem('barAddress', barAddress.trim());
-    localStorage.setItem('barLogo', barLogo);
-    localStorage.setItem('barLogoScale', barLogoScale.toString());
+    saveCompatibilityKeyValue('barName', barName.trim());
+    saveCompatibilityKeyValue('barCnpj', barCnpj.trim());
+    saveCompatibilityKeyValue('barAddress', barAddress.trim());
+    saveCompatibilityKeyValue('barLogo', barLogo);
+    saveCompatibilityKeyValue('barLogoScale', barLogoScale);
     
-    if (db) {
+    if (db && !isSupabaseProvider) {
         const docRef = doc(db, 'settings', orgId);
         const data = {
             barName: barName.trim(),

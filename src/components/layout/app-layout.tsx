@@ -59,6 +59,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { toast } = useToast();
   const [barName, setBarName] = useState('BarMate');
+  const [barLogo, setBarLogo] = useState('');
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingKitchenCount, setPendingKitchenCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -70,10 +71,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
 
   useEffect(() => {
+    const syncBrandingFromStorage = () => {
+      setBarName(localStorage.getItem('barName') || 'BarMate');
+      setBarLogo(localStorage.getItem('barLogo') || '');
+    };
+
     migrateOldData();
     loadEssentialDataFromCloud().then(() => {
-        const storedName = localStorage.getItem('barName') || 'BarMate';
-        setBarName(storedName);
+        syncBrandingFromStorage();
     });
 
     const syncAuthState = (hasUser: boolean) => {
@@ -109,8 +114,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     const checkRole = () => {
       const role = localStorage.getItem('barmate_user_role');
       if (role) setUserRole(role);
-      const storedName = localStorage.getItem('barName') || 'BarMate';
-      setBarName(storedName);
+      syncBrandingFromStorage();
     };
 
     checkRole();
@@ -316,8 +320,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="icon" className={`rounded-full h-10 w-10 overflow-hidden ring-2 transition-all ${userRole === 'super_admin' ? 'ring-orange-500/20 hover:ring-orange-500/40' : 'ring-primary/10 hover:ring-primary/30'}`}>
                   <Avatar className="h-full w-full">
-                    <AvatarImage src={`https://picsum.photos/seed/${userRole === 'super_admin' ? 'owner' : 'bar'}/40/40`} alt="Avatar" />
-                    <AvatarFallback className={`font-black uppercase text-white ${userRole === 'super_admin' ? 'bg-orange-600' : 'bg-primary'}`}>{userRole === 'super_admin' ? 'AD' : 'BA'}</AvatarFallback>
+                    <AvatarImage
+                      src={userRole === 'super_admin' ? 'https://picsum.photos/seed/owner/40/40' : (barLogo || undefined)}
+                      alt={userRole === 'super_admin' ? 'Avatar' : 'Logo do estabelecimento'}
+                      className={userRole === 'super_admin' ? 'object-cover' : 'object-contain bg-white p-1'}
+                    />
+                    <AvatarFallback className={`font-black uppercase text-white ${userRole === 'super_admin' ? 'bg-orange-600' : 'bg-primary'}`}>{userRole === 'super_admin' ? 'AD' : barName.slice(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>

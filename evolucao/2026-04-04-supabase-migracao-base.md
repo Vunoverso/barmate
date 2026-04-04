@@ -92,3 +92,14 @@ Criar a fundacao tecnica e documental para migrar o BarMate de Firebase para Sup
 - Isso causava hidratacao parcial no navegador: produtos apareciam, mas vendas e financeiro ficavam truncados.
 - O carregamento foi corrigido com paginacao em lotes de 1000 registros ate consumir toda a organization.
 - Validacao em producao concluida com a conta do THERAPIA BAR: localStorage passou a refletir 2393 vendas e 4571 lancamentos financeiros.
+
+## Atualizacao persistencia compatibilidade e branding
+- O modo Supabase passou a encaminhar salvamentos das chaves de compatibilidade para public.app_documents via data-access, reduzindo a dependencia de exportacao/importacao manual para configuracoes e dados operacionais baseados em localStorage.
+- A tela de configuracoes foi ajustada para persistir barName, barCnpj, barAddress, barLogo e barLogoScale por essa mesma camada de compatibilidade.
+- O layout principal foi corrigido para usar o barLogo salvo no avatar do topo, em vez de um avatar fixo, e reagir a atualizacoes de branding no mesmo navegador.
+- O tsconfig foi corrigido removendo baseUrl, que estava gerando conflito entre o editor e o TypeScript 5.7.3 instalado, destravando a validacao por typecheck sem depender de ignoreDeprecations.
+
+## Proximos passos imediatos
+1. Validar typecheck e build com a nova persistencia de compatibilidade.
+2. Publicar o ajuste em master para acionar o deploy no Vercel.
+3. Confirmar em producao se o logo pequeno e os salvamentos de configuracao passam a refletir sem recarga manual.

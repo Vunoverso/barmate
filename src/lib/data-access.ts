@@ -39,6 +39,7 @@ import {
 import { isSupabaseProvider } from './backend-provider';
 import { supabase } from './supabaseClient';
 
+const DATA_KEYS_SET = new Set(DATA_KEYS);
 const RAW_LOCAL_STORAGE_KEYS = new Set([
     'barName',
     'barCnpj',
@@ -47,11 +48,59 @@ const RAW_LOCAL_STORAGE_KEYS = new Set([
     'barLogoScale',
 ]);
 
+const supabaseSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 type AppDocumentRow = {
     collection_name: string;
     document_key: string;
     payload: unknown;
 };
+
+function normalizeCompatibilityPayload<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value, (_key, currentValue) => currentValue === undefined ? null : currentValue));
+}
+
+function shouldSyncCompatibilityKey(key: string) {
+    return isSupabaseProvider && Boolean(supabase) && DATA_KEYS_SET.has(key);
+}
+
+function scheduleCompatibilitySync(key: string, value: unknown) {
+    if (typeof window === 'undefined') return;
+    if (!shouldSyncCompatibilityKey(key) || !supabase) return;
+
+    const orgId = getCurrentOrgId();
+    if (!orgId) return;
+
+    const syncId = `${orgId}:${key}`;
+    const payload = normalizeCompatibilityPayload(value);
+
+    const existingTimer = supabaseSyncTimers.get(syncId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    const timer = setTimeout(async () => {
+        try {
+            const { error } = await supabase
+                .from('app_documents')
+                .upsert({
+                    organization_id: orgId,
+                    collection_name: key,
+                    document_key: 'singleton',
+                    payload,
+                    updated_at: new Date().toISOString(),
+                }, {
+                    onConflict: 'organization_id,collection_name,document_key',
+                });
+
+            if (error) {
+                console.error(`Supabase compatibility sync error (${key}):`, error);
+            }
+        } finally {
+            supabaseSyncTimers.delete(syncId);
+        }
+    }, 250);
+
+    supabaseSyncTimers.set(syncId, timer);
+}
 
 export function getCurrentOrgId(): string | null {
     if (typeof window === 'undefined') return null;
@@ -69,6 +118,9 @@ const saveToLocalStorage = <T,>(key: string, value: T, options?: { silent?: bool
     try {
       const serializedValue = JSON.stringify(value);
       window.localStorage.setItem(key, serializedValue);
+            if (!options?.silent) {
+                scheduleCompatibilitySync(key, value);
+            }
       if (!options?.silent) {
         window.dispatchEvent(new StorageEvent('storage', { key }));
       }
@@ -99,8 +151,23 @@ function saveRawToLocalStorage(key: string, value: unknown, options?: { silent?:
     }
 
     if (!options?.silent) {
+        scheduleCompatibilitySync(key, value);
+    }
+
+    if (!options?.silent) {
         window.dispatchEvent(new StorageEvent('storage', { key }));
     }
+}
+
+export function saveCompatibilityKeyValue(key: string, value: unknown, options?: { silent?: boolean }) {
+    if (!DATA_KEYS_SET.has(key)) return;
+
+    if (RAW_LOCAL_STORAGE_KEYS.has(key)) {
+        saveRawToLocalStorage(key, value, options);
+        return;
+    }
+
+    saveToLocalStorage(key, value, options);
 }
 
 function compareDocumentKeys(a: string, b: string) {
@@ -114,8 +181,9 @@ function compareDocumentKeys(a: string, b: string) {
 }
 
 function reconstructCollectionPayload(rows: AppDocumentRow[]) {
-    if (rows.length === 1 && rows[0].document_key === 'singleton') {
-        return rows[0].payload;
+    const singletonRow = rows.find((row) => row.document_key === 'singleton');
+    if (singletonRow) {
+        return singletonRow.payload;
     }
 
     return [...rows]
@@ -187,6 +255,7 @@ async function loadCompatibilityDataFromSupabase() {
  * Cloud Sync Engine Otimizado para coleções raiz (compatível com firestore.rules)
  */
 const syncToCloud = (collectionPath: string, id: string, data: any) => {
+    if (isSupabaseProvider) return;
     if (!db) return;
     const orgId = getCurrentOrgId();
     if (!orgId) return;
