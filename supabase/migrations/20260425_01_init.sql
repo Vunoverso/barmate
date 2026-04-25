@@ -1,10 +1,11 @@
 -- BarMate Supabase foundation
 -- Base multi-tenant schema and app-state storage.
+-- Shared-database safe: do not add foreign keys to pre-existing shared tables.
 
 create extension if not exists pgcrypto;
 
 create table if not exists public.organizations (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key default gen_random_uuid()::text,
   legal_name text not null,
   trade_name text not null,
   document text,
@@ -15,7 +16,7 @@ create table if not exists public.organizations (
 );
 
 create table if not exists public.users (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key default gen_random_uuid()::text,
   name text,
   email text unique,
   phone text,
@@ -27,8 +28,8 @@ create table if not exists public.users (
 
 create table if not exists public.memberships (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  user_id uuid not null references public.users(id) on delete cascade,
+  organization_id text not null,
+  user_id text not null,
   role text not null default 'OWNER',
   status text not null default 'active',
   created_at timestamptz not null default now(),
@@ -44,7 +45,7 @@ create table if not exists public.app_state (
 
 create table if not exists public.open_orders (
   id text primary key,
-  organization_id uuid references public.organizations(id) on delete cascade,
+  organization_id text,
   name text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -60,7 +61,7 @@ create table if not exists public.open_orders (
 
 create table if not exists public.guest_requests (
   id text primary key,
-  organization_id uuid references public.organizations(id) on delete cascade,
+  organization_id text,
   name text not null,
   status text not null default 'pending',
   intent text not null default 'view',
