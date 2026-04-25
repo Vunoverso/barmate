@@ -1,0 +1,469 @@
+import { supabase } from './supabaseClient';
+
+type OfflineStatus = {
+  isOnline: boolean;
+  isHydrating: boolean;
+  isSyncing: boolean;
+  pendingMutations: number;
+  conflicts: number;
+  lastSyncAt: string | null;
+  lastError: string | null;
+};
+
+type AppStateRecord = {
+  key: string;
+  value: unknown;
+  updatedAt: string;
+  pending: boolean;
+};
+
+type TableSnapshotRecord = {
+  tableName: string;
+  rows: Record<string, unknown>[];
+  updatedAt: string;
+};
+
+type PendingMutation = {
+  id: string;
+  tableName: string;
+  operation: 'upsert' | 'delete';
+  key: string;
+  payload?: Record<string, unknown>;
+  updatedAt: string;
+  baseUpdatedAt?: string | null;
+};
+
+type DbStores = {
+  app_state: IDBObjectStore;
+  table_snapshots: IDBObjectStore;
+  mutations: IDBObjectStore;
+  meta: IDBObjectStore;
+};
+
+const DB_NAME = 'barmate-offline-sync';
+const DB_VERSION = 1;
+const STATUS_EVENT = 'barmate-offline-status-changed';
+const DATA_EVENT = 'barmate-offline-data-changed';
+
+const memoryAppState = new Map<string, AppStateRecord>();
+const memoryTableSnapshots = new Map<string, TableSnapshotRecord>();
+let memoryMutations: PendingMutation[] = [];
+
+const status: OfflineStatus = {
+  isOnline: typeof navigator === 'undefined' ? true : navigator.onLine,
+  isHydrating: false,
+  isSyncing: false,
+  pendingMutations: 0,
+  conflicts: 0,
+  lastSyncAt: null,
+  lastError: null,
+};
+let statusSnapshot: OfflineStatus = { ...status };
+
+let databasePromise: Promise<IDBDatabase | null> | null = null;
+let initialized = false;
+let syncScheduled = false;
+const statusListeners = new Set<() => void>();
+
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const emitStatusChange = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(STATUS_EVENT, { detail: { ...status } }));
+  }
+
+  statusListeners.forEach((listener) => listener());
+};
+
+const emitDataChange = (tableName?: string) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(DATA_EVENT, { detail: { tableName } }));
+  }
+};
+
+const updateStatus = (nextStatus: Partial<OfflineStatus>) => {
+  Object.assign(status, nextStatus);
+  statusSnapshot = { ...status };
+  emitStatusChange();
+};
+
+const openDatabase = async () => {
+  if (typeof window === 'undefined' || !('indexedDB' in window)) {
+    return null;
+  }
+
+  if (databasePromise) {
+    return databasePromise;
+  }
+
+  databasePromise = new Promise<IDBDatabase | null>((resolve) => {
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains('app_state')) {
+        database.createObjectStore('app_state', { keyPath: 'key' });
+      }
+      if (!database.objectStoreNames.contains('table_snapshots')) {
+        database.createObjectStore('table_snapshots', { keyPath: 'tableName' });
+      }
+      if (!database.objectStoreNames.contains('mutations')) {
+        database.createObjectStore('mutations', { keyPath: 'id' });
+      }
+      if (!database.objectStoreNames.contains('meta')) {
+        database.createObjectStore('meta', { keyPath: 'key' });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      console.error('Falha ao abrir IndexedDB offline do BarMate:', request.error);
+      resolve(null);
+    };
+  });
+
+  return databasePromise;
+};
+
+const withStores = async <T,>(mode: IDBTransactionMode, callback: (stores: DbStores) => Promise<T> | T) => {
+  const database = await openDatabase();
+  if (!database) return null;
+
+  return new Promise<T | null>((resolve, reject) => {
+    const transaction = database.transaction(['app_state', 'table_snapshots', 'mutations', 'meta'], mode);
+    const stores = {
+      app_state: transaction.objectStore('app_state'),
+      table_snapshots: transaction.objectStore('table_snapshots'),
+      mutations: transaction.objectStore('mutations'),
+      meta: transaction.objectStore('meta'),
+    } as DbStores;
+
+    Promise.resolve(callback(stores))
+      .then((value) => {
+        resolve((value ?? null) as T | null);
+      })
+      .catch(reject);
+
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+};
+
+const idbGet = <T,>(store: IDBObjectStore, key: IDBValidKey) => new Promise<T | undefined>((resolve, reject) => {
+  const request = store.get(key);
+  request.onsuccess = () => resolve(request.result as T | undefined);
+  request.onerror = () => reject(request.error);
+});
+
+const idbGetAll = <T,>(store: IDBObjectStore) => new Promise<T[]>((resolve, reject) => {
+  const request = store.getAll();
+  request.onsuccess = () => resolve((request.result as T[]) ?? []);
+  request.onerror = () => reject(request.error);
+});
+
+const idbPut = <T,>(store: IDBObjectStore, value: T) => new Promise<void>((resolve, reject) => {
+  const request = store.put(value as never);
+  request.onsuccess = () => resolve();
+  request.onerror = () => reject(request.error);
+});
+
+const idbDelete = (store: IDBObjectStore, key: IDBValidKey) => new Promise<void>((resolve, reject) => {
+  const request = store.delete(key);
+  request.onsuccess = () => resolve();
+  request.onerror = () => reject(request.error);
+});
+
+const idbClear = (store: IDBObjectStore) => new Promise<void>((resolve, reject) => {
+  const request = store.clear();
+  request.onsuccess = () => resolve();
+  request.onerror = () => reject(request.error);
+});
+
+const remoteUpdatedAt = (row: Record<string, unknown> | null | undefined) => {
+  if (!row) return null;
+  const value = row.updated_at ?? row.updatedAt ?? null;
+  return typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : null;
+};
+
+const getPrimaryKeyField = (tableName: string) => (tableName === 'app_state' ? 'key' : 'id');
+
+const syncAppStateToMemory = async (records: AppStateRecord[]) => {
+  memoryAppState.clear();
+  records.forEach((record) => memoryAppState.set(record.key, record));
+};
+
+export const getOfflineStatus = () => statusSnapshot;
+
+export const subscribeOfflineStatus = (listener: () => void) => {
+  statusListeners.add(listener);
+  return () => statusListeners.delete(listener);
+};
+
+export const useOfflineStatusStore = () => getOfflineStatus();
+
+export const initializeOfflineSync = async () => {
+  if (initialized || typeof window === 'undefined') {
+    return;
+  }
+
+  initialized = true;
+  updateStatus({ isOnline: navigator.onLine, isHydrating: true });
+
+  window.addEventListener('online', () => {
+    updateStatus({ isOnline: true });
+    void flushPendingMutations();
+  });
+
+  window.addEventListener('offline', () => {
+    updateStatus({ isOnline: false });
+  });
+
+  const cachedRecords = await readAppStateRecordsFromLocal();
+  await syncAppStateToMemory(cachedRecords);
+  const cachedMutations = await readPendingMutationsFromLocal();
+  memoryMutations = cachedMutations;
+  updateStatus({ pendingMutations: memoryMutations.length, isHydrating: false });
+
+  if (navigator.onLine) {
+    void flushPendingMutations();
+  }
+};
+
+export const getLocalAppStateRecord = async (key: string) => {
+  const existing = memoryAppState.get(key);
+  if (existing) return existing;
+
+  const database = await openDatabase();
+  if (!database) return undefined;
+
+  const record = await withStores('readonly', async ({ app_state }) => idbGet<AppStateRecord>(app_state, key));
+  if (record) memoryAppState.set(record.key, record);
+  return record ?? undefined;
+};
+
+export const readAppStateRecordsFromLocal = async () => {
+  if (memoryAppState.size > 0) {
+    return Array.from(memoryAppState.values());
+  }
+
+  const database = await openDatabase();
+  if (!database) return [] as AppStateRecord[];
+
+  const records = await withStores('readonly', async ({ app_state }) => idbGetAll<AppStateRecord>(app_state));
+  return records ?? [];
+};
+
+export const persistAppStateRecord = async (record: AppStateRecord) => {
+  memoryAppState.set(record.key, record);
+
+  const database = await openDatabase();
+  if (!database) {
+    emitDataChange('app_state');
+    return;
+  }
+
+  await withStores('readwrite', async ({ app_state }) => idbPut(app_state, record));
+  emitDataChange('app_state');
+};
+
+export const removeAppStateRecord = async (key: string) => {
+  memoryAppState.delete(key);
+
+  const database = await openDatabase();
+  if (!database) {
+    emitDataChange('app_state');
+    return;
+  }
+
+  await withStores('readwrite', async ({ app_state }) => idbDelete(app_state, key));
+  emitDataChange('app_state');
+};
+
+export const getLocalTableSnapshot = async (tableName: string) => {
+  const existing = memoryTableSnapshots.get(tableName);
+  if (existing) return existing;
+
+  const database = await openDatabase();
+  if (!database) return undefined;
+
+  const snapshot = await withStores('readonly', async ({ table_snapshots }) => idbGet<TableSnapshotRecord>(table_snapshots, tableName));
+  if (snapshot) memoryTableSnapshots.set(tableName, snapshot);
+  return snapshot ?? undefined;
+};
+
+export const persistTableSnapshot = async (tableName: string, rows: Record<string, unknown>[]) => {
+  const snapshot: TableSnapshotRecord = {
+    tableName,
+    rows,
+    updatedAt: new Date().toISOString(),
+  };
+
+  memoryTableSnapshots.set(tableName, snapshot);
+
+  const database = await openDatabase();
+  if (database) {
+    await withStores('readwrite', async ({ table_snapshots }) => idbPut(table_snapshots, snapshot));
+  }
+
+  emitDataChange(tableName);
+};
+
+const writeMutationToLocal = async (mutation: PendingMutation) => {
+  const database = await openDatabase();
+  if (!database) {
+    memoryMutations.push(mutation);
+    updateStatus({ pendingMutations: memoryMutations.length });
+    return;
+  }
+
+  await withStores('readwrite', async ({ mutations }) => idbPut(mutations, mutation));
+  memoryMutations.push(mutation);
+  updateStatus({ pendingMutations: memoryMutations.length });
+};
+
+export const enqueueMutation = async (mutation: Omit<PendingMutation, 'id'>) => {
+  await writeMutationToLocal({ ...mutation, id: generateId() });
+};
+
+const readPendingMutationsFromLocal = async () => {
+  const database = await openDatabase();
+  if (!database) return memoryMutations;
+
+  const records = await withStores('readonly', async ({ mutations }) => idbGetAll<PendingMutation>(mutations));
+  return records ?? [];
+};
+
+const removeMutation = async (mutationId: string) => {
+  memoryMutations = memoryMutations.filter((mutation) => mutation.id !== mutationId);
+
+  const database = await openDatabase();
+  if (database) {
+    await withStores('readwrite', async ({ mutations }) => idbDelete(mutations, mutationId));
+  }
+
+  updateStatus({ pendingMutations: memoryMutations.length });
+};
+
+const updateRemoteAndLocal = async (mutation: PendingMutation) => {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+
+  const primaryKeyField = getPrimaryKeyField(mutation.tableName);
+  const { data: remote, error } = await supabase
+    .from(mutation.tableName)
+    .select('*')
+    .eq(primaryKeyField, mutation.key)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const remoteStamp = remoteUpdatedAt(remote as Record<string, unknown> | null | undefined);
+  if (remoteStamp && remoteStamp > mutation.updatedAt) {
+    updateStatus({ conflicts: status.conflicts + 1, lastError: `Conflito em ${mutation.tableName}:${mutation.key}` });
+
+    if (remote) {
+      if (mutation.tableName === 'app_state') {
+        await persistAppStateRecord({
+          key: mutation.key,
+          value: (remote as Record<string, unknown>).value,
+          updatedAt: remoteStamp,
+          pending: false,
+        });
+      } else {
+        const snapshot = await getLocalTableSnapshot(mutation.tableName);
+        const rows = (snapshot?.rows ?? []).filter((row) => String(row[primaryKeyField]) !== mutation.key);
+        rows.push(remote as Record<string, unknown>);
+        await persistTableSnapshot(mutation.tableName, rows);
+      }
+    }
+
+    return;
+  }
+
+  if (mutation.operation === 'delete') {
+    const { error: deleteError } = await supabase.from(mutation.tableName).delete().eq(primaryKeyField, mutation.key);
+    if (deleteError) throw deleteError;
+
+    if (mutation.tableName === 'app_state') {
+      await removeAppStateRecord(mutation.key);
+    } else {
+      const snapshot = await getLocalTableSnapshot(mutation.tableName);
+      const rows = (snapshot?.rows ?? []).filter((row) => String(row[primaryKeyField]) !== mutation.key);
+      await persistTableSnapshot(mutation.tableName, rows);
+    }
+    return;
+  }
+
+  const payload = mutation.payload ?? {};
+  const { error: upsertError } = await supabase.from(mutation.tableName).upsert(payload);
+  if (upsertError) throw upsertError;
+
+  if (mutation.tableName === 'app_state') {
+    await persistAppStateRecord({
+      key: mutation.key,
+      value: payload.value,
+      updatedAt: mutation.updatedAt,
+      pending: false,
+    });
+    return;
+  }
+
+  const snapshot = await getLocalTableSnapshot(mutation.tableName);
+  const rows = snapshot?.rows ?? [];
+  const nextRows = rows.filter((row) => String(row[primaryKeyField]) !== mutation.key);
+  nextRows.push(payload);
+  await persistTableSnapshot(mutation.tableName, nextRows);
+};
+
+export const flushPendingMutations = async () => {
+  if (status.isSyncing || !navigator.onLine || !supabase) {
+    return;
+  }
+
+  updateStatus({ isSyncing: true, lastError: null });
+
+  const mutations = await readPendingMutationsFromLocal();
+  memoryMutations = mutations;
+  updateStatus({ pendingMutations: memoryMutations.length });
+
+  try {
+    for (const mutation of mutations) {
+      await updateRemoteAndLocal(mutation);
+      await removeMutation(mutation.id);
+    }
+
+    updateStatus({ isSyncing: false, lastSyncAt: new Date().toISOString() });
+  } catch (error) {
+    console.error('Falha ao sincronizar alterações pendentes:', error);
+    updateStatus({ isSyncing: false, lastError: error instanceof Error ? error.message : 'Falha de sincronização' });
+  }
+};
+
+export const markLocalMutationApplied = async () => {
+  if (!status.isOnline) {
+    return;
+  }
+
+  await flushPendingMutations();
+};
+
+export const isOfflineCapable = () => true;
+
+export const emitOfflineDataChange = emitDataChange;
+
+export const setHydrationStatus = (isHydrating: boolean) => updateStatus({ isHydrating });
+
+export const setConnectivity = (isOnline: boolean) => updateStatus({ isOnline });
+
+export const getOfflineStatusEventName = () => STATUS_EVENT;
+
+export const getOfflineDataEventName = () => DATA_EVENT;

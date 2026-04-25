@@ -1,16 +1,12 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@/types/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase nao configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+}
 
-export const supabase: SupabaseClient<Database> | null = hasSupabaseConfig
-	? createClient<Database>(supabaseUrl as string, supabaseAnonKey as string, {
-			auth: {
-				persistSession: true,
-				autoRefreshToken: true,
-			},
-		})
-	: null;
+export const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;

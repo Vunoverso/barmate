@@ -4,49 +4,21 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  Home, 
-  Package, 
-  LineChart, 
-  Menu, 
-  HandCoins, 
-  Settings, 
-  LogOut, 
-  Store, 
-  Banknote, 
-  Users, 
-  QrCode, 
-  ChefHat, 
-  Lock, 
-  CreditCard, 
-  LifeBuoy, 
-  ShieldCheck,
-  Zap,
-  TrendingUp,
-  LayoutDashboard,
-  Frown,
-  Search,
-  ChevronRight,
-  MessageSquareHeart
-} from 'lucide-react';
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, Store, Banknote, Users, ClipboardCheck, QrCode, ChefHat } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { isSupabaseProvider } from '@/lib/backend-provider';
-import { migrateOldData, loadEssentialDataFromCloud, getCurrentOrgId } from '@/lib/data-access';
-import { auth, db } from '@/lib/firebase';
-import { supabase } from '@/lib/supabaseClient';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { migrateOldData, loadEssentialDataFromCloud, getCompanyDetails, saveCompanyDetails } from '@/lib/data-access';
+import { db, collection, onSnapshot, query, where } from '@/lib/supabase-firestore';
 import { isToday } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
+import { useSession, signOut } from 'next-auth/react';
+import { getOfflineStatus, subscribeOfflineStatus } from '@/lib/offline-sync';
 
 interface NavItem {
   href: string;
@@ -55,298 +27,239 @@ interface NavItem {
   badge?: number;
 }
 
+const settingsNavItem: NavItem = { href: '/settings', label: 'Configurações', icon: Settings };
+const serverOfflineStatusSnapshot = getOfflineStatus();
+
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const { toast } = useToast();
+  const pathname = usePathname() ?? '/';
+  const { status } = useSession();
+  const offlineStatus = useSyncExternalStore(subscribeOfflineStatus, getOfflineStatus, () => serverOfflineStatusSnapshot);
   const [barName, setBarName] = useState('BarMate');
-  const [barLogo, setBarLogo] = useState('');
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingKitchenCount, setPendingKitchenCount] = useState(0);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  
-  const version = "1.3.3-STABLE";
 
-  const isPublicRoute = pathname === '/' || pathname === '/planos' || pathname === '/cadastro' || pathname === '/login' || pathname === '/suporte' || pathname === '/termos';
-  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
+  const version = "1.3.2";
 
   useEffect(() => {
-    const syncBrandingFromStorage = () => {
-      setBarName(localStorage.getItem('barName') || 'BarMate');
-      setBarLogo(localStorage.getItem('barLogo') || '');
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      await loadEssentialDataFromCloud();
+      await migrateOldData();
+
+      if (cancelled) return;
+      const details = getCompanyDetails();
+      setBarName(details.barName);
     };
 
-    migrateOldData();
-    loadEssentialDataFromCloud().then(() => {
-        syncBrandingFromStorage();
-    });
+    void bootstrap();
 
-    const syncAuthState = (hasUser: boolean) => {
-      if (hasUser) {
-        localStorage.setItem('barmate_admin_session', 'true');
-        const role = localStorage.getItem('barmate_user_role') || 'owner';
-        setIsAuthenticated(true);
-        setUserRole(role);
-      } else {
-        localStorage.removeItem('barmate_admin_session');
-        setIsAuthenticated(false);
-        setUserRole(null);
-      }
+    const handleStateChange = () => {
+      const details = getCompanyDetails();
+      setBarName(details.barName);
     };
 
-    let unsubscribeAuth = () => {};
-    if (isSupabaseProvider && supabase) {
-      supabase.auth.getSession().then(({ data }) => {
-        syncAuthState(Boolean(data.session?.user));
-      });
-
-      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-        syncAuthState(Boolean(session?.user));
-      });
-
-      unsubscribeAuth = () => data.subscription.unsubscribe();
-    } else {
-      unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-        syncAuthState(Boolean(user));
-      });
-    }
-
-    const checkRole = () => {
-      const role = localStorage.getItem('barmate_user_role');
-      if (role) setUserRole(role);
-      syncBrandingFromStorage();
-    };
-
-    checkRole();
-    window.addEventListener('storage', checkRole);
-
+    window.addEventListener('barmate-app-state-changed', handleStateChange);
     return () => {
-      window.removeEventListener('storage', checkRole);
-      unsubscribeAuth();
+      cancelled = true;
+      window.removeEventListener('barmate-app-state-changed', handleStateChange);
     };
   }, []);
 
   useEffect(() => {
-    const orgId = getCurrentOrgId();
-    if (!db || !isAuthenticated || userRole === 'super_admin' || !orgId) return;
-    
-    // Ouvinte para solicitações de hóspedes filtrado por organização
-    const qRequests = query(
-      collection(db, 'guest_requests'), 
-      where('status', '==', 'pending'),
-      where('organizationId', '==', orgId)
-    );
+    if (!db) return;
+
+    const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
       setPendingRequestsCount(snapshot.size);
-    }, (error) => {
-      console.error("Firestore Permission Error (Requests):", error);
     });
 
-    // Ouvinte para pedidos na cozinha filtrado por organização
-    const qOrders = query(
-      collection(db, 'open_orders'),
-      where('organizationId', '==', orgId)
-    );
-    const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
+    const unsubscribeOrders = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
       let count = 0;
       const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
+
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const items = data.items || [];
         items.forEach((item: any) => {
           const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
           const isNotDelivered = !item.isDelivered;
-          const isRelevant = (item.addedAt ? isToday(new Date(item.addedAt)) : false) || item.forceKitchenVisible === true;
-          
-          if (isKitchen && isNotDelivered && isRelevant) {
+
+          const itemDate = item.addedAt ? new Date(item.addedAt) : null;
+          const isItemToday = itemDate ? isToday(itemDate) : false;
+          const isNewOrForced = isItemToday || item.forceKitchenVisible === true;
+
+          if (isKitchen && isNotDelivered && isNewOrForced) {
             count++;
           }
         });
       });
       setPendingKitchenCount(count);
-    }, (error) => {
-      console.error("Firestore Permission Error (Orders):", error);
     });
 
-    return () => { unsubscribeRequests(); unsubscribeOrders(); };
-  }, [isAuthenticated, userRole]);
+    return () => {
+      unsubscribeRequests();
+      unsubscribeOrders();
+    };
+  }, []);
+
+  const isAuthenticated = status === 'authenticated';
 
   const handleLogout = async () => {
-    try {
-      if (isSupabaseProvider && supabase) {
-        await supabase.auth.signOut();
-      } else {
-        await signOut(auth);
-      }
-    } catch {
-      // Continua limpeza local mesmo se a chamada remota falhar.
-    }
-    localStorage.removeItem('barmate_admin_session');
-    localStorage.removeItem('barmate_user_role');
-    localStorage.removeItem('barmate_current_org_id');
-    setIsAuthenticated(false);
-    setUserRole(null);
-    toast({ title: "Sessão Encerrada" });
+    await signOut({ callbackUrl: '/login' });
   };
-  
-  const barNavItems: NavItem[] = [
-    { href: '/dashboard', label: 'Dashboard', icon: Home },
-    { href: '/cash-register', label: 'Caixa Diário', icon: Banknote },
+
+  const mainNavItems: NavItem[] = [
+    { href: '/dashboard', label: 'Início', icon: Home },
+    { href: '/cash-register', label: 'Caixa', icon: Banknote },
     { href: '/counter-sale', label: 'Venda Balcão', icon: Store },
-    { href: '/orders', label: 'Gerenciar Mesas', icon: HandCoins, badge: pendingRequestsCount },
-    { href: '/pedidos', label: 'Cozinha', icon: ChefHat, badge: pendingKitchenCount },
+    { href: '/orders', label: 'Comandas', icon: HandCoins, badge: pendingRequestsCount },
+    { href: '/pedidos', label: 'Pedidos', icon: ChefHat, badge: pendingKitchenCount },
     { href: '/qrcode', label: 'QR Code Geral', icon: QrCode },
-    { href: '/financial', label: 'Financeiro', icon: LineChart },
+    { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
     { href: '/products', label: 'Produtos', icon: Package },
     { href: '/clients', label: 'Clientes', icon: Users },
-    { href: '/billing', label: 'Assinatura', icon: CreditCard },
-    { href: '/suporte', label: 'Suporte', icon: LifeBuoy },
-    { href: '/settings', label: 'Configurações', icon: Settings },
+    { href: '/financial', label: 'Financeiro', icon: LineChart },
   ];
 
-  const adminNavItems: NavItem[] = [
-    { href: '/admin', label: 'Visão Geral', icon: LayoutDashboard },
-    { href: '/admin/accounts', label: 'Organizações', icon: Users },
-    { href: '/admin/revenue', label: 'Receita SaaS', icon: TrendingUp },
-    { href: '/admin/testimonials', label: 'Depoimentos', icon: MessageSquareHeart },
-    { href: '/admin/cancelamentos', label: 'Churn', icon: Frown },
-    { href: '/admin/tickets', label: 'Suporte Global', icon: LifeBuoy },
-    { href: '/admin/settings', label: 'Config. SaaS', icon: Settings },
-  ];
+  const allNavItems = [...mainNavItems, settingsNavItem];
+  const publicRoutes = ['/', '/planos', '/login', '/cadastro', '/sobre'];
+  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
+  const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-  const currentNavItems = userRole === 'super_admin' ? adminNavItems : barNavItems;
-
-  if (isAuthenticated === null && !isGuestView && !isPublicRoute) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      );
+  // While checking session
+  if (status === 'loading' && !isGuestView && !isPublicRoute) {
+      return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
   }
 
+  // Public marketing and guest views
   if (isGuestView || isPublicRoute) return <main className="flex flex-col min-h-screen bg-background">{children}</main>;
 
-  if (!isAuthenticated) {
+  // Protected View - Login Required
+    if (!isAuthenticated) {
       return (
           <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-              <Card className="w-full max-w-md shadow-2xl border-t-4 border-t-primary">
+          <Card className="w-full max-w-md shadow-2xl border-t-4 border-t-primary bg-card">
                   <CardHeader className="text-center">
-                      <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit mb-4"><Lock className="h-10 w-10 text-primary" /></div>
-                      <CardTitle className="text-2xl font-black uppercase">Portal de Acesso</CardTitle>
-                      <CardDescription>Faça login para acessar sua conta.</CardDescription>
+              <CardTitle className="text-2xl font-black uppercase">Acesso Necessario</CardTitle>
+              <CardDescription>Entre com sua conta para acessar o painel operacional.</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                      <Link href="/login" className="w-full"><Button className="w-full h-14 text-lg font-black uppercase">Fazer Login</Button></Link>
-                      <Link href="/" className="block text-center text-sm text-muted-foreground hover:underline">Voltar para a Home</Link>
-                  </CardContent>
+            <CardContent className="space-y-3">
+            <Button asChild className="w-full">
+              <Link href="/login">Ir para login</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/cadastro">Criar conta e iniciar trial</Link>
+            </Button>
+            </CardContent>
               </Card>
           </div>
       );
   }
 
+  const SidebarNav = ({ items, className }: { items: NavItem[], className?: string }) => (
+    <nav className={`flex flex-col gap-1 ${className}`}>
+      {items.map((item) => (
+        <Button key={item.href} asChild variant={pathname === item.href ? 'secondary' : 'ghost'} className="justify-start">
+          <Link href={item.href} className="flex items-center gap-2 rounded-lg px-3 py-1 text-primary transition-all hover:text-primary">
+            <item.icon className="h-4 w-4" />
+            <span className="flex-1 text-left">{item.label}</span>
+            {item.badge && item.badge > 0 ? (
+              <Badge className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white p-0 text-[10px] font-bold border-none animate-pulse">
+                {item.badge}
+              </Badge>
+            ) : null}
+          </Link>
+        </Button>
+      ))}
+    </nav>
+  );
+
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[180px_1fr] lg:grid-cols-[200px_1fr]">
-      <div className={`hidden border-r md:block ${userRole === 'super_admin' ? 'bg-zinc-950 border-orange-950' : 'bg-muted/40'}`}>
+    <div className="grid min-h-screen w-full md:grid-cols-[170px_1fr] lg:grid-cols-[190px_1fr]">
+      <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-            <Link href={userRole === 'super_admin' ? '/admin' : '/dashboard'} className="flex items-center gap-2 font-black tracking-tighter text-lg uppercase">
-              <Zap className={`h-5 w-5 fill-current ${userRole === 'super_admin' ? 'text-orange-500' : 'text-primary'}`} />
-              <span className={userRole === 'super_admin' ? 'text-white' : ''}>{userRole === 'super_admin' ? 'Admin SaaS' : barName}</span>
+            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+              <Package className="h-6 w-6 text-primary" />
+              <span>{barName}</span>
             </Link>
           </div>
-          <div className="flex-1 overflow-auto">
-            <ScrollArea className="h-full">
-              <nav className="flex flex-col gap-1 px-2 text-sm font-medium lg:px-4 py-4">
-                {currentNavItems.map((item) => (
-                  <Button key={item.href} asChild variant={pathname === item.href ? 'secondary' : 'ghost'} className={`justify-start h-10 px-3 ${userRole === 'super_admin' ? (pathname === item.href ? 'bg-orange-600 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-900') : 'text-foreground hover:text-primary'}`}>
-                    <Link href={item.href} className="flex items-center gap-3 rounded-lg transition-all">
-                      <item.icon className={`h-4 w-4 ${pathname === item.href ? (userRole === 'super_admin' ? 'text-white' : 'text-primary') : ''}`} />
-                      <span className="flex-1 text-left font-bold uppercase text-[10px] tracking-wide">{item.label}</span>
-                      {item.badge && item.badge > 0 ? (
-                        <Badge className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white p-0 text-[10px] font-bold border-none animate-pulse">{item.badge}</Badge>
-                      ) : null}
-                    </Link>
-                  </Button>
-                ))}
-              </nav>
-            </ScrollArea>
+          <div className="flex-1">
+            <SidebarNav items={allNavItems} className="px-2 text-sm font-medium lg:px-4" />
           </div>
-          <div className="mt-auto p-4 border-t bg-muted/20">
-            <div className="flex flex-col gap-1">
-              <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest opacity-40 italic">BarMate v{version}</span>
-              <span className={`text-[8px] font-bold uppercase tracking-[0.2em] ${userRole === 'super_admin' ? 'text-orange-500' : 'text-primary'}`}>
-                {userRole === 'super_admin' ? 'Infraestrutura SaaS' : 'Licença Ativa'}
-              </span>
-            </div>
-          </div>
+          <div className="mt-auto p-4"><span className="text-xs text-muted-foreground">{version}</span></div>
         </div>
       </div>
-      
       <div className="flex flex-col">
-        <header className={`flex h-14 items-center gap-4 border-b px-4 lg:h-[60px] lg:px-6 ${userRole === 'super_admin' ? 'bg-zinc-950 border-orange-950' : 'bg-muted/40'}`}>
+        <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="shrink-0 md:hidden h-9 w-9"><Menu className="h-5 w-5" /><span className="sr-only">Menu</span></Button>
+              <Button variant="outline" size="icon" className="shrink-0 md:hidden h-9 w-9">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Menu</span>
+              </Button>
             </SheetTrigger>
-            <SheetContent side="left" className={`flex flex-col p-0 w-[250px] ${userRole === 'super_admin' ? 'bg-zinc-950 text-white' : ''}`}>
-              <SheetHeader className="p-6 border-b text-left">
-                <SheetTitle className="font-black uppercase tracking-tighter flex items-center gap-2">
-                  <Zap className={`h-5 w-5 fill-current ${userRole === 'super_admin' ? 'text-orange-500' : 'text-primary'}`} /> 
-                  {userRole === 'super_admin' ? 'Admin SaaS' : barName}
-                </SheetTitle>
-              </SheetHeader>
-              <ScrollArea className="flex-1 px-4 py-6">
-                <nav className="grid gap-1">
-                  {currentNavItems.map((item) => (
-                    <Link key={item.href} href={item.href} className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 font-bold uppercase text-xs ${pathname === item.href ? (userRole === 'super_admin' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/40' : 'bg-primary text-white shadow-lg shadow-primary/20') : (userRole === 'super_admin' ? 'text-zinc-400 hover:bg-zinc-900' : 'text-muted-foreground hover:bg-muted')}`}>
-                      <div className="flex items-center gap-3"><item.icon className="h-4 w-4" />{item.label}</div>
-                      {item.badge && item.badge > 0 && (<Badge className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white border-none animate-pulse">{item.badge}</Badge>)}
-                    </Link>
-                  ))}
-                </nav>
-              </ScrollArea>
+            <SheetContent side="left" className="flex flex-col">
+              <SheetHeader><SheetTitle className="sr-only">Menu</SheetTitle></SheetHeader>
+              <nav className="grid gap-1 text-lg font-medium">
+                <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold mb-4">
+                  <Package className="h-6 w-6 text-primary" />
+                  <span>{barName}</span>
+                </Link>
+                {allNavItems.map((item) => (
+                  <Link key={item.href} href={item.href} className={`mx-[-0.65rem] flex items-center justify-between gap-3 rounded-xl px-3 py-1 ${pathname === item.href ? 'bg-muted text-primary' : 'text-muted-foreground'}`}>
+                    <div className="flex items-center gap-3">
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                    </div>
+                    {item.badge && item.badge > 0 && (
+                        <Badge className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white border-none animate-pulse">
+                            {item.badge}
+                        </Badge>
+                    )}
+                  </Link>
+                ))}
+              </nav>
             </SheetContent>
           </Sheet>
-          
-          <div className="w-full flex-1 flex items-center gap-4">
-             <Badge variant="outline" className={`hidden sm:flex font-black uppercase text-[10px] tracking-widest px-3 ${userRole === 'super_admin' ? 'border-orange-900 text-orange-500' : 'border-primary/20 text-primary'}`}>
-                {userRole === 'super_admin' ? 'Painel de Controle SaaS' : 'Operação do Bar'}
-             </Badge>
-          </div>
-          
-          <div className="flex items-center gap-3">
+          <div className="w-full flex-1"></div>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className={`hidden md:inline-flex border px-3 py-1 text-xs font-semibold ${offlineStatus.isOnline ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600' : 'border-amber-500/40 bg-amber-500/10 text-amber-600'}`}
+            >
+              {offlineStatus.isHydrating
+                ? 'Carregando dados...'
+                : offlineStatus.isSyncing
+                  ? `Sincronizando ${offlineStatus.pendingMutations}`
+                  : offlineStatus.isOnline
+                    ? offlineStatus.pendingMutations > 0
+                      ? `Online · ${offlineStatus.pendingMutations} pendências`
+                      : 'Online'
+                    : `Offline · ${offlineStatus.pendingMutations} pendências`}
+            </Badge>
             <ThemeToggleButton />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="icon" className={`rounded-full h-10 w-10 overflow-hidden ring-2 transition-all ${userRole === 'super_admin' ? 'ring-orange-500/20 hover:ring-orange-500/40' : 'ring-primary/10 hover:ring-primary/30'}`}>
+                <Button variant="secondary" size="icon" className="rounded-full h-9 w-9 md:h-10 md:w-10">
                   <Avatar className="h-full w-full">
-                    <AvatarImage
-                      src={userRole === 'super_admin' ? 'https://picsum.photos/seed/owner/40/40' : (barLogo || undefined)}
-                      alt={userRole === 'super_admin' ? 'Avatar' : 'Logo do estabelecimento'}
-                      className={userRole === 'super_admin' ? 'object-cover' : 'object-contain bg-white p-1'}
-                    />
-                    <AvatarFallback className={`font-black uppercase text-white ${userRole === 'super_admin' ? 'bg-orange-600' : 'bg-primary'}`}>{userRole === 'super_admin' ? 'AD' : barName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    <AvatarImage src="https://placehold.co/40x40.png" alt="Avatar" />
+                    <AvatarFallback>AD</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="font-black uppercase text-xs tracking-tighter">
-                  {userRole === 'super_admin' ? 'Conta Administrador' : 'Meu Perfil'}
-                </DropdownMenuLabel>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Minha Conta (Admin)</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="font-bold text-xs uppercase" asChild><Link href={userRole === 'super_admin' ? '/admin/settings' : '/billing'}><CreditCard className="mr-2 h-4 w-4" /> {userRole === 'super_admin' ? 'Configurações' : 'Assinatura'}</Link></DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive font-bold text-xs uppercase cursor-pointer">
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" /> Sair do Sistema
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </header>
-        
-        <main className={`flex flex-1 flex-col gap-4 p-4 lg:gap-8 lg:p-8 overflow-auto ${userRole === 'super_admin' ? 'bg-zinc-950 text-white' : 'bg-muted/10'}`}>
-          {children}
-        </main>
+        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-auto">{children}</main>
       </div>
     </div>
   );

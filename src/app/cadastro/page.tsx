@@ -1,204 +1,120 @@
-
 "use client";
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Zap, ChevronRight, CheckCircle2, Store, User, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { isSupabaseProvider } from '@/lib/backend-provider';
-import { auth, db } from '@/lib/firebase';
-import { getFirebaseAuthErrorMessage } from '@/lib/firebase-auth-errors';
-import { getSupabaseAuthErrorMessage } from '@/lib/supabase-auth-errors';
-import { supabase } from '@/lib/supabaseClient';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 
 export default function CadastroPage() {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({ name: '', email: '', barName: '', password: '' });
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
 
-  const handleNext = async () => {
-    if (step === 1 && (!formData.name || !formData.email)) {
-      toast({ title: "Preencha seus dados", variant: "destructive" });
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [tradeName, setTradeName] = useState('');
+  const [document, setDocument] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+        tradeName,
+        legalName: tradeName,
+        document,
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload?.message || 'Nao foi possivel criar a conta.');
+      setIsLoading(false);
       return;
     }
-    if (step === 2) {
-      if (!formData.barName || !formData.password) {
-        toast({ title: "Preencha os dados do bar", variant: "destructive" });
-        return;
-      }
 
-      setIsLoading(true);
-      try {
-        const normalizedEmail = formData.email.trim().toLowerCase();
+    const loginResult = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+      callbackUrl: '/dashboard',
+    });
 
-        if (isSupabaseProvider && supabase) {
-          const registerResponse = await fetch('/api/auth/register-organization', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              name: formData.name,
-              email: normalizedEmail,
-              barName: formData.barName,
-              password: formData.password,
-            }),
-          });
+    setIsLoading(false);
 
-          const registerPayload = await registerResponse.json();
-          if (!registerResponse.ok) {
-            throw new Error(registerPayload.error || 'Nao foi possivel criar a conta.');
-          }
-
-          const signInResult = await supabase.auth.signInWithPassword({
-            email: normalizedEmail,
-            password: formData.password,
-          });
-
-          if (signInResult.error) {
-            throw signInResult.error;
-          }
-
-          localStorage.setItem('barmate_admin_session', 'true');
-          localStorage.setItem('barmate_current_org_id', registerPayload.orgId);
-          localStorage.setItem('barName', registerPayload.barName || formData.barName.trim());
-          localStorage.setItem('barmate_user_role', 'owner');
-
-          setStep(step + 1);
-          return;
-        }
-
-        const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, formData.password);
-
-        const orgId = `org_${cred.user.uid.slice(0, 12)}`;
-        const now = new Date().toISOString();
-        const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-        await setDoc(doc(db, 'organizations', orgId), {
-          id: orgId,
-          tradeName: formData.barName.trim(),
-          ownerId: cred.user.uid,
-          ownerName: formData.name.trim(),
-          ownerEmail: normalizedEmail,
-          planId: 'trial',
-          status: 'trial',
-          createdAt: now,
-          updatedAt: now,
-          trialEndsAt,
-        });
-
-        localStorage.setItem('barmate_admin_session', 'true');
-        localStorage.setItem('barmate_current_org_id', orgId);
-        localStorage.setItem('barName', formData.barName.trim());
-        localStorage.setItem('barmate_user_role', 'owner');
-      } catch (err: any) {
-        toast({
-          title: 'Erro no cadastro',
-          description: isSupabaseProvider
-            ? getSupabaseAuthErrorMessage(err, 'Nao foi possivel finalizar o cadastro.')
-            : getFirebaseAuthErrorMessage(err, 'Nao foi possivel finalizar o cadastro.'),
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-        return;
-      } finally {
-        setIsLoading(false);
-      }
+    if (loginResult?.error) {
+      router.push('/login');
+      return;
     }
-    setStep(step + 1);
+
+    router.push('/dashboard');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-lg space-y-8">
-        <div className="text-center space-y-2">
-          <Link href="/" className="flex items-center justify-center gap-2 font-black text-2xl text-primary mb-8">
-            <Zap className="fill-primary" />
-            <span>BARMATE</span>
+    <main className="flex min-h-screen items-center justify-center bg-[#05070A] p-6 text-white">
+      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0A1016] p-8">
+        <h1 className="text-3xl font-black">Criar conta e iniciar teste de 7 dias</h1>
+        <p className="mt-2 text-white/65">Primeiro passo para ativar sua organizacao no BarMate SaaS.</p>
+
+        <form className="mt-8 grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
+          <input
+            className="rounded-lg border border-white/15 bg-black/30 px-4 py-3 outline-none"
+            placeholder="Nome completo"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+          <input
+            className="rounded-lg border border-white/15 bg-black/30 px-4 py-3 outline-none"
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+          <input
+            className="rounded-lg border border-white/15 bg-black/30 px-4 py-3 outline-none"
+            placeholder="Nome do estabelecimento"
+            value={tradeName}
+            onChange={(event) => setTradeName(event.target.value)}
+            required
+          />
+          <input
+            className="rounded-lg border border-white/15 bg-black/30 px-4 py-3 outline-none"
+            placeholder="Documento (CNPJ/CPF)"
+            value={document}
+            onChange={(event) => setDocument(event.target.value)}
+          />
+          <input
+            className="rounded-lg border border-white/15 bg-black/30 px-4 py-3 outline-none md:col-span-2"
+            placeholder="Crie uma senha"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            minLength={6}
+            required
+          />
+          {error ? <p className="text-sm text-red-400 md:col-span-2">{error}</p> : null}
+          <button type="submit" disabled={isLoading} className="rounded-lg bg-[#22d3c5] px-4 py-3 font-bold text-[#062621] md:col-span-2 disabled:opacity-60">
+            {isLoading ? 'Criando conta...' : 'Ativar teste gratis'}
+          </button>
+        </form>
+
+        <p className="mt-6 text-sm text-white/60">
+          Ja possui acesso?{' '}
+          <Link href="/login" className="font-semibold text-[#22d3c5]">
+            Entrar
           </Link>
-          <div className="flex justify-center gap-4 mb-8">
-            <div className={`h-2 w-16 rounded-full ${step >= 1 ? 'bg-primary' : 'bg-muted'}`} />
-            <div className={`h-2 w-16 rounded-full ${step >= 2 ? 'bg-primary' : 'bg-muted'}`} />
-            <div className={`h-2 w-16 rounded-full ${step >= 3 ? 'bg-primary' : 'bg-muted'}`} />
-          </div>
-        </div>
-
-        <Card className="shadow-2xl border-t-4 border-primary">
-          {step === 1 && (
-            <>
-              <CardHeader>
-                <CardTitle className="text-2xl font-black uppercase flex items-center gap-2">
-                  <User className="h-6 w-6 text-primary" /> Passo 1: Sobre você
-                </CardTitle>
-                <CardDescription>Comece criando seu perfil de administrador.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Seu Nome Completo</Label>
-                  <Input placeholder="Ex: João da Silva" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email Profissional</Label>
-                  <Input type="email" placeholder="joao@seu-bar.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                </div>
-                <Button onClick={handleNext} className="w-full h-12 text-lg font-bold">Continuar <ChevronRight className="ml-2 h-5 w-5" /></Button>
-              </CardContent>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <CardHeader>
-                <CardTitle className="text-2xl font-black uppercase flex items-center gap-2">
-                  <Store className="h-6 w-6 text-primary" /> Passo 2: O Bar
-                </CardTitle>
-                <CardDescription>Qual o nome do estabelecimento que vamos gerenciar?</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Nome do Estabelecimento</Label>
-                  <Input placeholder="Ex: Boteco do Canal" value={formData.barName} onChange={e => setFormData({...formData, barName: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Crie uma Senha Forte</Label>
-                  <Input type="password" placeholder="Mínimo 8 caracteres" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                </div>
-                <div className="flex gap-4">
-                  <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-12">Voltar</Button>
-                  <Button onClick={handleNext} disabled={isLoading} className="flex-1 h-12 font-bold uppercase">
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Finalizar Cadastro
-                  </Button>
-                </div>
-              </CardContent>
-            </>
-          )}
-
-          {step === 3 && (
-            <CardContent className="py-12 text-center space-y-6">
-              <div className="mx-auto bg-green-100 p-4 rounded-full w-fit mb-4">
-                <CheckCircle2 className="h-16 w-16 text-green-600" />
-              </div>
-              <h2 className="text-3xl font-black uppercase">Tudo pronto, {formData.name.split(' ')[0]}!</h2>
-              <p className="text-muted-foreground">Seu período de teste grátis de 7 dias começou agora. Vamos configurar seus primeiros produtos?</p>
-              <Link href="/dashboard" className="block">
-                <Button size="lg" className="w-full h-16 text-xl font-black uppercase shadow-xl shadow-primary/20">Acessar Meu Bar</Button>
-              </Link>
-            </CardContent>
-          )}
-        </Card>
-
-        <p className="text-center text-sm text-muted-foreground">
-          Já tem uma conta? <Link href="/login" className="text-primary font-bold underline">Faça login aqui</Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

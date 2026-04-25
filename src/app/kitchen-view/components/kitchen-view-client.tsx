@@ -1,95 +1,98 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, updateDoc, query, where } from 'firebase/firestore';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { db, collection, onSnapshot, doc, updateDoc } from '@/lib/supabase-firestore';
 import type { ActiveOrder, OrderItem } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChefHat, CheckCircle2, Clock, BellRing, Utensils } from 'lucide-react';
+import { ChefHat, CheckCircle2, Clock, BellRing } from 'lucide-react';
 import { formatDistanceToNow, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
-import { getCurrentOrgId } from '@/lib/data-access';
+import { Separator } from '@/components/ui/separator';
+import { toValidDate } from '@/lib/utils';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
+
+const playNotificationSound = () => {
+    try {
+        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(440, context.currentTime);
+        gain.gain.setValueAtTime(0.1, context.currentTime);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.3);
+    } catch (e) {}
+};
+
+const isPendingKitchenItem = (item: OrderItem) => {
+    const addedAt = toValidDate(item.addedAt);
+    const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
+    const isNotDelivered = !item.isDelivered;
+    const isNewOrForced = (addedAt ? isToday(addedAt) : false) || item.forceKitchenVisible === true;
+    return isKitchen && isNotDelivered && isNewOrForced;
+};
+
+const countPendingKitchenItems = (orders: ActiveOrder[]) => orders.reduce(
+    (total, order) => total + order.items.filter(isPendingKitchenItem).length,
+    0
+);
 
 export default function KitchenViewClient() {
     const [orders, setOrders] = useState<ActiveOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const ordersRef = useRef<ActiveOrder[]>([]);
     const { toast } = useToast();
-    const orgId = getCurrentOrgId();
-
-    const playNotificationSound = () => {
-        try {
-            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = context.createOscillator();
-            const gain = context.createGain();
-            oscillator.type = 'triangle';
-            oscillator.frequency.setValueAtTime(440, context.currentTime);
-            gain.gain.setValueAtTime(0.1, context.currentTime);
-            oscillator.connect(gain);
-            gain.connect(context.destination);
-            oscillator.start();
-            oscillator.stop(context.currentTime + 0.3);
-        } catch (e) {}
-    };
 
     useEffect(() => {
-        if (!db || !orgId) return;
+        if (!db) {
+            setIsLoading(false);
+            return;
+        }
+
         let isFirstLoad = true;
-        // Filtro por organizationId para evitar ver pedidos de outros bares
-        const q = query(collection(db, 'open_orders'), where('organizationId', '==', orgId));
-        
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt)
-            } as any));
-            
+        const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
+            const data = snapshot.docs.map((doc) => {
+                const payload = doc.data();
+                return {
+                    id: doc.id,
+                    ...payload,
+                    createdAt: toValidDate(payload.createdAt) ?? new Date(),
+                } as ActiveOrder;
+            });
+
             if (!isFirstLoad) {
-                const currentKitchenCount = data.reduce((acc, o) => acc + o.items.filter((i: any) => 
-                    KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered && (isToday(new Date(i.addedAt)) || i.forceKitchenVisible)
-                ).length, 0);
-                const prevKitchenCount = orders.reduce((acc, o) => acc + o.items.filter((i: any) => 
-                    KITCHEN_CATEGORIES.includes(i.categoryId) && !i.isDelivered && (isToday(new Date(i.addedAt)) || i.forceKitchenVisible)
-                ).length, 0);
-                
+                const currentKitchenCount = countPendingKitchenItems(data);
+                const prevKitchenCount = countPendingKitchenItems(ordersRef.current);
+
                 if (currentKitchenCount > prevKitchenCount) {
                     playNotificationSound();
                     toast({ title: "NOVO PEDIDO!", description: "Um novo item chegou para preparo.", action: <BellRing className="h-4 w-4 text-primary" /> });
                 }
             }
 
+            ordersRef.current = data;
             setOrders(data);
             setIsLoading(false);
             isFirstLoad = false;
-        }, async (err) => {
-            const permissionError = new FirestorePermissionError({
-                path: 'open_orders',
-                operation: 'list',
-            } satisfies SecurityRuleContext);
-            errorEmitter.emit('permission-error', permissionError);
+        }, () => {
+            setIsLoading(false);
         });
         return () => unsubscribe();
-    }, [orgId, orders, toast]);
+    }, [toast]);
 
     const groupedKitchenOrders = useMemo(() => {
         const groups: Record<string, { id: string, orderName: string, createdAt: Date, items: OrderItem[] }> = {};
-        
+
         orders.forEach(order => {
-            const pendingItems = order.items.filter(item => {
-                const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
-                const isNotDelivered = !item.isDelivered;
-                const isNewOrForced = isToday(new Date(item.addedAt || 0)) || item.forceKitchenVisible === true;
-                return isKitchen && isNotDelivered && isNewOrForced;
-            });
-            
+            const pendingItems = order.items.filter(isPendingKitchenItem);
+
             if (pendingItems.length > 0) {
                 groups[order.id] = {
                     id: order.id,
@@ -99,34 +102,42 @@ export default function KitchenViewClient() {
                 };
             }
         });
-        
+
         return Object.values(groups).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     }, [orders]);
 
-    const handleUpdateStatus = async (orderId: string, lineItemId: string, updates: Partial<OrderItem>) => {
+    const handleMarkAsDelivered = async (orderId: string, lineItemId: string) => {
         if (!db) return;
         const order = orders.find(o => o.id === orderId);
         if (!order) return;
 
-        const updatedItems = order.items.map(item => 
-            item.lineItemId === lineItemId ? { ...item, ...updates } : item
+        const updatedItems = order.items.map(item =>
+            item.lineItemId === lineItemId ? { ...item, isDelivered: true, isPreparing: false, forceKitchenVisible: false } : item
         );
 
-        const docRef = doc(db, 'open_orders', orderId);
-        const data = { 
-            items: updatedItems,
-            updatedAt: new Date().toISOString()
-        };
-
-        updateDoc(docRef, data)
-            .catch(async (err) => {
-                const permissionError = new FirestorePermissionError({
-                    path: docRef.path,
-                    operation: 'update',
-                    requestResourceData: data,
-                } satisfies SecurityRuleContext);
-                errorEmitter.emit('permission-error', permissionError);
+        try {
+            await updateDoc(doc(db, 'open_orders', orderId), {
+                items: updatedItems,
+                updatedAt: new Date().toISOString()
             });
+        } catch (err) {}
+    };
+
+    const handleTogglePreparing = async (orderId: string, lineItemId: string) => {
+        if (!db) return;
+        const order = orders.find(o => o.id === orderId);
+        if (!order) return;
+
+        const updatedItems = order.items.map(item =>
+            item.lineItemId === lineItemId ? { ...item, isPreparing: !item.isPreparing } : item
+        );
+
+        try {
+            await updateDoc(doc(db, 'open_orders', orderId), {
+                items: updatedItems,
+                updatedAt: new Date().toISOString()
+            });
+        } catch (err) {}
     };
 
     if (isLoading) {
@@ -175,34 +186,24 @@ export default function KitchenViewClient() {
                                             <div className="text-2xl font-black text-white flex items-start gap-3 min-w-0">
                                                 <span className="text-primary">{item.quantity}x</span>
                                                 <div className="min-w-0">
-                                                    <span className={item.isReady ? "text-blue-400 line-through" : "uppercase leading-tight truncate block"}>{item.name}</span>
+                                                    <span className="uppercase leading-tight truncate block">{item.name}</span>
                                                     {item.forceKitchenVisible && (
                                                         <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Manual</span>
                                                     )}
                                                 </div>
                                             </div>
                                             <div className="flex gap-2 shrink-0">
-                                                <Button 
-                                                    size="icon" 
+                                                <Button
+                                                    size="icon"
                                                     className={`h-12 w-12 rounded-xl transition-colors ${item.isPreparing ? 'bg-orange-500 hover:bg-orange-600' : 'bg-white/5 hover:bg-white/20'} text-white`}
-                                                    onClick={() => handleUpdateStatus(group.id, item.lineItemId!, { isPreparing: !item.isPreparing, isReady: false })}
-                                                    title="Marcar em Preparo"
+                                                    onClick={() => handleTogglePreparing(group.id, item.lineItemId!)}
                                                 >
                                                     <Clock className="h-6 w-6" />
                                                 </Button>
-                                                <Button 
-                                                    size="icon" 
-                                                    className={`h-12 w-12 rounded-xl transition-colors ${item.isReady ? 'bg-blue-600 hover:bg-blue-700' : 'bg-white/5 hover:bg-white/20'} text-white`}
-                                                    onClick={() => handleUpdateStatus(group.id, item.lineItemId!, { isReady: !item.isReady, isPreparing: false })}
-                                                    title="Pedido Pronto"
-                                                >
-                                                    <Utensils className="h-6 w-6" />
-                                                </Button>
-                                                <Button 
-                                                    size="icon" 
+                                                <Button
+                                                    size="icon"
                                                     className="h-12 w-12 rounded-xl bg-white/10 hover:bg-green-600 text-white transition-colors"
-                                                    onClick={() => handleUpdateStatus(group.id, item.lineItemId!, { isDelivered: true, isPreparing: false, isReady: false, forceKitchenVisible: false })}
-                                                    title="Entregar ao Cliente"
+                                                    onClick={() => handleMarkAsDelivered(group.id, item.lineItemId!)}
                                                 >
                                                     <CheckCircle2 className="h-6 w-6" />
                                                 </Button>
@@ -213,20 +214,15 @@ export default function KitchenViewClient() {
                                                 Em Produção
                                             </Badge>
                                         )}
-                                        {item.isReady && (
-                                            <Badge variant="outline" className="w-fit text-[9px] font-black text-blue-400 border-blue-500/30 bg-blue-500/5 uppercase tracking-widest animate-bounce ml-10">
-                                                PRONTO NA BANCADA
-                                            </Badge>
-                                        )}
                                     </div>
                                 ))}
                             </CardContent>
                             <CardFooter className="pt-0 pb-4">
-                                <Button 
+                                <Button
                                     className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg h-14 rounded-xl"
                                     onClick={async () => {
                                         for(const item of group.items) {
-                                            await handleUpdateStatus(group.id, item.lineItemId!, { isDelivered: true, isPreparing: false, isReady: false });
+                                            await handleMarkAsDelivered(group.id, item.lineItemId!);
                                         }
                                     }}
                                 >

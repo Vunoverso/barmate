@@ -1,21 +1,17 @@
+import Stripe from 'stripe';
 
-/**
- * @fileOverview Placeholder para integração com Stripe.
- * Este arquivo será expandido assim que as chaves de API forem configuradas.
- */
+let stripeClient: Stripe | null = null;
 
-export const STRIPE_PLANS = {
-  ESSENTIAL: 'price_essential_id',
-  PRO: 'price_pro_id',
-};
+export function getStripeClient() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return null;
+  }
 
-export async function createCheckoutSession(orgId: string, planId: string) {
-  // TODO: Implementar chamada para Stripe API via Server Action
-  console.log(`Iniciando checkout para Org: ${orgId}, Plano: ${planId}`);
-  return { url: '/billing' }; // Redirecionamento temporário
-}
+  if (!stripeClient) {
+    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-03-25.dahlia',
+    });
+  }
 
-export async function getSubscriptionStatus(orgId: string) {
-  // TODO: Consultar status real no Stripe/Firestore
-  return { status: 'active', plan: 'Pro' };
+  return stripeClient;
 }

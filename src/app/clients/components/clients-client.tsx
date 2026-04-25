@@ -54,6 +54,7 @@ import { Badge } from '@/components/ui/badge';
 import PaymentDialog from '@/app/orders/components/payment-dialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toValidDate } from '@/lib/utils';
 
 const clientSchema = z.object({
   name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
@@ -122,13 +123,19 @@ export default function ClientsClient() {
   }, [editingClient, isDialogOpen, form]);
 
   const handleSaveClient = (values: ClientFormData) => {
+    const normalizedValues = {
+      name: values.name,
+      phone: values.phone || null,
+      notes: values.notes || null,
+    };
+
     if (editingClient) {
-      const updatedClient = { ...editingClient, ...values };
+      const updatedClient: Client = { ...editingClient, ...normalizedValues };
       const updatedClients = clients.map(c => c.id === editingClient.id ? updatedClient : c);
       saveClients(updatedClients);
       toast({ title: "Cliente Atualizado", description: `Os dados de ${values.name} foram atualizados.` });
     } else {
-      const newClient: Client = { id: `client-${Date.now()}`, debtAmount: 0, ...values };
+      const newClient: Client = { id: `client-${Date.now()}`, debtAmount: 0, ...normalizedValues };
       const updatedClients = [...clients, newClient];
       saveClients(updatedClients);
       toast({ title: "Cliente Adicionado", description: `${values.name} foi adicionado à sua lista de clientes.` });
@@ -404,7 +411,7 @@ interface DebtDetailsDialogProps {
 function DebtDetailsDialog({ isOpen, onOpenChange, client, onSettleDebt }: DebtDetailsDialogProps) {
   const archivedOrders = useMemo(() => {
     return getArchivedOrders().filter(order => order.clientId === client.id)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => (toValidDate(b.createdAt)?.getTime() ?? 0) - (toValidDate(a.createdAt)?.getTime() ?? 0));
   }, [client.id]);
 
   return (
@@ -427,7 +434,7 @@ function DebtDetailsDialog({ isOpen, onOpenChange, client, onSettleDebt }: DebtD
                       <span>{formatCurrency(order.items.reduce((sum, item) => sum + item.price * item.quantity, 0))}</span>
                     </CardTitle>
                     <CardDescription>
-                      Arquivada em: {format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      Arquivada em: {toValidDate(order.createdAt) ? format(toValidDate(order.createdAt)!, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Data indisponível'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-4 pt-0 text-xs">

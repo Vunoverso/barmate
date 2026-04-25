@@ -1,95 +1,14 @@
 
 import type { LucideIcon } from 'lucide-react';
 
-// --- Entidades de Plataforma (SaaS) ---
-
-export interface Organization {
-  id: string;
-  legalName?: string;
-  tradeName: string;
-  document?: string;
-  status: 'active' | 'suspended' | 'trial' | 'past_due';
-  ownerId: string;
-  planId: 'trial' | 'essential' | 'pro' | 'enterprise';
-  stripeCustomerId?: string;
-  createdAt: string;
-  updatedAt: string;
-  settings?: {
-    barLogo?: string;
-    barLogoScale?: number;
-    barAddress?: string;
-    barCnpj?: string;
-  };
-}
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  status: 'active' | 'inactive';
-  createdAt: string;
-}
-
-export interface Membership {
-  id: string;
-  organizationId: string;
-  userId: string;
-  role: 'owner' | 'admin' | 'staff';
-  status: 'active' | 'inactive';
-}
-
-export interface Subscription {
-  id: string;
-  organizationId: string;
-  planId: 'trial' | 'essential' | 'pro' | 'enterprise';
-  status: 'active' | 'past_due' | 'canceled' | 'trialing';
-  currentPeriodEnd: string;
-}
-
-export interface SupportTicket {
-  id: string;
-  organizationId: string;
-  userId: string;
-  subject: string;
-  category: 'technical' | 'billing' | 'feature';
-  priority: 'low' | 'medium' | 'high';
-  status: 'open' | 'in_progress' | 'closed';
-  createdAt: string;
-}
-
-export interface Testimonial {
-  id: string;
-  organizationId: string;
-  barName: string;
-  authorName: string;
-  content: string;
-  rating: number;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: any;
-}
-
-export interface CancellationRequest {
-  id: string;
-  organizationId: string;
-  requestedBy: string;
-  reason: string;
-  status: 'pending' | 'processed' | 'reversed';
-  scheduledEndDate: string;
-  createdAt: string;
-}
-
-// --- Entidades Operacionais (Com organizationId para Multi-tenancy) ---
-
 export type ProductCategory = {
   id: string;
-  organizationId: string;
   name: string;
   iconName: string;
 };
 
 export interface Client {
   id: string;
-  organizationId: string;
   name: string;
   phone: string | null;
   notes: string | null;
@@ -98,7 +17,6 @@ export interface Client {
 
 export interface Product {
   id: string;
-  organizationId: string;
   name: string;
   price: number;
   categoryId: string;
@@ -116,11 +34,10 @@ export interface OrderItem extends Product {
   isClaim?: boolean; 
   claimedFromId?: string;
   isDelivered?: boolean;
-  isPreparing?: boolean;
-  isReady?: boolean;
-  addedAt?: string;
-  forceKitchenVisible?: boolean;
-  isPaid?: boolean;
+  isPreparing?: boolean; // Novo campo para controle de produção
+  addedAt?: string; // ISO string of when the item was added
+  forceKitchenVisible?: boolean; // Manual flag to show in kitchen even if old
+  isPaid?: boolean; // Indica se o item individual já foi pago em uma separação de conta
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';
@@ -132,7 +49,6 @@ export interface Payment {
 
 export interface Sale {
   id: string;
-  organizationId: string;
   timestamp: Date;
   items: OrderItem[];
   payments: Payment[];
@@ -145,15 +61,16 @@ export interface Sale {
   leaveChangeAsCredit?: boolean | null;
 }
 
+
 export interface ActiveOrder {
   id: string;
-  organizationId: string;
   name: string;
   createdAt: Date;
   items: OrderItem[];
   status?: 'open' | 'paid';
   clientId?: string | null;
   clientName?: string | null;
+  user_id?: string;
   isShared?: boolean;
   viewerCount?: number;
   updatedAt?: string;
@@ -161,26 +78,33 @@ export interface ActiveOrder {
 
 export interface CashAdjustment {
   id: string;
-  organizationId: string;
   amount: number;
-  type: 'in' | 'out';
+  type: 'in' | 'out'; // 'in' for suprimento, 'out' for sangria
   description: string;
-  timestamp: string;
-  source?: 'secondary_cash' | 'bank_account';
-  destination?: 'secondary_cash' | 'bank_account';
+  timestamp: string; // ISO String
+  source?: 'secondary_cash' | 'bank_account'; // For 'in' types that are transfers
+  destination?: 'secondary_cash' | 'bank_account'; // For 'out' types that are transfers
   isCorrection?: boolean;
 }
 
 export interface CashRegisterStatus {
   status: 'open' | 'closed';
-  openingTime?: string;
+  openingTime?: string; // ISO String
   openingBalance?: number;
   adjustments?: CashAdjustment[];
 }
 
+export interface SecondaryCashBox {
+  baseBalance?: number;
+}
+
+export interface BankAccount {
+  baseBalance?: number;
+}
+
+
 export interface FinancialEntry {
     id: string;
-    organizationId: string;
     description: string;
     amount: number;
     type: "expense" | "income";
@@ -199,10 +123,9 @@ export interface TransactionFees {
 
 export interface GuestRequest {
   id: string;
-  organizationId: string;
   name: string;
   status: 'pending' | 'approved' | 'rejected';
   associatedOrderId?: string | null;
   intent?: 'create' | 'view';
-  requestedAt: any;
+  requestedAt: any; // Firestore Timestamp
 }

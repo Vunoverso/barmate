@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ProductCategory, Payment } from '@/types';
-import { getProducts, getProductCategories, addSale } from '@/lib/data-access';
+import type { Product, OrderItem, Sale, ProductCategory, ActiveOrder } from '@/types';
+import { getProducts, getProductCategories, addSale, getCounterSaleDraft, saveCounterSaleDraft, removeCounterSaleDraft } from '@/lib/data-access';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { PlusCircle, MinusCircle, Trash2, Search, LayoutGrid, List, CheckCircle,
 import PaymentDialog from '@/app/orders/components/payment-dialog'; 
 import { useToast } from '@/hooks/use-toast';
 
-const LOCAL_STORAGE_COUNTER_SALE_KEY = 'barmate_counterSaleOrderItems_v2';
+const COUNTER_SALE_DRAFT_KEY = 'barmate_counterSaleOrderItems_v2';
 
 const groupProductsByCategoryId = (products: Product[], categories: ProductCategory[]) => {
   return products.reduce((acc, product) => {
@@ -44,32 +44,22 @@ export default function CounterSaleClient() {
     setIsLoading(true);
     setProducts(getProducts());
     setProductCategories(getProductCategories());
-    const storedOrderItems = localStorage.getItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-    if (storedOrderItems) {
-      try {
-        setCurrentOrderItems(JSON.parse(storedOrderItems));
-      } catch (error) {
-        console.error("Failed to parse counter sale items from localStorage", error);
-        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
-      }
-    }
+    setCurrentOrderItems(getCounterSaleDraft<OrderItem[]>(COUNTER_SALE_DRAFT_KEY, []));
     setIsLoading(false);
   };
   
   useEffect(() => {
     loadInitialData();
 
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'barmate_products_v2' || event.key === 'barmate_productCategories_v2' || event.key === LOCAL_STORAGE_COUNTER_SALE_KEY) {
+    const handleStateChange = () => {
         loadInitialData();
-      }
     };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('barmate-app-state-changed', handleStateChange);
+    return () => window.removeEventListener('barmate-app-state-changed', handleStateChange);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_COUNTER_SALE_KEY, JSON.stringify(currentOrderItems));
+    saveCounterSaleDraft(COUNTER_SALE_DRAFT_KEY, currentOrderItems);
   }, [currentOrderItems]);
 
   const filteredProducts = useMemo(() => {
@@ -145,7 +135,7 @@ export default function CounterSaleClient() {
     
     if (!isPartial) {
         setCurrentOrderItems([]); 
-        localStorage.removeItem(LOCAL_STORAGE_COUNTER_SALE_KEY);
+      removeCounterSaleDraft(COUNTER_SALE_DRAFT_KEY);
     }
     
     toast({
@@ -155,19 +145,15 @@ export default function CounterSaleClient() {
     });
   };
   
-  const currentCounterOrder: Sale | undefined = useMemo(() => {
+  const currentCounterOrder: ActiveOrder | undefined = useMemo(() => {
     if (currentOrderItems.length === 0) return undefined;
     return {
         id: `countersale-${Date.now()}`,
         name: 'Venda Balcão',
+        createdAt: new Date(),
         items: currentOrderItems,
-        totalAmount: orderTotal,
-        timestamp: new Date(),
-        payments: [],
-        originalAmount: orderTotal,
-        discountAmount: 0,
-        status: 'pending',
-    } as any;
+        status: 'open',
+    };
   }, [currentOrderItems, orderTotal]);
 
 

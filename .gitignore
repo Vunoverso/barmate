@@ -31,6 +31,12 @@ pnpm-debug.log*
 .env*.local
 *.env.local
 
+# local exports and generated data
+*.zip
+*.exe
+*.docx
+*.db
+
 # vercel
 .vercel
 

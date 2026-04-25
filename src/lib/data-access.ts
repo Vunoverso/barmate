@@ -1,18 +1,7 @@
 
-import type { 
-  Product, 
-  Sale, 
-  ProductCategory, 
-  FinancialEntry, 
-  CashRegisterStatus, 
-  TransactionFees, 
-  ActiveOrder, 
-  Client
-} from '@/types';
-import { db } from './firebase';
-import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest } from '@/types';
+import { getAppState, setAppState, hydrateAppState, hasAppStateKey } from './app-state';
+import { db, collection, getDocs, doc, setDoc } from './supabase-firestore';
 import {
     DATA_KEYS,
     INITIAL_PRODUCT_CATEGORIES,
@@ -23,6 +12,8 @@ import {
     INITIAL_CLIENTS,
     INITIAL_FINANCIAL_ENTRIES,
     INITIAL_CASH_REGISTER_STATUS,
+    INITIAL_SECONDARY_CASH_BOX,
+    INITIAL_BANK_ACCOUNT,
     INITIAL_TRANSACTION_FEES,
     KEY_PRODUCT_CATEGORIES,
     KEY_PRODUCTS,
@@ -35,443 +26,354 @@ import {
     KEY_TRANSACTION_FEES,
     KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES,
     KEY_VISUALLY_REMOVED_ADJUSTMENTS,
+    KEY_SECONDARY_CASH_BOX,
+    KEY_BANK_ACCOUNT,
+    KEY_CLOSED_SESSIONS,
 } from './constants';
-import { isSupabaseProvider } from './backend-provider';
-import { supabase } from './supabaseClient';
 
-const DATA_KEYS_SET = new Set(DATA_KEYS);
-const RAW_LOCAL_STORAGE_KEYS = new Set([
-    'barName',
-    'barCnpj',
-    'barAddress',
-    'barLogo',
-    'barLogoScale',
-]);
+const sessionStateCache = new Map<string, unknown>();
 
-const supabaseSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-type AppDocumentRow = {
-    collection_name: string;
-    document_key: string;
-    payload: unknown;
+const saveToSessionState = <T,>(key: string, value: T) => {
+  sessionStateCache.set(key, value);
 };
 
-function normalizeCompatibilityPayload<T>(value: T): T {
-    return JSON.parse(JSON.stringify(value, (_key, currentValue) => currentValue === undefined ? null : currentValue));
-}
+const getFromSessionState = <T,>(key: string, defaultValue: T): T => {
+  return sessionStateCache.has(key) ? (sessionStateCache.get(key) as T) : defaultValue;
+};
 
-function shouldSyncCompatibilityKey(key: string) {
-    return isSupabaseProvider && Boolean(supabase) && DATA_KEYS_SET.has(key);
-}
+// --- Data Migration & Deep Recovery Scan ---
+let legacyDataMigrated = false;
 
-function scheduleCompatibilitySync(key: string, value: unknown) {
-    if (typeof window === 'undefined') return;
-    if (!shouldSyncCompatibilityKey(key) || !supabase) return;
+const LEGACY_TEXT_KEYS = ['barName', 'barCnpj', 'barAddress', 'barLogo'] as const;
+const LEGACY_STATE_KEYS = [
+  KEY_PRODUCT_CATEGORIES,
+  KEY_PRODUCTS,
+  KEY_SALES,
+  KEY_OPEN_ORDERS,
+  KEY_ARCHIVED_ORDERS,
+  KEY_CLIENTS,
+  KEY_FINANCIAL_ENTRIES,
+  KEY_CASH_REGISTER_STATUS,
+  KEY_TRANSACTION_FEES,
+  KEY_CLOSED_SESSIONS,
+  KEY_SECONDARY_CASH_BOX,
+  KEY_BANK_ACCOUNT,
+] as const;
 
-    const orgId = getCurrentOrgId();
-    if (!orgId) return;
-
-    const syncId = `${orgId}:${key}`;
-    const payload = normalizeCompatibilityPayload(value);
-
-    const existingTimer = supabaseSyncTimers.get(syncId);
-    if (existingTimer) clearTimeout(existingTimer);
-
-    const timer = setTimeout(async () => {
-        try {
-            const { error } = await supabase
-                .from('app_documents')
-                .upsert({
-                    organization_id: orgId,
-                    collection_name: key,
-                    document_key: 'singleton',
-                    payload,
-                    updated_at: new Date().toISOString(),
-                }, {
-                    onConflict: 'organization_id,collection_name,document_key',
-                });
-
-            if (error) {
-                console.error(`Supabase compatibility sync error (${key}):`, error);
-            }
-        } finally {
-            supabaseSyncTimers.delete(syncId);
-        }
-    }, 250);
-
-    supabaseSyncTimers.set(syncId, timer);
-}
-
-export function getCurrentOrgId(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('barmate_current_org_id');
-}
-
-function getRequiredOrgId(): string {
-    const orgId = getCurrentOrgId();
-    if (!orgId) throw new Error("Nenhuma organização selecionada. Faça login novamente.");
-    return orgId;
-}
-
-const saveToLocalStorage = <T,>(key: string, value: T, options?: { silent?: boolean }) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const serializedValue = JSON.stringify(value);
-      window.localStorage.setItem(key, serializedValue);
-            if (!options?.silent) {
-                scheduleCompatibilitySync(key, value);
-            }
-      if (!options?.silent) {
-        window.dispatchEvent(new StorageEvent('storage', { key }));
-      }
-    } catch (error) {
-      console.error(`Error saving to localStorage:`, error);
-    }
+const parseLegacyValue = (key: string, rawValue: string) => {
+  if (key === 'barLogoScale') {
+    const parsed = Number(rawValue);
+    return Number.isFinite(parsed) ? parsed : 1;
   }
-};
 
-const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-  if (typeof window === 'undefined') return defaultValue;
+  if (LEGACY_TEXT_KEYS.includes(key as typeof LEGACY_TEXT_KEYS[number])) {
+    return rawValue;
+  }
+
   try {
-    const storedValue = window.localStorage.getItem(key);
-    if (storedValue === null || storedValue === 'undefined') return defaultValue;
-    return JSON.parse(storedValue);
-  } catch (error) {
-    return defaultValue;
+    return JSON.parse(rawValue);
+  } catch {
+    return rawValue;
   }
 };
 
-function saveRawToLocalStorage(key: string, value: unknown, options?: { silent?: boolean }) {
-    if (typeof window === 'undefined') return;
+const importLegacyOrdersToSupabase = async (rawValue: string) => {
+  if (!db) return false;
 
-    if (value === null || value === undefined) {
-        window.localStorage.removeItem(key);
-    } else {
-        window.localStorage.setItem(key, String(value));
-    }
+  const existingOrders = await getDocs(collection(db, 'open_orders'));
+  if (existingOrders.size > 0) return false;
 
-    if (!options?.silent) {
-        scheduleCompatibilitySync(key, value);
-    }
+  const parsed = parseLegacyValue(KEY_OPEN_ORDERS, rawValue);
+  if (!Array.isArray(parsed)) return false;
 
-    if (!options?.silent) {
-        window.dispatchEvent(new StorageEvent('storage', { key }));
-    }
-}
+  for (const order of parsed) {
+    if (!order || typeof order !== 'object' || !('id' in order)) continue;
+    await setDoc(doc(db, 'open_orders', String((order as ActiveOrder).id)), order as Record<string, unknown>, { merge: true });
+  }
 
-export function saveCompatibilityKeyValue(key: string, value: unknown, options?: { silent?: boolean }) {
-    if (!DATA_KEYS_SET.has(key)) return;
-
-    if (RAW_LOCAL_STORAGE_KEYS.has(key)) {
-        saveRawToLocalStorage(key, value, options);
-        return;
-    }
-
-    saveToLocalStorage(key, value, options);
-}
-
-function compareDocumentKeys(a: string, b: string) {
-    const aMatch = /^index_(\d+)$/.exec(a);
-    const bMatch = /^index_(\d+)$/.exec(b);
-
-    if (aMatch && bMatch) return Number(aMatch[1]) - Number(bMatch[1]);
-    if (aMatch) return -1;
-    if (bMatch) return 1;
-    return a.localeCompare(b, 'pt-BR');
-}
-
-function reconstructCollectionPayload(rows: AppDocumentRow[]) {
-    const singletonRow = rows.find((row) => row.document_key === 'singleton');
-    if (singletonRow) {
-        return singletonRow.payload;
-    }
-
-    return [...rows]
-        .sort((left, right) => compareDocumentKeys(left.document_key, right.document_key))
-        .map((row) => row.payload);
-}
-
-async function loadCompatibilityDataFromSupabase() {
-    if (!supabase) return;
-
-    const orgId = getCurrentOrgId();
-    if (!orgId) return;
-
-    const pageSize = 1000;
-    const data: AppDocumentRow[] = [];
-    let offset = 0;
-
-    while (true) {
-        const { data: page, error } = await supabase
-            .from('app_documents')
-            .select('collection_name, document_key, payload')
-            .eq('organization_id', orgId)
-            .order('collection_name', { ascending: true })
-            .order('document_key', { ascending: true })
-            .range(offset, offset + pageSize - 1);
-
-        if (error) {
-            console.error('Supabase compatibility boot error:', error);
-            return;
-        }
-
-        if (!page || page.length === 0) break;
-
-        data.push(...(page as AppDocumentRow[]));
-
-        if (page.length < pageSize) break;
-        offset += page.length;
-    }
-
-    const groupedRows = new Map<string, AppDocumentRow[]>();
-    for (const row of data || []) {
-        const bucket = groupedRows.get(row.collection_name) || [];
-        bucket.push(row as AppDocumentRow);
-        groupedRows.set(row.collection_name, bucket);
-    }
-
-    DATA_KEYS.forEach((key) => {
-        const rows = groupedRows.get(key);
-        if (!rows || rows.length === 0) return;
-
-        const payload = reconstructCollectionPayload(rows);
-
-        if (RAW_LOCAL_STORAGE_KEYS.has(key)) {
-            saveRawToLocalStorage(key, payload, { silent: true });
-            return;
-        }
-
-        saveToLocalStorage(key, payload, { silent: true });
-    });
-
-    if (groupedRows.has(KEY_PRODUCTS) || groupedRows.has(KEY_PRODUCT_CATEGORIES)) {
-        localStorage.setItem(`init_${orgId}`, 'true');
-    }
-
-    window.dispatchEvent(new Event('storage'));
-}
-
-/**
- * Cloud Sync Engine Otimizado para coleções raiz (compatível com firestore.rules)
- */
-const syncToCloud = (collectionPath: string, id: string, data: any) => {
-    if (isSupabaseProvider) return;
-    if (!db) return;
-    const orgId = getCurrentOrgId();
-    if (!orgId) return;
-
-    const cleanData = JSON.parse(JSON.stringify({ 
-        ...data, 
-        organizationId: orgId, 
-        updatedAt: new Date().toISOString() 
-    }, (k, v) => v === undefined ? null : v));
-
-    // Usando coleção raiz para compatibilidade com as regras atuais
-    const docRef = doc(db, collectionPath, id);
-    
-    setDoc(docRef, cleanData, { merge: true })
-        .catch(async (err) => {
-            const permissionError = new FirestorePermissionError({
-                path: docRef.path,
-                operation: 'write',
-                requestResourceData: cleanData
-            });
-            errorEmitter.emit('permission-error', permissionError);
-        });
+  return true;
 };
+
+export async function migrateOldData() {
+  await hydrateAppState();
+
+  if (legacyDataMigrated || typeof window === 'undefined') {
+    return;
+  }
+
+  const legacyKeys = [...LEGACY_TEXT_KEYS, 'barLogoScale', ...LEGACY_STATE_KEYS] as const;
+  const legacyEntries: Array<[string, string]> = [];
+
+  for (const key of legacyKeys) {
+    const rawValue = window.localStorage.getItem(key);
+    if (rawValue) {
+      legacyEntries.push([key, rawValue]);
+    }
+  }
+
+  if (legacyEntries.length === 0) {
+    legacyDataMigrated = true;
+    return;
+  }
+
+  for (const [key, rawValue] of legacyEntries) {
+    if (key === KEY_OPEN_ORDERS) {
+      const importedOrders = await importLegacyOrdersToSupabase(rawValue);
+      if (importedOrders && !hasAppStateKey(KEY_OPEN_ORDERS)) {
+        await setAppState(KEY_OPEN_ORDERS, parseLegacyValue(key, rawValue));
+      }
+      continue;
+    }
+
+    if (hasAppStateKey(key)) {
+      continue;
+    }
+
+    await setAppState(key, parseLegacyValue(key, rawValue));
+  }
+
+  legacyDataMigrated = true;
+};
+
+
+// --- Data Accessor Functions ---
 
 export function getProductCategories(): ProductCategory[] {
-    const orgId = getCurrentOrgId();
-    const data = getFromLocalStorage(KEY_PRODUCT_CATEGORIES, INITIAL_PRODUCT_CATEGORIES);
-    return data.map(c => ({ ...c, organizationId: orgId || 'default' }));
+  return getAppState(KEY_PRODUCT_CATEGORIES, INITIAL_PRODUCT_CATEGORIES);
 }
-export function saveProductCategories(categories: ProductCategory[]) {
-    const orgId = getRequiredOrgId();
-    saveToLocalStorage(KEY_PRODUCT_CATEGORIES, categories);
-    syncToCloud('product_categories', orgId, { items: categories });
+export async function saveProductCategories(categories: ProductCategory[]) {
+  await setAppState(KEY_PRODUCT_CATEGORIES, categories);
 }
 
 export function getProducts(): Product[] {
-    const orgId = getCurrentOrgId();
-    const data = getFromLocalStorage(KEY_PRODUCTS, INITIAL_PRODUCTS);
-    if (orgId && !orgId.startsWith('demo_') && !orgId.startsWith('master_') && !localStorage.getItem(`init_${orgId}`)) {
-        localStorage.setItem(`init_${orgId}`, 'true');
-        return []; 
-    }
-    return data;
+  return getAppState(KEY_PRODUCTS, INITIAL_PRODUCTS);
 }
-export function saveProducts(products: Product[]) {
-    const orgId = getRequiredOrgId();
-    saveToLocalStorage(KEY_PRODUCTS, products);
-    syncToCloud('products', orgId, { items: products });
+export async function saveProducts(products: Product[]) {
+  await setAppState(KEY_PRODUCTS, products);
 }
 
 export function getSales(): Sale[] {
-    return getFromLocalStorage<Sale[]>(KEY_SALES, INITIAL_SALES);
+  const sales = getAppState<Sale[]>(KEY_SALES, INITIAL_SALES);
+    return sales.map(sale => ({
+        ...sale,
+        payments: sale.payments || [],
+        items: sale.items || [],
+    }));
 }
 export function saveSales(sales: Sale[]) {
-    saveToLocalStorage(KEY_SALES, sales);
+  void setAppState(KEY_SALES, sales);
 }
 
 export function getOpenOrders(): ActiveOrder[] {
-    return getFromLocalStorage(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
+  return getAppState(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
 }
 export function saveOpenOrders(orders: ActiveOrder[]) {
-    saveToLocalStorage(KEY_OPEN_ORDERS, orders);
+  void setAppState(KEY_OPEN_ORDERS, orders);
 }
 
 export function getArchivedOrders(): ActiveOrder[] {
-    return getFromLocalStorage(KEY_ARCHIVED_ORDERS, INITIAL_ARCHIVED_ORDERS);
+  return getAppState(KEY_ARCHIVED_ORDERS, INITIAL_ARCHIVED_ORDERS);
 }
 export function saveArchivedOrders(orders: ActiveOrder[]) {
-    saveToLocalStorage(KEY_ARCHIVED_ORDERS, orders);
+  void setAppState(KEY_ARCHIVED_ORDERS, orders);
 }
 
 export function getClients(): Client[] {
-    return getFromLocalStorage(KEY_CLIENTS, INITIAL_CLIENTS);
+  return getAppState(KEY_CLIENTS, INITIAL_CLIENTS);
 }
-export function saveClients(clients: Client[]) {
-    const orgId = getRequiredOrgId();
-    saveToLocalStorage(KEY_CLIENTS, clients);
-    syncToCloud('clients', orgId, { items: clients });
+export async function saveClients(clients: Client[]) {
+  await setAppState(KEY_CLIENTS, clients);
 }
 
 export function getFinancialEntries(): FinancialEntry[] {
-    return getFromLocalStorage(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
+  return getAppState(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
 }
 export function saveFinancialEntries(entries: FinancialEntry[]) {
-    saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
+  void setAppState(KEY_FINANCIAL_ENTRIES, entries);
+}
+
+export function getClosedSessions(): unknown[] {
+  return getAppState(KEY_CLOSED_SESSIONS, []);
+}
+
+export function saveClosedSessions(sessions: unknown[]) {
+  void setAppState(KEY_CLOSED_SESSIONS, sessions);
 }
 
 export function getCashRegisterStatus(): CashRegisterStatus {
-    return getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
+  return getAppState(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 }
 export function saveCashRegisterStatus(status: CashRegisterStatus, options?: { silent?: boolean }) {
-    saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
+  void setAppState(KEY_CASH_REGISTER_STATUS, status);
 }
 
 export function getTransactionFees(): TransactionFees {
-    return getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
+  return getAppState(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
 }
-export function saveTransactionFees(fees: TransactionFees, options?: { silent?: boolean }) {
-    const orgId = getRequiredOrgId();
-    saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
-    syncToCloud('settings', orgId, fees);
+export async function saveTransactionFees(fees: TransactionFees, options?: { silent?: boolean }) {
+  await setAppState(KEY_TRANSACTION_FEES, fees);
 }
 
 export function getVisuallyRemovedFinancialEntries(): string[] {
-    return getFromLocalStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
+  return getFromSessionState(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
 }
 export function saveVisuallyRemovedFinancialEntries(ids: string[]) {
-    saveToLocalStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
+  saveToSessionState(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
 }
 
 export function getVisuallyRemovedAdjustments(): string[] {
-    return getFromLocalStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, []);
+  return getFromSessionState(KEY_VISUALLY_REMOVED_ADJUSTMENTS, []);
 }
 export function saveVisuallyRemovedAdjustments(ids: string[]) {
-    saveToLocalStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
+  saveToSessionState(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
 }
 
+export type CompanyDetails = {
+  barName: string;
+  barCnpj: string;
+  barAddress: string;
+  barLogo: string;
+  barLogoScale: number;
+};
+
+export function getCompanyDetails(): CompanyDetails {
+  return {
+    barName: getAppState('barName', 'BarMate'),
+    barCnpj: getAppState('barCnpj', ''),
+    barAddress: getAppState('barAddress', ''),
+    barLogo: getAppState('barLogo', ''),
+    barLogoScale: getAppState('barLogoScale', 1),
+  };
+}
+
+export async function saveCompanyDetails(details: CompanyDetails) {
+  await Promise.all([
+    setAppState('barName', details.barName),
+    setAppState('barCnpj', details.barCnpj),
+    setAppState('barAddress', details.barAddress),
+    setAppState('barLogo', details.barLogo),
+    setAppState('barLogoScale', details.barLogoScale),
+  ]);
+}
+
+export function getCounterSaleDraft<T>(key: string, defaultValue: T): T {
+  return getFromSessionState(key, defaultValue);
+}
+
+export function saveCounterSaleDraft<T>(key: string, value: T) {
+  saveToSessionState(key, value);
+}
+
+export function removeCounterSaleDraft(key: string) {
+  sessionStateCache.delete(key);
+}
+
+
+// --- Cloud Loading Helpers (Sincronização Master) ---
 export async function loadEssentialDataFromCloud() {
-    const orgId = getCurrentOrgId();
-    if (!orgId) return;
-
-    if (isSupabaseProvider && supabase) {
-        await loadCompatibilityDataFromSupabase();
-        return;
-    }
-
-    if (!db) return;
-
-    try {
-        const catSnap = await getDoc(doc(db, 'product_categories', orgId)).catch(() => null);
-        if (catSnap?.exists()) saveToLocalStorage(KEY_PRODUCT_CATEGORIES, catSnap.data().items, { silent: true });
-
-        const prodSnap = await getDoc(doc(db, 'products', orgId)).catch(() => null);
-        if (prodSnap?.exists()) saveToLocalStorage(KEY_PRODUCTS, prodSnap.data().items, { silent: true });
-
-        const clientSnap = await getDoc(doc(db, 'clients', orgId)).catch(() => null);
-        if (clientSnap?.exists()) saveToLocalStorage(KEY_CLIENTS, clientSnap.data().items, { silent: true });
-
-        const feeSnap = await getDoc(doc(db, 'settings', orgId)).catch(() => null);
-        if (feeSnap?.exists()) saveToLocalStorage(KEY_TRANSACTION_FEES, feeSnap.data() as TransactionFees, { silent: true });
-
-        window.dispatchEvent(new Event('storage'));
-    } catch (err) {
-        console.error("Cloud boot error:", err);
-    }
+  await hydrateAppState();
 }
 
-export function addSale(sale: any) {
-  const orgId = getRequiredOrgId();
+
+// --- Business Logic Functions ---
+
+export function addSale(sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: string, timestamp?: Date })) {
   const newSale: Sale = {
     id: `sale-${Date.now()}`,
-    organizationId: orgId,
     timestamp: new Date(),
     ...sale,
-    payments: sale.payments || [], 
+    payments: 'payments' in sale ? (sale.payments || []) : [],
   };
 
   const currentSales = getSales();
-  saveSales([...currentSales, newSale]);
+  const updatedSales = [...currentSales, newSale];
+  saveSales(updatedSales);
 
   const fees = getTransactionFees();
-  const entries: any[] = [];
-  const saleName = sale.name || `Venda #${newSale.id.slice(-6)}`;
-  
-  newSale.payments.forEach((p) => {
+  const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
+
+  const saleName = 'name' in sale ? sale.name : `Venda #${newSale.id.slice(-6)}`;
+
+  newSale.payments.forEach((p: Payment) => {
     if (p.amount <= 0) return;
+
     if (['debit', 'credit', 'pix'].includes(p.method)) {
-      const feeRate = p.method === 'debit' ? fees.debitRate : (p.method === 'credit' ? fees.creditRate : fees.pixRate);
+      let feeRate = 0;
+      if (p.method === 'debit') feeRate = fees.debitRate;
+      if (p.method === 'credit') feeRate = fees.creditRate;
+      if (p.method === 'pix') feeRate = fees.pixRate;
+
       const feeAmount = p.amount * (feeRate / 100);
-      
-      entries.push({ organizationId: orgId, description: `${saleName} via ${p.method}`, amount: p.amount, type: 'income', source: 'bank_account', saleId: newSale.id, adjustmentId: null });
+
+      newFinancialEntries.push({
+        description: `${saleName} via ${p.method}`,
+        amount: p.amount,
+        type: 'income',
+        source: 'bank_account',
+        saleId: newSale.id,
+        adjustmentId: null
+      });
+
       if (feeAmount > 0) {
-        entries.push({ organizationId: orgId, description: `Taxa ${p.method} ${saleName}`, amount: feeAmount, type: 'expense', source: 'bank_account', saleId: newSale.id, adjustmentId: null });
+        newFinancialEntries.push({
+          description: `Taxa ${p.method} ${saleName}`,
+          amount: feeAmount,
+          type: 'expense',
+          source: 'bank_account',
+          saleId: newSale.id,
+          adjustmentId: null
+        });
       }
     } else if (p.method === 'cash') {
         const netCash = p.amount - (newSale.changeGiven || 0);
-        if(netCash > 0) entries.push({ organizationId: orgId, description: `${saleName} em dinheiro`, amount: netCash, type: 'income', source: 'daily_cash', saleId: newSale.id, adjustmentId: null });
+        if(netCash > 0) {
+          newFinancialEntries.push({
+             description: `${saleName} em dinheiro`,
+             amount: netCash,
+             type: 'income',
+             source: 'daily_cash',
+             saleId: newSale.id,
+             adjustmentId: null,
+          });
+        }
     }
   });
 
-  if (entries.length > 0) addFinancialEntry(entries);
+  if (newFinancialEntries.length > 0) {
+    addFinancialEntry(newFinancialEntries);
+  }
 };
 
 export function removeSale(saleId: string) {
-  saveSales(getSales().filter(s => s.id !== saleId));
-  saveFinancialEntries(getFinancialEntries().filter(e => e.saleId !== saleId));
+  const currentSales = getSales();
+  const updatedSales = currentSales.filter(s => s.id !== saleId);
+  saveSales(updatedSales);
+
+  const allEntries = getFinancialEntries();
+  const entriesToKeep = allEntries.filter(e => e.saleId !== saleId);
+  saveFinancialEntries(entriesToKeep);
 }
 
-export function addFinancialEntry(entry: any) {
-    const orgId = getRequiredOrgId();
-    const current = getFinancialEntries();
-    const toAdd = Array.isArray(entry) ? entry : [entry];
-    const news = toAdd.map((e, i) => ({ ...e, organizationId: orgId, id: `fin-${Date.now()}-${i}`, timestamp: new Date() }));
-    saveFinancialEntries([...current, ...news]);
+export function addFinancialEntry(entry: Omit<FinancialEntry, 'id' | 'timestamp'> | Omit<FinancialEntry, 'id' | 'timestamp'>[]) {
+    const currentEntries = getFinancialEntries();
+    const entriesToAdd = Array.isArray(entry) ? entry : [entry];
+
+    const newEntries: FinancialEntry[] = entriesToAdd.map((e, i) => ({
+        ...e,
+        id: `fin-${Date.now()}-${i}`,
+        timestamp: new Date()
+    }));
+
+    const allEntries = [...currentEntries, ...newEntries];
+    saveFinancialEntries(allEntries);
 };
+
 
 export function clearFinancialData() {
-    if (typeof window === 'undefined') return;
-    saveToLocalStorage(KEY_SALES, []);
-    saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
-    saveToLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
-    window.dispatchEvent(new Event('storage'));
+  void setAppState(KEY_SALES, []);
+  void setAppState(KEY_FINANCIAL_ENTRIES, []);
+  void setAppState(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
+  void setAppState(KEY_CLOSED_SESSIONS, []);
+  void setAppState(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
+  void setAppState(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
 };
-
-export function migrateOldData() {
-    if (typeof window === 'undefined') return;
-    const keys = Object.keys(localStorage);
-    keys.forEach(key => {
-        if (key.includes('barmate') && !key.endsWith('_v2')) {
-            const oldData = localStorage.getItem(key);
-            if (oldData) {
-                const v2Key = key + '_v2';
-                if (!localStorage.getItem(v2Key)) {
-                    localStorage.setItem(v2Key, oldData);
-                }
-            }
-        }
-    });
-}

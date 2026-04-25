@@ -2,17 +2,19 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { db, collection, addDoc, doc, onSnapshot, serverTimestamp } from '@/lib/supabase-firestore';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, UserCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { Loader2, UserCircle2, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { getCounterSaleDraft, removeCounterSaleDraft, saveCounterSaleDraft } from '@/lib/data-access';
+
+const GUEST_NAME_KEY = 'barmate_guest_name';
+const GUEST_LAST_ORDER_KEY = 'barmate_last_order_id';
+const GUEST_REQUEST_ID_KEY = 'barmate_guest_request_id';
 
 export default function GuestRegisterPage() {
     const [name, setName] = useState('');
@@ -22,18 +24,16 @@ export default function GuestRegisterPage() {
     const [barInfo, setBarInfo] = useState({ name: 'BarMate', logo: '', logoScale: 1 });
     
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { toast } = useToast();
-    
-    const orgId = searchParams.get('orgId');
 
     useEffect(() => {
-        const savedName = localStorage.getItem('barmate_guest_name');
+        const savedName = getCounterSaleDraft<string>(GUEST_NAME_KEY, '');
         if (savedName) setName(savedName);
 
-        const lastOrderId = localStorage.getItem('barmate_last_order_id');
-        const savedRequestId = localStorage.getItem('barmate_guest_request_id');
+        const lastOrderId = getCounterSaleDraft<string>(GUEST_LAST_ORDER_KEY, '');
+        const savedRequestId = getCounterSaleDraft<string>(GUEST_REQUEST_ID_KEY, '');
         
+        // Se já tem uma comanda ativa e não está pendente de uma nova, redireciona direto
         if (lastOrderId && !savedRequestId) {
             router.push(`/my-order/${lastOrderId}`);
             return;
@@ -45,13 +45,9 @@ export default function GuestRegisterPage() {
         }
     }, [router]);
 
-    // Busca informações do bar baseadas no orgId da URL
     useEffect(() => {
-        if (!db || !orgId) return;
-        
-        // Em um sistema multi-tenant real, buscamos da coleção settings pelo orgId
-        const settingsRef = doc(db, 'settings', orgId);
-        const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
+        if (!db) return;
+        const unsubscribe = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setBarInfo({
@@ -60,89 +56,48 @@ export default function GuestRegisterPage() {
                     logoScale: data.barLogoScale || 1
                 });
             }
-        }, (err) => {
-            console.error("Erro ao carregar info do bar:", err);
         });
         return () => unsubscribe();
-    }, [orgId]);
+    }, []);
 
     useEffect(() => {
         if (!requestId || !db) return;
-        const requestRef = doc(db, 'guest_requests', requestId);
-        const unsubscribe = onSnapshot(requestRef, (docSnap) => {
+        const unsubscribe = onSnapshot(doc(db, 'guest_requests', requestId), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.status === 'approved' && data.associatedOrderId) {
-                    localStorage.setItem('barmate_last_order_id', data.associatedOrderId);
-                    localStorage.removeItem('barmate_guest_request_id');
+                    void saveCounterSaleDraft(GUEST_LAST_ORDER_KEY, data.associatedOrderId);
+                    removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
                     router.push(`/my-order/${data.associatedOrderId}`);
                 } else if (data.status === 'rejected') {
-                    localStorage.removeItem('barmate_guest_request_id');
+                    removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
                     setRequestId(null);
                     setStatus('idle');
                     toast({ title: "Solicitação Recusada", variant: "destructive" });
                 }
             }
-        }, async (err) => {
-            const permissionError = new FirestorePermissionError({
-                path: requestRef.path,
-                operation: 'get',
-            } satisfies SecurityRuleContext);
-            errorEmitter.emit('permission-error', permissionError);
         });
         return () => unsubscribe();
     }, [requestId, router, toast]);
 
     const handleSendRequest = async (intent: 'create' | 'view') => {
-        if (!name.trim() || !db || !orgId) {
-            if (!orgId) toast({ title: "Erro", description: "QR Code inválido. Por favor, solicite um novo ao atendente.", variant: "destructive" });
-            return;
-        }
-        
+        if (!name.trim() || !db) return;
         setIsSubmitting(true);
-        localStorage.setItem('barmate_guest_name', name.trim());
-        
-        const requestData = {
-            organizationId: orgId, // Crucial para o bar certo receber a notificação
-            name: name.trim(),
-            status: 'pending',
-            intent: intent,
-            requestedAt: serverTimestamp(),
-        };
-
-        const requestsCol = collection(db, 'guest_requests');
-
-        addDoc(requestsCol, requestData)
-            .then((docRef) => {
-                localStorage.setItem('barmate_guest_request_id', docRef.id);
-                setRequestId(docRef.id);
-                setStatus('pending');
-            })
-            .catch(async (error) => {
-                console.error("Erro ao enviar solicitação:", error);
-                toast({ title: "Erro na conexão", description: "Não foi possível enviar sua solicitação.", variant: "destructive" });
-            })
-            .finally(() => { 
-                setIsSubmitting(false); 
+        void saveCounterSaleDraft(GUEST_NAME_KEY, name.trim());
+        try {
+            const docRef = await addDoc(collection(db, 'guest_requests'), {
+                name: name.trim(),
+                status: 'pending',
+                intent: intent,
+                requestedAt: serverTimestamp(),
             });
+            void saveCounterSaleDraft(GUEST_REQUEST_ID_KEY, docRef.id);
+            setRequestId(docRef.id);
+            setStatus('pending');
+        } catch (error) {
+            toast({ title: "Erro na Conexão", variant: "destructive" });
+        } finally { setIsSubmitting(false); }
     };
-
-    if (!orgId && status !== 'approved') {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-                <Card className="w-full max-w-md text-center shadow-xl border-t-4 border-t-destructive">
-                    <CardHeader>
-                        <div className="mx-auto bg-destructive/10 rounded-full p-4 w-fit mb-4"><AlertTriangle className="h-10 w-10 text-destructive" /></div>
-                        <CardTitle className="text-2xl">QR Code Inválido</CardTitle>
-                        <CardDescription>Este link de acesso não possui a identificação do estabelecimento.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground">Por favor, utilize o QR Code impresso na sua mesa ou peça ajuda a um funcionário.</p>
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
 
     if (status === 'pending') {
         return (
@@ -155,7 +110,7 @@ export default function GuestRegisterPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex flex-col items-center gap-2 mb-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /><p className="text-xs font-bold opacity-50">SINCRO EM TEMPO REAL</p></div>
-                        <Button variant="outline" className="w-full" onClick={() => { localStorage.removeItem('barmate_guest_request_id'); setRequestId(null); setStatus('idle'); }}>Cancelar</Button>
+                        <Button variant="outline" className="w-full" onClick={() => { removeCounterSaleDraft(GUEST_REQUEST_ID_KEY); setRequestId(null); setStatus('idle'); }}>Cancelar</Button>
                     </CardContent>
                 </Card>
             </div>

@@ -2,8 +2,8 @@
 "use client";
 
 import type { CashRegisterStatus, Sale, SecondaryCashBox, CashAdjustment, BankAccount, FinancialEntry } from '@/types';
-import { formatCurrency, KEY_CLOSED_SESSIONS } from '@/lib/constants';
-import { getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, getVisuallyRemovedAdjustments, saveVisuallyRemovedAdjustments, saveSales, getSales } from '@/lib/data-access';
+import { formatCurrency } from '@/lib/constants';
+import { getFinancialEntries, saveFinancialEntries, saveCashRegisterStatus, getCashRegisterStatus, addFinancialEntry, getVisuallyRemovedAdjustments, saveVisuallyRemovedAdjustments, saveSales, getSales, getClosedSessions, saveClosedSessions } from '@/lib/data-access';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -294,6 +294,8 @@ export default function CashRegisterClient() {
   const handleTransfer = (details: { amount: number; source: AccountType; destination: AccountType }) => {
     const { amount, source, destination } = details;
     const transferId = `transfer-${Date.now()}`;
+    const adjustmentSource = source === 'secondary_cash' || source === 'bank_account' ? source : undefined;
+    const adjustmentDestination = destination === 'secondary_cash' || destination === 'bank_account' ? destination : undefined;
 
     addFinancialEntry([
         { description: `Transferência para ${ACCOUNT_NAMES[destination]}`, amount: amount, type: 'expense', source: source, saleId: null, adjustmentId: transferId },
@@ -311,8 +313,8 @@ export default function CashRegisterClient() {
                 type: isToDaily ? 'in' : 'out',
                 description: isToDaily ? `Transferência de ${ACCOUNT_NAMES[source]}` : `Transferência para ${ACCOUNT_NAMES[destination]}`,
                 timestamp: new Date().toISOString(),
-                source: isToDaily ? source : undefined,
-                destination: !isToDaily ? destination : undefined,
+                source: isToDaily ? adjustmentSource : undefined,
+                destination: !isToDaily ? adjustmentDestination : undefined,
             };
             const newAdjustments = [...(currentCashStatus.adjustments || []), adjustment];
             saveCashRegisterStatus({ ...currentCashStatus, adjustments: newAdjustments });
@@ -340,9 +342,8 @@ export default function CashRegisterClient() {
       transferredToCaixa02: finalCashAmount,
     };
     
-    const allClosedSessions = JSON.parse(localStorage.getItem(KEY_CLOSED_SESSIONS) || '[]');
-    allClosedSessions.push(closedSession);
-    localStorage.setItem(KEY_CLOSED_SESSIONS, JSON.stringify(allClosedSessions));
+    const allClosedSessions = [...getClosedSessions(), closedSession];
+    saveClosedSessions(allClosedSessions);
 
     const newStatus = { status: 'closed' as 'closed', adjustments: [] };
     saveCashRegisterStatus(newStatus);

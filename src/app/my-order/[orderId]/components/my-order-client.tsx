@@ -12,12 +12,11 @@ import { FileX, ShoppingCart, Loader2, BellRing } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
+import { db, doc, onSnapshot, updateDoc, increment } from '@/lib/supabase-firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { removeCounterSaleDraft } from '@/lib/data-access';
+import { toValidDate } from '@/lib/utils';
 
 export default function MyOrderClient({ orderId }: { orderId: string }) {
     const [order, setOrder] = useState<ActiveOrder | null>(null);
@@ -27,20 +26,23 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
     const prevItemsCount = useRef<number>(0);
     const { toast } = useToast();
 
+    // Som de notificação (Beep suave)
     const playNotificationSound = () => {
         try {
             const context = new (window.AudioContext || (window as any).webkitAudioContext)();
             const oscillator = context.createOscillator();
             const gain = context.createGain();
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, context.currentTime);
+            oscillator.frequency.setValueAtTime(880, context.currentTime); // Lá (A5)
             gain.gain.setValueAtTime(0.1, context.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
             oscillator.connect(gain);
             gain.connect(context.destination);
             oscillator.start();
             oscillator.stop(context.currentTime + 0.5);
-        } catch (e) {}
+        } catch (e) {
+            // Ignora se o navegador bloquear áudio sem interação prévia
+        }
     };
 
     useEffect(() => {
@@ -53,22 +55,14 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
         const docRef = doc(db, 'open_orders', orderId);
 
         if (!hasIncremented.current) {
-            updateDoc(docRef, { viewerCount: increment(1) })
-                .catch(async (err) => {
-                    const permissionError = new FirestorePermissionError({
-                        path: docRef.path,
-                        operation: 'update',
-                        requestResourceData: { viewerCount: 'increment' }
-                    } satisfies SecurityRuleContext);
-                    errorEmitter.emit('permission-error', permissionError);
-                });
+            updateDoc(docRef, { viewerCount: increment(1) }).catch(() => {});
             hasIncremented.current = true;
         }
 
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                const createdAt = toValidDate(data.createdAt) ?? new Date();
                 
                 const newOrder = {
                     ...data,
@@ -76,6 +70,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                     createdAt: createdAt
                 } as ActiveOrder;
 
+                // Detectar se novos itens foram adicionados
                 const currentItemsCount = newOrder.items.reduce((sum, item) => sum + item.quantity, 0);
                 if (prevItemsCount.current > 0 && currentItemsCount > prevItemsCount.current) {
                     playNotificationSound();
@@ -98,12 +93,8 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                 }
             }
             setIsLoading(false);
-        }, async (err) => {
-            const permissionError = new FirestorePermissionError({
-                path: docRef.path,
-                operation: 'get',
-            } satisfies SecurityRuleContext);
-            errorEmitter.emit('permission-error', permissionError);
+        }, (err) => {
+            console.error("Error fetching real-time order:", err);
             setError("Erro ao conectar com o servidor.");
             setIsLoading(false);
         });
@@ -111,8 +102,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
         return () => {
             unsubscribe();
             if (hasIncremented.current) {
-                updateDoc(docRef, { viewerCount: increment(-1) })
-                    .catch(() => {});
+                updateDoc(docRef, { viewerCount: increment(-1) }).catch(() => {});
                 hasIncremented.current = false;
             }
         };
@@ -123,6 +113,8 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
         if (!order) return 0;
         return order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     }, [order]);
+
+    const openedAt = order ? toValidDate(order.createdAt) : null;
 
     if (isLoading) {
         return (
@@ -151,7 +143,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                             variant="outline" 
                             className="w-full"
                             onClick={() => {
-                                localStorage.removeItem('barmate_last_order_id');
+                                removeCounterSaleDraft('barmate_last_order_id');
                                 window.location.href = '/guest/register';
                             }}
                         >
@@ -172,7 +164,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                     </div>
                     <CardTitle className="text-2xl">Sua Comanda: {order.name}</CardTitle>
                     <CardDescription>
-                        Abertura: {format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                        Abertura: {openedAt ? format(openedAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Data indisponível'}
                     </CardDescription>
                     {order.status === 'paid' && (
                         <Badge className="w-fit mx-auto mt-2 bg-green-600 px-4 py-1 text-sm">Comanda Paga</Badge>

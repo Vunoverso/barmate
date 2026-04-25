@@ -9,16 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Copy, Printer, QrCode } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentOrgId } from '@/lib/data-access';
 
 export default function QRCodeDisplay() {
     const [registerUrl, setRegisterUrl] = useState('');
     const [qrCodeUrl, setQrCodeUrl] = useState('');
     const { toast } = useToast();
-    const orgId = getCurrentOrgId();
 
     useEffect(() => {
-        if (typeof window !== 'undefined' && orgId) {
+        if (typeof window !== 'undefined') {
             // Force origin to reflect the current port (useful for cloud workstations)
             let origin = window.location.origin;
             
@@ -27,18 +25,19 @@ export default function QRCodeDisplay() {
                 origin = origin.replace(/\d+-/, '9000-');
             }
 
-            // Inclui o orgId na URL para garantir o isolamento no autoatendimento
-            const url = `${origin}/guest/register?orgId=${orgId}`;
+            const url = `${origin}/guest/register`;
             setRegisterUrl(url);
             setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}`);
         }
-    }, [orgId]);
+    }, []);
 
-    const copyToClipboard = () => {
-        if (!registerUrl) return;
-        navigator.clipboard.writeText(registerUrl).then(() => {
+    const copyToClipboard = async () => {
+        try {
+            await navigator.clipboard?.writeText(registerUrl);
             toast({ title: "Link copiado!", description: "O link de cadastro foi copiado." });
-        });
+        } catch {
+            toast({ title: "Não foi possível copiar", description: "Copie o link manualmente pelo campo acima.", variant: "destructive" });
+        }
     };
 
     const handlePrint = () => {
@@ -82,7 +81,7 @@ export default function QRCodeDisplay() {
                         </div>
                     </div>
 
-                    <Button className="w-full" size="lg" onClick={handlePrint} disabled={!qrCodeUrl}>
+                    <Button className="w-full" size="lg" onClick={handlePrint}>
                         <Printer className="mr-2 h-5 w-5" /> Imprimir QR Code
                     </Button>
                 </CardContent>
