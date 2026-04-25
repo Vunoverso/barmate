@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 const registerSchema = z.object({
@@ -78,6 +79,22 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ message: 'Dados invalidos.', issues: error.issues }, { status: 400 });
+    }
+
+    console.error('Falha ao criar conta:', error);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        return NextResponse.json({ message: 'Email ou organizacao ja cadastrados.' }, { status: 409 });
+      }
+
+      if (error.code === 'P2021' || error.code === 'P2022') {
+        return NextResponse.json({ message: 'Banco de login ainda nao esta pronto. Rode a migration de auth no Supabase.' }, { status: 503 });
+      }
+
+      if (['P1000', 'P1001', 'P1002', 'P1013'].includes(error.code)) {
+        return NextResponse.json({ message: 'Banco de login nao conectou. Confira DATABASE_URL na Vercel.' }, { status: 503 });
+      }
     }
 
     return NextResponse.json({ message: 'Falha ao criar conta.' }, { status: 500 });
