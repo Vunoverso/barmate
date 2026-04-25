@@ -58,6 +58,7 @@ export async function uploadMediaFile(
   const fileName = `${type}/${folder}/${timestamp}_${randomId}_${file.name}`;
 
   try {
+    if (!storage) throw new Error('Firebase Storage nao configurado.');
     const storageRef = ref(storage, fileName);
     
     // Upload
@@ -75,6 +76,7 @@ export async function uploadMediaFile(
 // Deletar arquivo do Storage
 export async function deleteMediaFile(fileUrl: string): Promise<void> {
   try {
+    if (!storage) return;
     // Extrair o caminho do arquivo da URL
     const url = new URL(fileUrl);
     const pathSegments = url.pathname.split('/');

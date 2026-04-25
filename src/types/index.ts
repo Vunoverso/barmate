@@ -129,3 +129,13 @@ export interface GuestRequest {
   intent?: 'create' | 'view';
   requestedAt: any; // Firestore Timestamp
 }
+
+export interface Testimonial {
+  id: string;
+  barName: string;
+  authorName: string;
+  content: string;
+  rating: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+}

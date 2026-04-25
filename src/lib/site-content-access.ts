@@ -38,6 +38,7 @@ const SITE_CONTENT_DOC = 'default';
 // Carrega o conteúdo do site do Firestore
 export async function loadSiteContent(): Promise<SiteContent | null> {
   try {
+    if (!db) return null;
     const docRef = doc(db, 'site_content', SITE_CONTENT_DOC);
     const docSnap = await getDoc(docRef);
     
@@ -54,6 +55,7 @@ export async function loadSiteContent(): Promise<SiteContent | null> {
 // Salva o conteúdo do site no Firestore
 export async function saveSiteContent(content: SiteContent): Promise<void> {
   try {
+    if (!db) throw new Error('Firebase nao configurado.');
     const docRef = doc(db, 'site_content', SITE_CONTENT_DOC);
     await setDoc(docRef, {
       ...content,

@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { CreditCard, CheckCircle2, ArrowUpCircle, History, ReceiptText, ShieldCheck } from 'lucide-react';
 import { formatCurrency } from '@/lib/constants';
 import { Separator } from '@/components/ui/separator';
-import { createCheckoutSession } from '@/lib/stripe';
 import { useToast } from '@/hooks/use-toast';
 
 export default function BillingPage() {
@@ -23,8 +22,24 @@ export default function BillingPage() {
 
   const handleUpgrade = async () => {
     toast({ title: "Redirecionando...", description: "Estamos preparando seu checkout seguro." });
-    const session = await createCheckoutSession('org-current', 'PRO');
-    // window.location.href = session.url;
+    const response = await fetch('/api/billing/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planId: 'profissional' }),
+    });
+
+    if (response.status === 401) {
+      window.location.href = '/login?next=/billing';
+      return;
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.url) {
+      toast({ title: "Erro no checkout", description: payload?.message || "Nao foi possivel iniciar o checkout.", variant: "destructive" });
+      return;
+    }
+
+    window.location.href = payload.url;
   };
 
   return (
