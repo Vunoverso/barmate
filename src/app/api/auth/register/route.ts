@@ -95,8 +95,31 @@ export async function POST(request: Request) {
       if (['P1000', 'P1001', 'P1002', 'P1013'].includes(error.code)) {
         return NextResponse.json({ message: 'Banco de login nao conectou. Confira DATABASE_URL na Vercel.' }, { status: 503 });
       }
+
+      return NextResponse.json({
+        message: 'Erro Prisma conhecido.',
+        code: error.code,
+        detail: String(error.message).slice(0, 300),
+      }, { status: 500 });
     }
 
-    return NextResponse.json({ message: 'Falha ao criar conta.' }, { status: 500 });
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      return NextResponse.json({
+        message: 'Falha ao inicializar Prisma. Verifique DATABASE_URL na Vercel.',
+        errorCode: error.errorCode,
+        detail: String(error.message).slice(0, 300),
+      }, { status: 503 });
+    }
+
+    if (error instanceof Prisma.PrismaClientUnknownRequestError) {
+      return NextResponse.json({
+        message: 'Erro desconhecido do Prisma.',
+        detail: String(error.message).slice(0, 300),
+      }, { status: 500 });
+    }
+
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errType = error instanceof Error ? error.constructor.name : typeof error;
+    return NextResponse.json({ message: 'Falha ao criar conta.', type: errType, detail: errMsg.slice(0, 300) }, { status: 500 });
   }
 }
