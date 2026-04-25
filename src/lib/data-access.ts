@@ -1,4 +1,7 @@
+
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest } from '@/types';
+import { getAppState, setAppState, hydrateAppState, hasAppStateKey } from './app-state';
+import { db, collection, getDocs, doc, setDoc } from './supabase-firestore';
 import {
     DATA_KEYS,
     INITIAL_PRODUCT_CATEGORIES,
@@ -28,126 +31,129 @@ import {
     KEY_CLOSED_SESSIONS,
 } from './constants';
 
+const sessionStateCache = new Map<string, unknown>();
 
-// --- LocalStorage Helper Functions ---
-const saveToLocalStorage = <T,>(key: string, value: T, options?: { silent?: boolean }) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const serializedValue = JSON.stringify(value);
-      window.localStorage.setItem(key, serializedValue);
-      if (!options?.silent) {
-        window.dispatchEvent(new StorageEvent('storage', { key }));
+const saveToSessionState = <T,>(key: string, value: T) => {
+  sessionStateCache.set(key, value);
+};
+
+const getFromSessionState = <T,>(key: string, defaultValue: T): T => {
+  return sessionStateCache.has(key) ? (sessionStateCache.get(key) as T) : defaultValue;
+};
+
+// --- Data Migration & Deep Recovery Scan ---
+let legacyDataMigrated = false;
+
+const LEGACY_TEXT_KEYS = ['barName', 'barCnpj', 'barAddress', 'barLogo'] as const;
+const LEGACY_STATE_KEYS = [
+  KEY_PRODUCT_CATEGORIES,
+  KEY_PRODUCTS,
+  KEY_SALES,
+  KEY_OPEN_ORDERS,
+  KEY_ARCHIVED_ORDERS,
+  KEY_CLIENTS,
+  KEY_FINANCIAL_ENTRIES,
+  KEY_CASH_REGISTER_STATUS,
+  KEY_TRANSACTION_FEES,
+  KEY_CLOSED_SESSIONS,
+  KEY_SECONDARY_CASH_BOX,
+  KEY_BANK_ACCOUNT,
+] as const;
+
+const parseLegacyValue = (key: string, rawValue: string) => {
+  if (key === 'barLogoScale') {
+    const parsed = Number(rawValue);
+    return Number.isFinite(parsed) ? parsed : 1;
+  }
+
+  if (LEGACY_TEXT_KEYS.includes(key as typeof LEGACY_TEXT_KEYS[number])) {
+    return rawValue;
+  }
+
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return rawValue;
+  }
+};
+
+const importLegacyOrdersToSupabase = async (rawValue: string) => {
+  if (!db) return false;
+
+  const existingOrders = await getDocs(collection(db, 'open_orders'));
+  if (existingOrders.size > 0) return false;
+
+  const parsed = parseLegacyValue(KEY_OPEN_ORDERS, rawValue);
+  if (!Array.isArray(parsed)) return false;
+
+  for (const order of parsed) {
+    if (!order || typeof order !== 'object' || !('id' in order)) continue;
+    await setDoc(doc(db, 'open_orders', String((order as ActiveOrder).id)), order as Record<string, unknown>, { merge: true });
+  }
+
+  return true;
+};
+
+export async function migrateOldData() {
+  await hydrateAppState();
+
+  if (legacyDataMigrated || typeof window === 'undefined') {
+    return;
+  }
+
+  const legacyKeys = [...LEGACY_TEXT_KEYS, 'barLogoScale', ...LEGACY_STATE_KEYS] as const;
+  const legacyEntries: Array<[string, string]> = [];
+
+  for (const key of legacyKeys) {
+    const rawValue = window.localStorage.getItem(key);
+    if (rawValue) {
+      legacyEntries.push([key, rawValue]);
+    }
+  }
+
+  if (legacyEntries.length === 0) {
+    legacyDataMigrated = true;
+    return;
+  }
+
+  for (const [key, rawValue] of legacyEntries) {
+    if (key === KEY_OPEN_ORDERS) {
+      const importedOrders = await importLegacyOrdersToSupabase(rawValue);
+      if (importedOrders && !hasAppStateKey(KEY_OPEN_ORDERS)) {
+        await setAppState(KEY_OPEN_ORDERS, parseLegacyValue(key, rawValue));
       }
-    } catch (error) {
-      console.error(`Error saving to localStorage key "${key}":`, error);
-    }
-  }
-};
-
-const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-  if (typeof window === 'undefined') {
-    return defaultValue;
-  }
-  try {
-    const storedValue = window.localStorage.getItem(key);
-    if (storedValue === null || storedValue === 'undefined') {
-      return defaultValue;
-    }
-    return JSON.parse(storedValue);
-  } catch (error) {
-    console.error(`Error parsing localStorage key "${key}":`, error);
-    saveToLocalStorage(key, defaultValue);
-    return defaultValue;
-  }
-};
-
-// --- SessionStorage Helper Functions ---
-const saveToSessionStorage = <T,>(key: string, value: T) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const serializedValue = JSON.stringify(value);
-      window.sessionStorage.setItem(key, serializedValue);
-    } catch (error) {
-      console.error(`Error saving to sessionStorage key "${key}":`, error);
-    }
-  }
-};
-
-const getFromSessionStorage = <T,>(key: string, defaultValue: T): T => {
-  if (typeof window === 'undefined') {
-    return defaultValue;
-  }
-  try {
-    const storedValue = window.sessionStorage.getItem(key);
-    if (storedValue === null || storedValue === 'undefined') {
-      return defaultValue;
-    }
-    return JSON.parse(storedValue);
-  } catch (error) {
-    console.error(`Error parsing sessionStorage key "${key}":`, error);
-    return defaultValue;
-  }
-};
-
-// --- Data Migration ---
-const MIGRATION_FLAG_KEY = 'barmate_migration_v2_completed_final';
-
-export function migrateOldData() {
-    if (typeof window === 'undefined' || localStorage.getItem(MIGRATION_FLAG_KEY)) {
-        return;
+      continue;
     }
 
-    const migrateKey = (oldKey: string, newKey: string) => {
-        const oldDataRaw = localStorage.getItem(oldKey);
-        if (oldDataRaw) {
-            localStorage.setItem(newKey, oldDataRaw);
-            localStorage.removeItem(oldKey);
-        }
-    };
-    
-    const oldKeys = [
-        'barmate_productCategories', 'barmate_productCategories_v2',
-        'barmate_products', 'barmate_products_v2',
-        'barmate_sales', 'barmate_sales_v2',
-        'barmate_openOrders', 'barmate_openOrders_v2',
-        'barmate_clients', 'barmate_clients_v2',
-        'barmate_financialEntries', 'barmate_financialEntries_v2',
-        'barmate_cashRegisterStatus', 'barmate_cashRegisterStatus_v2',
-        'barmate_transactionFees', 'barmate_transactionFees_v2',
-        'barmate_counterSaleOrderItems', 'barmate_counterSaleOrderItems_v2'
-    ];
-    
-    const uniqueOldKeys = [...new Set(oldKeys)];
+    if (hasAppStateKey(key)) {
+      continue;
+    }
 
-    uniqueOldKeys.forEach(oldKey => {
-        const newKey = `barmate_${oldKey.split('_')[1]}_v2`;
-        if (oldKey !== newKey) {
-            migrateKey(oldKey, newKey);
-        }
-    });
-    
-    window.dispatchEvent(new Event('storage')); 
+    await setAppState(key, parseLegacyValue(key, rawValue));
+  }
+
+  legacyDataMigrated = true;
 };
 
 
 // --- Data Accessor Functions ---
 
 export function getProductCategories(): ProductCategory[] {
-    return getFromLocalStorage(KEY_PRODUCT_CATEGORIES, INITIAL_PRODUCT_CATEGORIES);
+  return getAppState(KEY_PRODUCT_CATEGORIES, INITIAL_PRODUCT_CATEGORIES);
 }
-export function saveProductCategories(categories: ProductCategory[]) {
-    saveToLocalStorage(KEY_PRODUCT_CATEGORIES, categories);
+export async function saveProductCategories(categories: ProductCategory[]) {
+  await setAppState(KEY_PRODUCT_CATEGORIES, categories);
 }
 
 export function getProducts(): Product[] {
-    return getFromLocalStorage(KEY_PRODUCTS, INITIAL_PRODUCTS);
+  return getAppState(KEY_PRODUCTS, INITIAL_PRODUCTS);
 }
-export function saveProducts(products: Product[]) {
-    saveToLocalStorage(KEY_PRODUCTS, products);
+export async function saveProducts(products: Product[]) {
+  await setAppState(KEY_PRODUCTS, products);
 }
 
 export function getSales(): Sale[] {
-    const sales = getFromLocalStorage<Sale[]>(KEY_SALES, INITIAL_SALES);
+  const sales = getAppState<Sale[]>(KEY_SALES, INITIAL_SALES);
     return sales.map(sale => ({
         ...sale,
         payments: sale.payments || [],
@@ -155,63 +161,117 @@ export function getSales(): Sale[] {
     }));
 }
 export function saveSales(sales: Sale[]) {
-    saveToLocalStorage(KEY_SALES, sales);
+  void setAppState(KEY_SALES, sales);
 }
 
 export function getOpenOrders(): ActiveOrder[] {
-    return getFromLocalStorage(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
+  return getAppState(KEY_OPEN_ORDERS, INITIAL_OPEN_ORDERS);
 }
 export function saveOpenOrders(orders: ActiveOrder[]) {
-    saveToLocalStorage(KEY_OPEN_ORDERS, orders);
+  void setAppState(KEY_OPEN_ORDERS, orders);
 }
 
 export function getArchivedOrders(): ActiveOrder[] {
-    return getFromLocalStorage(KEY_ARCHIVED_ORDERS, INITIAL_ARCHIVED_ORDERS);
+  return getAppState(KEY_ARCHIVED_ORDERS, INITIAL_ARCHIVED_ORDERS);
 }
 export function saveArchivedOrders(orders: ActiveOrder[]) {
-    saveToLocalStorage(KEY_ARCHIVED_ORDERS, orders);
+  void setAppState(KEY_ARCHIVED_ORDERS, orders);
 }
 
 export function getClients(): Client[] {
-    return getFromLocalStorage(KEY_CLIENTS, INITIAL_CLIENTS);
+  return getAppState(KEY_CLIENTS, INITIAL_CLIENTS);
 }
-export function saveClients(clients: Client[]) {
-    saveToLocalStorage(KEY_CLIENTS, clients);
+export async function saveClients(clients: Client[]) {
+  await setAppState(KEY_CLIENTS, clients);
 }
 
 export function getFinancialEntries(): FinancialEntry[] {
-    return getFromLocalStorage(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
+  return getAppState(KEY_FINANCIAL_ENTRIES, INITIAL_FINANCIAL_ENTRIES);
 }
 export function saveFinancialEntries(entries: FinancialEntry[]) {
-    saveToLocalStorage(KEY_FINANCIAL_ENTRIES, entries);
+  void setAppState(KEY_FINANCIAL_ENTRIES, entries);
+}
+
+export function getClosedSessions(): unknown[] {
+  return getAppState(KEY_CLOSED_SESSIONS, []);
+}
+
+export function saveClosedSessions(sessions: unknown[]) {
+  void setAppState(KEY_CLOSED_SESSIONS, sessions);
 }
 
 export function getCashRegisterStatus(): CashRegisterStatus {
-    return getFromLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
+  return getAppState(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
 }
 export function saveCashRegisterStatus(status: CashRegisterStatus, options?: { silent?: boolean }) {
-    saveToLocalStorage(KEY_CASH_REGISTER_STATUS, status, options);
+  void setAppState(KEY_CASH_REGISTER_STATUS, status);
 }
 
 export function getTransactionFees(): TransactionFees {
-    return getFromLocalStorage(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
+  return getAppState(KEY_TRANSACTION_FEES, INITIAL_TRANSACTION_FEES);
 }
-export function saveTransactionFees(fees: TransactionFees, options?: { silent?: boolean }) {
-    saveToLocalStorage(KEY_TRANSACTION_FEES, fees, options);
+export async function saveTransactionFees(fees: TransactionFees, options?: { silent?: boolean }) {
+  await setAppState(KEY_TRANSACTION_FEES, fees);
 }
 
 export function getVisuallyRemovedFinancialEntries(): string[] {
-    return getFromSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
+  return getFromSessionState(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, []);
 }
 export function saveVisuallyRemovedFinancialEntries(ids: string[]) {
-    saveToSessionStorage(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
+  saveToSessionState(KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES, ids);
 }
 
 export function getVisuallyRemovedAdjustments(): string[] {
-    return getFromSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, []);
+  return getFromSessionState(KEY_VISUALLY_REMOVED_ADJUSTMENTS, []);
 }
 export function saveVisuallyRemovedAdjustments(ids: string[]) {
-    saveToSessionStorage(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
+  saveToSessionState(KEY_VISUALLY_REMOVED_ADJUSTMENTS, ids);
+}
+
+export type CompanyDetails = {
+  barName: string;
+  barCnpj: string;
+  barAddress: string;
+  barLogo: string;
+  barLogoScale: number;
+};
+
+export function getCompanyDetails(): CompanyDetails {
+  return {
+    barName: getAppState('barName', 'BarMate'),
+    barCnpj: getAppState('barCnpj', ''),
+    barAddress: getAppState('barAddress', ''),
+    barLogo: getAppState('barLogo', ''),
+    barLogoScale: getAppState('barLogoScale', 1),
+  };
+}
+
+export async function saveCompanyDetails(details: CompanyDetails) {
+  await Promise.all([
+    setAppState('barName', details.barName),
+    setAppState('barCnpj', details.barCnpj),
+    setAppState('barAddress', details.barAddress),
+    setAppState('barLogo', details.barLogo),
+    setAppState('barLogoScale', details.barLogoScale),
+  ]);
+}
+
+export function getCounterSaleDraft<T>(key: string, defaultValue: T): T {
+  return getFromSessionState(key, defaultValue);
+}
+
+export function saveCounterSaleDraft<T>(key: string, value: T) {
+  saveToSessionState(key, value);
+}
+
+export function removeCounterSaleDraft(key: string) {
+  sessionStateCache.delete(key);
+}
+
+
+// --- Cloud Loading Helpers (Sincronização Master) ---
+export async function loadEssentialDataFromCloud() {
+  await hydrateAppState();
 }
 
 
@@ -222,7 +282,7 @@ export function addSale(sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
     id: `sale-${Date.now()}`,
     timestamp: new Date(),
     ...sale,
-    payments: 'payments' in sale ? (sale.payments || []) : [], // Ensure payments is an array
+    payments: 'payments' in sale ? (sale.payments || []) : [],
   };
 
   const currentSales = getSales();
@@ -233,7 +293,7 @@ export function addSale(sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
   const newFinancialEntries: Omit<FinancialEntry, 'id'|'timestamp'>[] = [];
 
   const saleName = 'name' in sale ? sale.name : `Venda #${newSale.id.slice(-6)}`;
-  
+
   newSale.payments.forEach((p: Payment) => {
     if (p.amount <= 0) return;
 
@@ -244,7 +304,7 @@ export function addSale(sale: Sale | (Omit<Sale, 'id' | 'timestamp'> & { name: s
       if (p.method === 'pix') feeRate = fees.pixRate;
 
       const feeAmount = p.amount * (feeRate / 100);
-      
+
       newFinancialEntries.push({
         description: `${saleName} via ${p.method}`,
         amount: p.amount,
@@ -288,8 +348,7 @@ export function removeSale(saleId: string) {
   const currentSales = getSales();
   const updatedSales = currentSales.filter(s => s.id !== saleId);
   saveSales(updatedSales);
-  
-  // Find all financial entries related to this saleId and remove them
+
   const allEntries = getFinancialEntries();
   const entriesToKeep = allEntries.filter(e => e.saleId !== saleId);
   saveFinancialEntries(entriesToKeep);
@@ -311,13 +370,10 @@ export function addFinancialEntry(entry: Omit<FinancialEntry, 'id' | 'timestamp'
 
 
 export function clearFinancialData() {
-    if (typeof window !== 'undefined') {
-        saveToLocalStorage(KEY_SALES, []);
-        saveToLocalStorage(KEY_FINANCIAL_ENTRIES, []);
-        saveToLocalStorage(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
-        saveToLocalStorage(KEY_CLOSED_SESSIONS, []);
-        saveToLocalStorage(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
-        saveToLocalStorage(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
-        window.dispatchEvent(new Event('storage'));
-    }
+  void setAppState(KEY_SALES, []);
+  void setAppState(KEY_FINANCIAL_ENTRIES, []);
+  void setAppState(KEY_CASH_REGISTER_STATUS, INITIAL_CASH_REGISTER_STATUS);
+  void setAppState(KEY_CLOSED_SESSIONS, []);
+  void setAppState(KEY_SECONDARY_CASH_BOX, INITIAL_SECONDARY_CASH_BOX);
+  void setAppState(KEY_BANK_ACCOUNT, INITIAL_BANK_ACCOUNT);
 };

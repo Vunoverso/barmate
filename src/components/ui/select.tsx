@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -88,7 +89,7 @@ const SelectContent = React.forwardRef<
         className={cn(
           "p-1",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+            "h-full w-full min-w-[var(--radix-select-trigger-width)]"
         )}
       >
         {children}

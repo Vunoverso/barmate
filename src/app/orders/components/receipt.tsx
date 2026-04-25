@@ -1,4 +1,3 @@
-
 "use client";
 
 import { format } from 'date-fns';
@@ -6,6 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import type { Sale } from '@/types';
 import { formatCurrency, PAYMENT_METHODS } from '@/lib/constants';
 import { useEffect, useState } from 'react';
+import { getCompanyDetails } from '@/lib/data-access';
 
 interface ReceiptProps {
   sale: Sale;
@@ -17,9 +17,7 @@ export const Receipt = ({ sale, orderName }: ReceiptProps) => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const name = localStorage.getItem('barName') || 'BarMate';
-      const cnpj = localStorage.getItem('barCnpj') || '';
-      const address = localStorage.getItem('barAddress') || '';
+      const { barName: name, barCnpj: cnpj, barAddress: address } = getCompanyDetails();
       setBarDetails({ name, cnpj, address });
     }
   }, []);

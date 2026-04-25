@@ -2,8 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { db, collection, addDoc, doc, onSnapshot, serverTimestamp } from '@/lib/supabase-firestore';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, UserCircle2, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getCounterSaleDraft, removeCounterSaleDraft, saveCounterSaleDraft } from '@/lib/data-access';
+
+const GUEST_NAME_KEY = 'barmate_guest_name';
+const GUEST_LAST_ORDER_KEY = 'barmate_last_order_id';
+const GUEST_REQUEST_ID_KEY = 'barmate_guest_request_id';
 
 export default function GuestRegisterPage() {
     const [name, setName] = useState('');
@@ -23,11 +27,11 @@ export default function GuestRegisterPage() {
     const { toast } = useToast();
 
     useEffect(() => {
-        const savedName = localStorage.getItem('barmate_guest_name');
+        const savedName = getCounterSaleDraft<string>(GUEST_NAME_KEY, '');
         if (savedName) setName(savedName);
 
-        const lastOrderId = localStorage.getItem('barmate_last_order_id');
-        const savedRequestId = localStorage.getItem('barmate_guest_request_id');
+        const lastOrderId = getCounterSaleDraft<string>(GUEST_LAST_ORDER_KEY, '');
+        const savedRequestId = getCounterSaleDraft<string>(GUEST_REQUEST_ID_KEY, '');
         
         // Se já tem uma comanda ativa e não está pendente de uma nova, redireciona direto
         if (lastOrderId && !savedRequestId) {
@@ -62,11 +66,11 @@ export default function GuestRegisterPage() {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.status === 'approved' && data.associatedOrderId) {
-                    localStorage.setItem('barmate_last_order_id', data.associatedOrderId);
-                    localStorage.removeItem('barmate_guest_request_id');
+                    void saveCounterSaleDraft(GUEST_LAST_ORDER_KEY, data.associatedOrderId);
+                    removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
                     router.push(`/my-order/${data.associatedOrderId}`);
                 } else if (data.status === 'rejected') {
-                    localStorage.removeItem('barmate_guest_request_id');
+                    removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
                     setRequestId(null);
                     setStatus('idle');
                     toast({ title: "Solicitação Recusada", variant: "destructive" });
@@ -79,7 +83,7 @@ export default function GuestRegisterPage() {
     const handleSendRequest = async (intent: 'create' | 'view') => {
         if (!name.trim() || !db) return;
         setIsSubmitting(true);
-        localStorage.setItem('barmate_guest_name', name.trim());
+        void saveCounterSaleDraft(GUEST_NAME_KEY, name.trim());
         try {
             const docRef = await addDoc(collection(db, 'guest_requests'), {
                 name: name.trim(),
@@ -87,7 +91,7 @@ export default function GuestRegisterPage() {
                 intent: intent,
                 requestedAt: serverTimestamp(),
             });
-            localStorage.setItem('barmate_guest_request_id', docRef.id);
+            void saveCounterSaleDraft(GUEST_REQUEST_ID_KEY, docRef.id);
             setRequestId(docRef.id);
             setStatus('pending');
         } catch (error) {
@@ -106,7 +110,7 @@ export default function GuestRegisterPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex flex-col items-center gap-2 mb-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /><p className="text-xs font-bold opacity-50">SINCRO EM TEMPO REAL</p></div>
-                        <Button variant="outline" className="w-full" onClick={() => { localStorage.removeItem('barmate_guest_request_id'); setRequestId(null); setStatus('idle'); }}>Cancelar</Button>
+                        <Button variant="outline" className="w-full" onClick={() => { removeCounterSaleDraft(GUEST_REQUEST_ID_KEY); setRequestId(null); setStatus('idle'); }}>Cancelar</Button>
                     </CardContent>
                 </Card>
             </div>

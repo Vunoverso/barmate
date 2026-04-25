@@ -5,6 +5,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { ActiveOrder } from '@/types';
 import { formatCurrency } from '@/lib/constants';
+import { getCompanyDetails } from '@/lib/data-access';
+import { toValidDate } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
 interface OrderStatementProps {
@@ -16,14 +18,13 @@ export const OrderStatement = ({ order }: OrderStatementProps) => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const name = localStorage.getItem('barName') || 'BarMate';
-      const cnpj = localStorage.getItem('barCnpj') || '';
-      const address = localStorage.getItem('barAddress') || '';
+      const { barName: name, barCnpj: cnpj, barAddress: address } = getCompanyDetails();
       setBarDetails({ name, cnpj, address });
     }
   }, []);
 
   const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const openedAt = toValidDate(order.createdAt);
 
   return (
     <div className="printable-content bg-white text-black font-mono w-full text-sm leading-tight p-2">
@@ -38,7 +39,7 @@ export const OrderStatement = ({ order }: OrderStatementProps) => {
       <div className="text-center mb-2">
         <p className="font-bold">EXTRATO DE CONSUMO</p>
         <p>Comanda: {order.name}</p>
-        <p>Abertura: {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+        <p>Abertura: {openedAt ? format(openedAt, "dd/MM/yyyy HH:mm", { locale: ptBR }) : 'Data indisponível'}</p>
       </div>
       
       <hr className="border-dashed border-black my-2" />

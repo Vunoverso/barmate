@@ -5,6 +5,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function toValidDate(value: unknown): Date | null {
+  const rawValue = value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function'
+    ? value.toDate()
+    : value;
+  const date = rawValue instanceof Date ? rawValue : new Date(rawValue as string | number);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 
 export function downloadAsCSV(headers: string[], data: (string | number)[][], filename: string) {
   const csvContent = [

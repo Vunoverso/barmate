@@ -10,7 +10,23 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
-    match /settings/global {
+    match /products/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /clients/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /product_categories/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /settings_v2/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /settings/{id} {
       allow read: if true;
       allow write: if true;
     }

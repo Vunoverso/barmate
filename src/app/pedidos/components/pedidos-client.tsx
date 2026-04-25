@@ -2,8 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { db, collection, onSnapshot, doc, updateDoc } from '@/lib/supabase-firestore';
 import type { ActiveOrder, OrderItem } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -368,6 +367,15 @@ function ShareKitchenDialog({ isOpen, onOpenChange }: { isOpen: boolean, onOpenC
         }
     }, [isOpen]);
 
+    const copyUrl = async () => {
+        try {
+            await navigator.clipboard?.writeText(url);
+            toast({ title: "Link copiado!" });
+        } catch {
+            toast({ title: "Não foi possível copiar", description: "Copie o link manualmente pelo campo.", variant: "destructive" });
+        }
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
@@ -381,7 +389,7 @@ function ShareKitchenDialog({ isOpen, onOpenChange }: { isOpen: boolean, onOpenC
                     </div>
                     <div className="flex gap-2 w-full">
                         <Input value={url} readOnly />
-                        <Button size="icon" variant="outline" onClick={() => { navigator.clipboard.writeText(url); toast({ title: "Link copiado!" }); }}>
+                        <Button size="icon" variant="outline" onClick={copyUrl}>
                             <Copy className="h-4 w-4" />
                         </Button>
                     </div>

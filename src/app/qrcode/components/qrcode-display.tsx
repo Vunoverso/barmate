@@ -31,10 +31,13 @@ export default function QRCodeDisplay() {
         }
     }, []);
 
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(registerUrl).then(() => {
+    const copyToClipboard = async () => {
+        try {
+            await navigator.clipboard?.writeText(registerUrl);
             toast({ title: "Link copiado!", description: "O link de cadastro foi copiado." });
-        });
+        } catch {
+            toast({ title: "Não foi possível copiar", description: "Copie o link manualmente pelo campo acima.", variant: "destructive" });
+        }
     };
 
     const handlePrint = () => {

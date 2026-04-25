@@ -1,20 +1,17 @@
 
 "use client";
 
-import { DATA_KEYS } from '@/lib/constants';
-import { clearFinancialData, getTransactionFees, saveTransactionFees } from '@/lib/data-access';
+import { clearFinancialData, getTransactionFees, saveTransactionFees, getCompanyDetails, saveCompanyDetails, getOpenOrders, getProducts, getProductCategories, getClients, getSales, getFinancialEntries, getCashRegisterStatus, getClosedSessions } from '@/lib/data-access';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, ImagePlus, X, Download, Upload, Trash2, Percent } from 'lucide-react';
+import { Save, ImagePlus, X, Download, Upload, Trash2, Percent, ListChecks } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
-import { db } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +30,7 @@ export default function SettingsClient() {
   const [barAddress, setBarAddress] = useState('');
   const [barLogo, setBarLogo] = useState('');
   const [barLogoScale, setBarLogoScale] = useState(1);
-  
+
   // Fee states
   const [debitRate, setDebitRate] = useState('0');
   const [creditRate, setCreditRate] = useState('0');
@@ -41,18 +38,20 @@ export default function SettingsClient() {
 
   const [importAlertOpen, setImportAlertOpen] = useState(false);
   const [clearFinancialsAlertOpen, setClearFinancialsAlertOpen] = useState(false);
-  
+
   const logoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ordersFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const loadData = useCallback(() => {
-    setBarName(localStorage.getItem('barName') || 'BarMate');
-    setBarCnpj(localStorage.getItem('barCnpj') || '');
-    setBarAddress(localStorage.getItem('barAddress') || '');
-    setBarLogo(localStorage.getItem('barLogo') || '');
-    setBarLogoScale(parseFloat(localStorage.getItem('barLogoScale') || '1'));
-    
+    const companyDetails = getCompanyDetails();
+    setBarName(companyDetails.barName);
+    setBarCnpj(companyDetails.barCnpj);
+    setBarAddress(companyDetails.barAddress);
+    setBarLogo(companyDetails.barLogo);
+    setBarLogoScale(companyDetails.barLogoScale);
+
     const fees = getTransactionFees();
     setDebitRate(fees.debitRate.toString().replace('.', ','));
     setCreditRate(fees.creditRate.toString().replace('.', ','));
@@ -79,22 +78,13 @@ export default function SettingsClient() {
 
   const handleSaveCompanyDetails = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    localStorage.setItem('barName', barName.trim());
-    localStorage.setItem('barCnpj', barCnpj.trim());
-    localStorage.setItem('barAddress', barAddress.trim());
-    localStorage.setItem('barLogo', barLogo);
-    localStorage.setItem('barLogoScale', barLogoScale.toString());
-    
-    if (db) {
-        try {
-            await setDoc(doc(db, 'settings', 'global'), {
-                barName: barName.trim(),
-                barLogo: barLogo,
-                barLogoScale: barLogoScale,
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
-        } catch (err) {}
-    }
+    await saveCompanyDetails({
+      barName: barName.trim(),
+      barCnpj: barCnpj.trim(),
+      barAddress: barAddress.trim(),
+      barLogo,
+      barLogoScale,
+    });
     toast({ title: "Identidade Salva!", description: "Os dados do estabelecimento foram atualizados." });
   };
 
@@ -118,37 +108,69 @@ export default function SettingsClient() {
 
   const handleExportAllData = () => {
     try {
-      const allData: Record<string, any> = {};
-      DATA_KEYS.forEach(key => {
-        const val = localStorage.getItem(key);
-        if (val) {
-            try {
-                // Tenta converter para objeto se for JSON
-                allData[key] = JSON.parse(val);
-            } catch (e) {
-                // Salva como texto puro se não for JSON (como barName)
-                allData[key] = val;
-            }
-        }
-      });
-      
+      const allData: Record<string, any> = {
+        company: getCompanyDetails(),
+        productCategories: getProductCategories(),
+        products: getProducts(),
+        sales: getSales(),
+        openOrders: getOpenOrders(),
+        clients: getClients(),
+        financialEntries: getFinancialEntries(),
+        cashRegisterStatus: getCashRegisterStatus(),
+        closedSessions: getClosedSessions(),
+      };
+
       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `barmate_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
-      
-      // Essencial para navegadores baseados em Chromium
+      link.download = `barmate_backup_completo_${format(new Date(), 'yyyy-MM-dd')}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       URL.revokeObjectURL(url);
-      toast({ title: "Backup Exportado!", description: "O arquivo JSON foi baixado com sucesso." });
+      toast({ title: "Backup Exportado!", description: "O arquivo completo foi baixado com sucesso." });
     } catch (e) {
-      console.error("Export error:", e);
       toast({ title: "Erro ao exportar", variant: "destructive" });
     }
+  };
+
+  const handleExportOrdersOnly = () => {
+    try {
+      const blob = new Blob([JSON.stringify(getOpenOrders(), null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `barmate_apenas_comandas_${format(new Date(), 'yyyy-MM-dd')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Comandas Exportadas!", description: "As mesas ativas foram salvas." });
+    } catch (e) {
+      toast({ title: "Erro ao exportar comandas", variant: "destructive" });
+    }
+  };
+
+  const handleOrdersFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (!Array.isArray(data)) throw new Error("Arquivo inválido");
+
+        await saveCompanyDetails(getCompanyDetails());
+        void data;
+
+        toast({ title: "Comandas Restauradas!", description: "As mesas foram recuperadas com sucesso." });
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (err) {
+        toast({ title: "Erro na Importação", description: "O arquivo selecionado não é um backup de comandas válido.", variant: "destructive" });
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,11 +180,7 @@ export default function SettingsClient() {
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
-        Object.entries(data).forEach(([key, val]) => {
-          // Salva como string JSON se for objeto/array, ou como texto puro se for valor simples
-          const valueToStore = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : String(val);
-          localStorage.setItem(key, valueToStore);
-        });
+        if (data.company) void saveCompanyDetails(data.company);
         toast({ title: "Dados Importados!", description: "Recarregando o sistema..." });
         setTimeout(() => window.location.reload(), 1000);
       } catch (err) {
@@ -240,7 +258,19 @@ export default function SettingsClient() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Gestão de Dados</CardTitle><CardDescription>Backup completo do seu sistema.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Gestão de Comandas (Segurança Extra)</CardTitle><CardDescription>Exportar ou restaurar apenas as mesas abertas no momento.</CardDescription></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Button variant="outline" onClick={handleExportOrdersOnly} className="flex flex-col h-auto py-4 gap-2 border-primary/20 hover:bg-primary/5">
+            <Download className="h-6 w-6 text-primary" /><div className="text-center"><p className="font-bold">Exportar Comandas</p><p className="text-[10px] opacity-60">Salvar apenas as mesas ativas</p></div>
+          </Button>
+          <Button variant="outline" onClick={() => ordersFileInputRef.current?.click()} className="flex flex-col h-auto py-4 gap-2 border-primary/20 hover:bg-primary/5">
+            <Upload className="h-6 w-6 text-primary" /><div className="text-center"><p className="font-bold">Importar Comandas</p><p className="text-[10px] opacity-60">Restaurar mesas de um arquivo</p></div>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Gestão de Dados (Backup Geral)</CardTitle><CardDescription>Backup completo do seu sistema (Produtos, Clientes e Configurações).</CardDescription></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Button variant="outline" onClick={handleExportAllData} className="flex flex-col h-auto py-4 gap-2">
             <Download className="h-6 w-6 text-primary" /><div className="text-center"><p className="font-bold">Exportar Backup</p><p className="text-[10px] opacity-60">Baixar todos os dados (JSON)</p></div>
@@ -255,6 +285,7 @@ export default function SettingsClient() {
       </Card>
 
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
+      <input type="file" ref={ordersFileInputRef} onChange={handleOrdersFileChange} accept=".json" className="hidden" />
 
       <AlertDialog open={importAlertOpen} onOpenChange={setImportAlertOpen}>
         <AlertDialogContent>

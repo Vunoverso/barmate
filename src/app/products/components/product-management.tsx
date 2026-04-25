@@ -84,6 +84,15 @@ export default function ProductManagement() {
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   }, [products, toast]);
 
+  const handleSaveProduct = useCallback((product: Omit<Product, 'id'> | Product) => {
+    if ('id' in product) {
+      handleEditProduct(product);
+      return;
+    }
+
+    handleAddProduct(product);
+  }, [handleAddProduct, handleEditProduct]);
+
   const openEditDialog = useCallback((product: Product) => {
     setEditingProduct(product);
     setIsDialogOpen(true);
@@ -316,7 +325,7 @@ export default function ProductManagement() {
         isOpen={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         product={editingProduct}
-        onSave={editingProduct ? handleEditProduct : handleAddProduct}
+        onSave={handleSaveProduct}
       />
 
       {productToDelete && (

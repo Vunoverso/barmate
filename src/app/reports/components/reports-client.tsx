@@ -77,7 +77,7 @@ export default function ReportsClient() {
           setSales(getSales());
           setFinancialEntries(getFinancialEntries());
       } catch (error) {
-          console.error("Failed to load report data from localStorage:", error);
+          console.error("Failed to load report data:", error);
           toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os dados para os relatórios.", variant: "destructive" });
       } finally {
           setIsMounted(true);

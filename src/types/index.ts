@@ -37,6 +37,7 @@ export interface OrderItem extends Product {
   isPreparing?: boolean; // Novo campo para controle de produção
   addedAt?: string; // ISO string of when the item was added
   forceKitchenVisible?: boolean; // Manual flag to show in kitchen even if old
+  isPaid?: boolean; // Indica se o item individual já foi pago em uma separação de conta
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';

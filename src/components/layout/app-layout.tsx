@@ -11,12 +11,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { migrateOldData } from '@/lib/data-access';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { migrateOldData, loadEssentialDataFromCloud, getCompanyDetails, saveCompanyDetails } from '@/lib/data-access';
+import { db, collection, onSnapshot, query, where } from '@/lib/supabase-firestore';
 import { isToday } from 'date-fns';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSession, signOut } from 'next-auth/react';
+import { getOfflineStatus, subscribeOfflineStatus } from '@/lib/offline-sync';
 
 interface NavItem {
   href: string;
@@ -26,51 +28,67 @@ interface NavItem {
 }
 
 const settingsNavItem: NavItem = { href: '/settings', label: 'Configurações', icon: Settings };
+const serverOfflineStatusSnapshot = getOfflineStatus();
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '/';
+  const { status } = useSession();
+  const offlineStatus = useSyncExternalStore(subscribeOfflineStatus, getOfflineStatus, () => serverOfflineStatusSnapshot);
   const [barName, setBarName] = useState('BarMate');
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingKitchenCount, setPendingKitchenCount] = useState(0);
+
   const version = "1.3.2";
 
   useEffect(() => {
-    migrateOldData();
-    const loadBarName = () => {
-        const storedName = localStorage.getItem('barName') || 'BarMate';
-        setBarName(storedName);
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      await loadEssentialDataFromCloud();
+      await migrateOldData();
+
+      if (cancelled) return;
+      const details = getCompanyDetails();
+      setBarName(details.barName);
     };
-    loadBarName();
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'barName') loadBarName();
-    });
+
+    void bootstrap();
+
+    const handleStateChange = () => {
+      const details = getCompanyDetails();
+      setBarName(details.barName);
+    };
+
+    window.addEventListener('barmate-app-state-changed', handleStateChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('barmate-app-state-changed', handleStateChange);
+    };
   }, []);
 
   useEffect(() => {
     if (!db) return;
 
-    // Monitorar solicitações de clientes pendentes
     const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
       setPendingRequestsCount(snapshot.size);
     });
 
-    // Monitorar pedidos pendentes na cozinha (apenas itens de hoje ou forçados)
     const unsubscribeOrders = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
       let count = 0;
       const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
-      
+
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const items = data.items || [];
         items.forEach((item: any) => {
           const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
           const isNotDelivered = !item.isDelivered;
-          
+
           const itemDate = item.addedAt ? new Date(item.addedAt) : null;
           const isItemToday = itemDate ? isToday(itemDate) : false;
           const isNewOrForced = isItemToday || item.forceKitchenVisible === true;
-          
+
           if (isKitchen && isNotDelivered && isNewOrForced) {
             count++;
           }
@@ -84,7 +102,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       unsubscribeOrders();
     };
   }, []);
-  
+
+  const isAuthenticated = status === 'authenticated';
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/login' });
+  };
+
   const mainNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Início', icon: Home },
     { href: '/cash-register', label: 'Caixa', icon: Banknote },
@@ -97,11 +121,41 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     { href: '/clients', label: 'Clientes', icon: Users },
     { href: '/financial', label: 'Financeiro', icon: LineChart },
   ];
-  
-  const allNavItems = [...mainNavItems, settingsNavItem];
-  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
 
-  if (isGuestView) return <main className="flex flex-col min-h-screen bg-background">{children}</main>;
+  const allNavItems = [...mainNavItems, settingsNavItem];
+  const publicRoutes = ['/', '/planos', '/login', '/cadastro', '/sobre'];
+  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
+  const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
+  // While checking session
+  if (status === 'loading' && !isGuestView && !isPublicRoute) {
+      return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
+  }
+
+  // Public marketing and guest views
+  if (isGuestView || isPublicRoute) return <main className="flex flex-col min-h-screen bg-background">{children}</main>;
+
+  // Protected View - Login Required
+    if (!isAuthenticated) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+          <Card className="w-full max-w-md shadow-2xl border-t-4 border-t-primary bg-card">
+                  <CardHeader className="text-center">
+              <CardTitle className="text-2xl font-black uppercase">Acesso Necessario</CardTitle>
+              <CardDescription>Entre com sua conta para acessar o painel operacional.</CardDescription>
+                  </CardHeader>
+            <CardContent className="space-y-3">
+            <Button asChild className="w-full">
+              <Link href="/login">Ir para login</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/cadastro">Criar conta e iniciar trial</Link>
+            </Button>
+            </CardContent>
+              </Card>
+          </div>
+      );
+  }
 
   const SidebarNav = ({ items, className }: { items: NavItem[], className?: string }) => (
     <nav className={`flex flex-col gap-1 ${className}`}>
@@ -171,20 +225,36 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Sheet>
           <div className="w-full flex-1"></div>
           <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className={`hidden md:inline-flex border px-3 py-1 text-xs font-semibold ${offlineStatus.isOnline ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600' : 'border-amber-500/40 bg-amber-500/10 text-amber-600'}`}
+            >
+              {offlineStatus.isHydrating
+                ? 'Carregando dados...'
+                : offlineStatus.isSyncing
+                  ? `Sincronizando ${offlineStatus.pendingMutations}`
+                  : offlineStatus.isOnline
+                    ? offlineStatus.pendingMutations > 0
+                      ? `Online · ${offlineStatus.pendingMutations} pendências`
+                      : 'Online'
+                    : `Offline · ${offlineStatus.pendingMutations} pendências`}
+            </Badge>
             <ThemeToggleButton />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="icon" className="rounded-full h-9 w-9 md:h-10 md:w-10">
                   <Avatar className="h-full w-full">
                     <AvatarImage src="https://placehold.co/40x40.png" alt="Avatar" />
-                    <AvatarFallback>BM</AvatarFallback>
+                    <AvatarFallback>AD</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+                <DropdownMenuLabel>Minha Conta (Admin)</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem><LogOut className="mr-2 h-4 w-4" /> Sair</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
+                    <LogOut className="mr-2 h-4 w-4" /> Sair do Sistema
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

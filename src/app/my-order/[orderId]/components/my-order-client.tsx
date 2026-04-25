@@ -12,10 +12,11 @@ import { FileX, ShoppingCart, Loader2, BellRing } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
+import { db, doc, onSnapshot, updateDoc, increment } from '@/lib/supabase-firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { removeCounterSaleDraft } from '@/lib/data-access';
+import { toValidDate } from '@/lib/utils';
 
 export default function MyOrderClient({ orderId }: { orderId: string }) {
     const [order, setOrder] = useState<ActiveOrder | null>(null);
@@ -61,7 +62,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                const createdAt = toValidDate(data.createdAt) ?? new Date();
                 
                 const newOrder = {
                     ...data,
@@ -113,6 +114,8 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
         return order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     }, [order]);
 
+    const openedAt = order ? toValidDate(order.createdAt) : null;
+
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen gap-4">
@@ -140,7 +143,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                             variant="outline" 
                             className="w-full"
                             onClick={() => {
-                                localStorage.removeItem('barmate_last_order_id');
+                                removeCounterSaleDraft('barmate_last_order_id');
                                 window.location.href = '/guest/register';
                             }}
                         >
@@ -161,7 +164,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                     </div>
                     <CardTitle className="text-2xl">Sua Comanda: {order.name}</CardTitle>
                     <CardDescription>
-                        Abertura: {format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                        Abertura: {openedAt ? format(openedAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Data indisponível'}
                     </CardDescription>
                     {order.status === 'paid' && (
                         <Badge className="w-fit mx-auto mt-2 bg-green-600 px-4 py-1 text-sm">Comanda Paga</Badge>
