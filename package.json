@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "migrate:firestore:supabase": "node scripts/migrate-firestore-to-supabase.mjs",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "seed:users": "node scripts/seed-users.mjs"
