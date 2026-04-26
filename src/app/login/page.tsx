@@ -20,9 +20,12 @@ function LoginPageContent() {
     setIsLoading(true);
     setError(null);
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password;
+
     const response = await signIn('credentials', {
-      email,
-      password,
+      email: normalizedEmail,
+      password: normalizedPassword,
       redirect: false,
       callbackUrl,
     });

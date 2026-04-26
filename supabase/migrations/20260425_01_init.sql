@@ -1,40 +1,8 @@
 -- BarMate Supabase foundation
 -- Base multi-tenant schema and app-state storage.
+-- Shared-database safe: only manage BarMate operational state tables here.
 
 create extension if not exists pgcrypto;
-
-create table if not exists public.organizations (
-  id uuid primary key default gen_random_uuid(),
-  legal_name text not null,
-  trade_name text not null,
-  document text,
-  slug text not null unique,
-  status text not null default 'TRIAL',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.users (
-  id uuid primary key default gen_random_uuid(),
-  name text,
-  email text unique,
-  phone text,
-  password_hash text,
-  status text not null default 'active',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.memberships (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  user_id uuid not null references public.users(id) on delete cascade,
-  role text not null default 'OWNER',
-  status text not null default 'active',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (organization_id, user_id)
-);
 
 create table if not exists public.app_state (
   key text primary key,
@@ -44,7 +12,7 @@ create table if not exists public.app_state (
 
 create table if not exists public.open_orders (
   id text primary key,
-  organization_id uuid references public.organizations(id) on delete cascade,
+  organization_id text,
   name text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -60,7 +28,7 @@ create table if not exists public.open_orders (
 
 create table if not exists public.guest_requests (
   id text primary key,
-  organization_id uuid references public.organizations(id) on delete cascade,
+  organization_id text,
   name text not null,
   status text not null default 'pending',
   intent text not null default 'view',
@@ -69,14 +37,36 @@ create table if not exists public.guest_requests (
   updated_at timestamptz not null default now()
 );
 
+alter table public.app_state add column if not exists key text;
+alter table public.app_state add column if not exists value jsonb not null default '{}'::jsonb;
+alter table public.app_state add column if not exists updated_at timestamptz not null default now();
+
+alter table public.open_orders add column if not exists id text;
+alter table public.open_orders add column if not exists organization_id text;
+alter table public.open_orders add column if not exists name text;
+alter table public.open_orders add column if not exists created_at timestamptz not null default now();
+alter table public.open_orders add column if not exists updated_at timestamptz not null default now();
+alter table public.open_orders add column if not exists items jsonb not null default '[]'::jsonb;
+alter table public.open_orders add column if not exists status text;
+alter table public.open_orders add column if not exists client_id text;
+alter table public.open_orders add column if not exists client_name text;
+alter table public.open_orders add column if not exists user_id text;
+alter table public.open_orders add column if not exists is_shared boolean not null default false;
+alter table public.open_orders add column if not exists viewer_count integer not null default 0;
+alter table public.open_orders add column if not exists deleted_at timestamptz;
+
+alter table public.guest_requests add column if not exists id text;
+alter table public.guest_requests add column if not exists organization_id text;
+alter table public.guest_requests add column if not exists name text;
+alter table public.guest_requests add column if not exists status text not null default 'pending';
+alter table public.guest_requests add column if not exists intent text not null default 'view';
+alter table public.guest_requests add column if not exists associated_order_id text;
+alter table public.guest_requests add column if not exists requested_at timestamptz not null default now();
+alter table public.guest_requests add column if not exists updated_at timestamptz not null default now();
+
 create index if not exists idx_open_orders_org_created_at on public.open_orders (organization_id, created_at desc);
 create index if not exists idx_guest_requests_org_status on public.guest_requests (organization_id, status);
-create index if not exists idx_memberships_user on public.memberships (user_id);
-create index if not exists idx_memberships_org on public.memberships (organization_id);
 
-alter table public.organizations enable row level security;
-alter table public.users enable row level security;
-alter table public.memberships enable row level security;
 alter table public.app_state enable row level security;
 alter table public.open_orders enable row level security;
 alter table public.guest_requests enable row level security;
@@ -134,16 +124,4 @@ drop policy if exists "transitional delete guest_requests" on public.guest_reque
 create policy "transitional delete guest_requests" on public.guest_requests
   for delete using (true);
 
-drop policy if exists "memberships read own org" on public.memberships;
-create policy "memberships read own org" on public.memberships
-  for select using (true);
-
-drop policy if exists "organizations read" on public.organizations;
-create policy "organizations read" on public.organizations
-  for select using (true);
-
-drop policy if exists "users read" on public.users;
-create policy "users read" on public.users
-  for select using (true);
-
--- Seed helper rows for app defaults can be added later through SQL or Prisma.
+-- Seed helper rows for app defaults can be added later through SQL or the app.
