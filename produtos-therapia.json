@@ -1,0 +1,2198 @@
+{
+  "items": [
+    {
+      "id": "10",
+      "name": " Batata Frita PORÇÃO",
+      "price": 20,
+      "stock": 75,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "11",
+      "name": "Pastel Pizza",
+      "price": 6,
+      "stock": 120,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "13",
+      "name": "Coxinha Frango",
+      "price": 8,
+      "stock": 50,
+      "isCombo": false,
+      "categoryId": "cat_lanches",
+      "comboItems": null
+    },
+    {
+      "id": "4",
+      "name": "Refrigerante Lata",
+      "price": 6,
+      "stock": 150,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "6",
+      "name": "Água Mineral",
+      "price": 3,
+      "stock": 200,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "9",
+      "name": "Mini Pastel PORÇÃO",
+      "price": 20,
+      "stock": 60,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1751039867904",
+      "name": "Guaraná 2l",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1751041766897",
+      "name": "Boa Lata",
+      "price": 6,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751041775342",
+      "name": "Brahma Lata",
+      "price": 6,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751041784688",
+      "name": "Litrinho",
+      "price": 5,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751041977097",
+      "name": "Litrão Boa",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751041989546",
+      "name": "Litrão Brahma",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751042001771",
+      "name": "Litrão Burguesa",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751046072790",
+      "name": "Caçulinha",
+      "price": 3,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1751053428816",
+      "name": "Doce pingo de Leite",
+      "price": 1,
+      "stock": 0,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1751053439322",
+      "name": "Paçoca",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1751053482199",
+      "name": "Freegel",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1751053491747",
+      "name": "Bala",
+      "price": 0.2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1751053518890",
+      "name": "Snack Salgadinhos",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1751053555446",
+      "name": "Dose: Conh, Vel, Old, Canel",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1751053571441",
+      "name": "Dose, Smirnoff, Chanceller",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1751053959839",
+      "name": "Copão Chan/Smirnoff 500ml",
+      "price": 16,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1751054003985",
+      "name": "Copão Chan/Smirnoff 700ml",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1751054045524",
+      "name": "Copão Old, Black, 500ml",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1751054091130",
+      "name": "Copão Old, Black 700ml",
+      "price": 14,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1751054235029",
+      "name": "Caipirinha Suiça 500ml",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_caipirinhas_1756501145617"
+    },
+    {
+      "id": "prod-1751054310013",
+      "name": "Caipirinha Velho B. 500ml",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_caipirinhas_1756501145617"
+    },
+    {
+      "id": "prod-1751054389085",
+      "name": "Caipirinha Suiça 700ml",
+      "price": 22,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_caipirinhas_1756501145617"
+    },
+    {
+      "id": "prod-1751054424501",
+      "name": "Caipirinha Velho B. 700ml ",
+      "price": 17,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_caipirinhas_1756501145617"
+    },
+    {
+      "id": "prod-1751054488734",
+      "name": "Energetico 2l",
+      "price": 16,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1751054518235",
+      "name": "Energético Big Lata",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1751054526270",
+      "name": "Monster",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1751054542329",
+      "name": "Ice",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751054556571",
+      "name": "Bud Zero long",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751054581351",
+      "name": "Guaraviton",
+      "price": 5,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1751054647461",
+      "name": "Enrolado Salsicha",
+      "price": 7,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1751054663995",
+      "name": "Bola de Pres e Queijo",
+      "price": 7,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1751117100368",
+      "name": " Batata/Calab PORÇÃO",
+      "price": 40,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1751151129717",
+      "name": "Drink Gin Morango 700ml",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_drinks_1756501505560"
+    },
+    {
+      "id": "prod-1751151145451",
+      "name": "Drink Gin Morango 500ml",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_drinks_1756501505560"
+    },
+    {
+      "id": "prod-1751163190318",
+      "name": "Cigarro Egypt",
+      "price": 6,
+      "stock": 0,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1751230528773",
+      "name": "Pirulito",
+      "price": 2,
+      "stock": 0,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1751233703629",
+      "name": "Gelo Sabores",
+      "price": 3,
+      "stock": 0,
+      "categoryId": "cat_gelos_1751233766129"
+    },
+    {
+      "id": "prod-1751234546004",
+      "name": "Pizza",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1751235420286",
+      "name": "Troca/ Smirnof",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_caipirinhas_1756501145617"
+    },
+    {
+      "id": "prod-1751550966986",
+      "name": "Caçulinha Refri",
+      "price": 3,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1751587450959",
+      "name": "Calabreza PORÇÃO",
+      "price": 30,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1751717009029",
+      "name": "Heinneken Long",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1751832758151",
+      "name": "Eergético copao 700ml",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1751833065880",
+      "name": "Fogazza",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1752026443378",
+      "name": "Amendoim verde concha",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1752191703013",
+      "name": "Caipirinha Smirnoff 500ml",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_caipirinhas_1756501145617"
+    },
+    {
+      "id": "prod-1752193386649",
+      "name": "Heinneken Lata",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1752354724070",
+      "name": "Beats",
+      "price": 8,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1752432435259",
+      "name": "BUD lata",
+      "price": 8,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1752432474546",
+      "name": "MAK Whisky Dose",
+      "price": 9,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1752805356848",
+      "name": "Porção Mandioca",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1752888413197",
+      "name": "Doce de Leite",
+      "price": 3,
+      "stock": 0,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1752899659793",
+      "name": "Hamburguer",
+      "price": 20,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1752955084682",
+      "name": "Dose Jurupinga",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1753044218094",
+      "name": "Porção Mandioca C/ Queijo",
+      "price": 25,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1753309708619",
+      "name": "Copo Smirnoff",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1753312010859",
+      "name": "Cigarro Solto",
+      "price": 0.5,
+      "stock": 0,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1753320485714",
+      "name": "Risoles Queijo",
+      "price": 7,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1753551168321",
+      "name": "Gatorade",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1753640027893",
+      "name": "Água c/ Gás",
+      "price": 4,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1753649013041",
+      "name": "Copo Energético 500ml",
+      "price": 8,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1753655035530",
+      "name": "Batata Meia Porção",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1753721577957",
+      "name": "Chiclete BRINQ",
+      "price": 0.5,
+      "stock": 0,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1753998770546",
+      "name": "Rifa FACAS",
+      "price": 1,
+      "stock": 0,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1754230638331",
+      "name": "Red Label Dose",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1754526694819",
+      "name": "Porção Promocional",
+      "price": 25,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1754610401420",
+      "name": "Chup-Chup",
+      "price": 1,
+      "stock": 0,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1754698560258",
+      "name": "Pizza  Pedaço",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1754760397301",
+      "name": "Dose Old Red Apple/Honey",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1754760423970",
+      "name": "Dose Menta",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1754760448411",
+      "name": "Copão Menta Maçâ Mel 500ml",
+      "price": 14,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1754760464595",
+      "name": "Copão Menta Maçã Mel  700ml",
+      "price": 16,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1754779417140",
+      "name": "Copão Red Label 500ml",
+      "price": 22,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1754779442181",
+      "name": "Copão  Red Label 700ml",
+      "price": 32,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1754852919813",
+      "name": "Mini Pastel c/ Cheddar",
+      "price": 20,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1754877400440",
+      "name": "água de coco",
+      "price": 3,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1755213541831",
+      "name": "Meia Porção Calabreza",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1755218169136",
+      "name": "Crystal Lata",
+      "price": 5,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1755452355805",
+      "name": "Jack Coca",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1755909592063",
+      "name": "Espetinho",
+      "price": 7,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1755909604993",
+      "name": "Jantar",
+      "price": 20,
+      "stock": 0,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1755909988154",
+      "name": "Rifa facas",
+      "price": 5,
+      "stock": 0,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1755915135649",
+      "name": "Fanta 2l",
+      "price": 10,
+      "stock": 0,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1755992245535",
+      "name": "Diplink",
+      "price": 1.5,
+      "stock": 0,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1755995597845",
+      "name": "Combo Burguesa",
+      "price": 27,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 3
+    },
+    {
+      "id": "prod-1756070296458",
+      "name": "Combo boa 2",
+      "price": 28,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 2
+    },
+    {
+      "id": "prod-1756076440939",
+      "name": "Suco Del Vale 450ml",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1756328269633",
+      "name": "Bala Lilith Maçã Verde",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1756341313637",
+      "name": "Batida Vinho 500ml",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_drinks_1756501505560"
+    },
+    {
+      "id": "prod-1756684956893",
+      "name": "Torcida",
+      "price": 4,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1756730140786",
+      "name": "café",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1756842130837",
+      "name": "Bolo Pedaço",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1757024665367",
+      "name": "Goiabeta",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1757029259306",
+      "name": "Fogazza Frango",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1757094580196",
+      "name": "Chesterfield Sabor",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1757113177863",
+      "name": "Litrão Promo(1)",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1757113194750",
+      "name": "Litrão Promo (2)",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1757113227803",
+      "name": "Mini Pastel Promo(1)",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1757113245742",
+      "name": "Mini Pastel Promo (2)",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1757277565421",
+      "name": "Cigarro Winston",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1757295642819",
+      "name": "trident",
+      "price": 4.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1757295742663",
+      "name": "halls",
+      "price": 3.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1757337611317",
+      "name": "Pé de Moça",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1757424939826",
+      "name": "Amstel lata 350ml",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1757621516067",
+      "name": "Doce Leite em Pó",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1757626961147",
+      "name": "Empada",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1757694299347",
+      "name": "Enrolado Mort.",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1757718149513",
+      "name": "porção KARINA",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1757726210076",
+      "name": "Coca 2l",
+      "price": 14,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1757735881190",
+      "name": "pastel grande",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1757958531219",
+      "name": "POWERADE",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1758240849203",
+      "name": "Dose Paratudo",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1758243780811",
+      "name": "COM 3 BOA",
+      "price": 42,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 3
+    },
+    {
+      "id": "prod-1758248021903",
+      "name": "h2o garrafa",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1758309928671",
+      "name": "Burguesa Lata",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1758322472705",
+      "name": "Caipirinha Menta",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_caipirinhas_1756501145617"
+    },
+    {
+      "id": "prod-1758414876279",
+      "name": "Coca/Fanta",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1758745677874",
+      "name": "Taubaina/Tubaina",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1759003483755",
+      "name": "Ovinho Amendoin",
+      "price": 7.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1759016493882",
+      "name": "Porção Mandioca Promo",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1759018323474",
+      "name": "FINI",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1759018370070",
+      "name": "fandangos",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1759095148709",
+      "name": "Heinneken 0 269ml",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1759104407862",
+      "name": "Copão Duplo",
+      "price": 18,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_cop_o_1756500824433",
+      "comboItems": 2
+    },
+    {
+      "id": "prod-1759532973093",
+      "name": "Fósforo",
+      "price": 1,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1759535535723",
+      "name": "Anel de  Cebola",
+      "price": 25,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1759635394183",
+      "name": "BALLY",
+      "price": 9,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1759864768752",
+      "name": "pipoca doce",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1760039870801",
+      "name": "600 BRAHMA",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1760227125806",
+      "name": "Chips Salgadinho",
+      "price": 4,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1760230050593",
+      "name": "revista desenho",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1760384661614",
+      "name": "PASTEL",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1760552698786",
+      "name": "doce de batata doce",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1760567810903",
+      "name": "SOBREMESA",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1760579821937",
+      "name": "pastel (c/ queijo)",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1761220900451",
+      "name": "COX GOURMET",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1761343916155",
+      "name": "imperio",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1761359507017",
+      "name": "revista",
+      "price": 8.99,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1761363240865",
+      "name": "revista",
+      "price": 19.99,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1761363263353",
+      "name": "revista",
+      "price": 14.99,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1761444103246",
+      "name": "revista",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1761769523509",
+      "name": "Imperio 600ml",
+      "price": 9,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1761865008212",
+      "name": "bala update",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1761869276519",
+      "name": "Bolacha ",
+      "price": 2.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1761876305707",
+      "name": "Nhoque Pote",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1761959051418",
+      "name": "FANDANGOS",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1762058023485",
+      "name": "MACARRÃO / QUEIJO",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1762262215499",
+      "name": "cheetos Salgadinho",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1762262294111",
+      "name": "batatinha fritop salgadinho",
+      "price": 4,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1762262612680",
+      "name": "confete G",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1762479836037",
+      "name": "Revista 12,99",
+      "price": 12.99,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1763074917035",
+      "name": "REVISTA",
+      "price": 2.49,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1763256192369",
+      "name": "dadinho meia",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1763256257659",
+      "name": "MEIA DADINHO DE MANDICA",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1763504435210",
+      "name": "Imperio 475ml",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1763565233393",
+      "name": "PRATO FEITO",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1763840863893",
+      "name": "Copo",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1763923415680",
+      "name": "água 1,5l",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1764289146753",
+      "name": "paçoquita",
+      "price": 1,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1764535423365",
+      "name": "Coca 600",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1764862980190",
+      "name": "ALMOÇO",
+      "price": 16,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1764862981447",
+      "name": "ALMOÇO",
+      "price": 16,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1764865768052",
+      "name": "ALMOÇO PARA OS FUNCIONÁRIOS DO POSTO",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1765034174218",
+      "name": "MALZEBIER",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1765583076290",
+      "name": "Coquinha 225ml",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1765669035138",
+      "name": "SOPA DE MANDIOCA",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1765669663002",
+      "name": "CAMPARI E SUCO",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1765681597997",
+      "name": "MOINHO 600",
+      "price": 9,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1765749803435",
+      "name": "burguesa 600ml",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1765756465856",
+      "name": "gin tonica lata",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1765828082082",
+      "name": "BATIDA VINHO",
+      "price": 14,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_drinks_1756501505560"
+    },
+    {
+      "id": "prod-1765828235156",
+      "name": "CAMPARY LARANJA",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_drinks_1756501505560"
+    },
+    {
+      "id": "prod-1765908744590",
+      "name": "IMP.ULTRA",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1766265793133",
+      "name": "Coca 1L",
+      "price": 9,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1766928462913",
+      "name": "COXA CREME",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1766955968945",
+      "name": "Batida",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1767203417430",
+      "name": "Linguiça Gomo Espeto",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1767203429030",
+      "name": "Linguiça Gomo",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1767395612844",
+      "name": "Red Bull",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1767475845507",
+      "name": "Cigarro Roythmans",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1767557948949",
+      "name": "frango com chips",
+      "price": 40,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1767729467050",
+      "name": "Amendoin sta helena",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1767743824900",
+      "name": "Goiabinha",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1767743892141",
+      "name": "Amendoin",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1767817871581",
+      "name": "ARROZ DOCE",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1767875282438",
+      "name": "PÃO NA CHAPA",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1767888084958",
+      "name": "SUCO SKINKA",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1768153551523",
+      "name": "Eisenbahn",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1768153591389",
+      "name": "Cigarro LM",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1768403570832",
+      "name": "Gago Drink",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_drinks_1756501505560"
+    },
+    {
+      "id": "prod-1768669513407",
+      "name": "Trento Slim",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1768669534865",
+      "name": "LOL pirulito",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1769015823502",
+      "name": "Brutal Fruit",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1769123363358",
+      "name": "Heinneken 600",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1769126247870",
+      "name": "h2o lata",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1769130505910",
+      "name": "Porção Tilápia",
+      "price": 30,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1769130740740",
+      "name": "Amstel Litrão",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1769278068221",
+      "name": "Bits Trento",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1769278315929",
+      "name": "Doritos",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1769278317431",
+      "name": "Doritos",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1769290333295",
+      "name": "churros",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1769309189169",
+      "name": "CACHORRO QUENTE Simples",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1769612763324",
+      "name": "bolo de pote cenouro com brigadeiro e nutela",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1769612838947",
+      "name": "tubaina 600ml",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1769612871777",
+      "name": "prato feito ",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1769713823475",
+      "name": "Tubaina 500ml",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1769713843246",
+      "name": "Combo Amstel",
+      "price": 27,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 3
+    },
+    {
+      "id": "prod-1769881255007",
+      "name": "PRATO FEITO",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1769885917854",
+      "name": "PROMISSÓRIA",
+      "price": 250,
+      "stock": 8,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1769901287054",
+      "name": "Corote Combo",
+      "price": 28,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1769901301010",
+      "name": "Maromba Sabor",
+      "price": 18,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1769985989843",
+      "name": "Copão Maromba",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cop_o_1756500824433"
+    },
+    {
+      "id": "prod-1770334658844",
+      "name": "Mentos",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1770335046018",
+      "name": "Fritop grande Salgadinho",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1770399046809",
+      "name": "BOM BOM OREO",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1770414221830",
+      "name": "Casco long",
+      "price": 1,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1770422131356",
+      "name": "Meia Frango",
+      "price": 25,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1770917288100",
+      "name": "raspadinha",
+      "price": 1,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1770942513709",
+      "name": "isqueiro",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1771209164778",
+      "name": "Pringles",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1771263909121",
+      "name": "Papel Juriti",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1771263951049",
+      "name": "Palha Juriti",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1771263985721",
+      "name": "Fumo Juriti",
+      "price": 6.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1771273016450",
+      "name": "Coca KS",
+      "price": 5.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1771301157280",
+      "name": "Combo MOTOCLUBE",
+      "price": 36,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 3
+    },
+    {
+      "id": "prod-1771378533787",
+      "name": "Cachorro batata queijo",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1771546573931",
+      "name": "Pastel Carne Queijo",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1771720498763",
+      "name": "Tilápia Meia",
+      "price": 20,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1771796090880",
+      "name": "Guarana Litrino",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1771806622904",
+      "name": "Pastel Queijo",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1771808495675",
+      "name": "cachorro completo",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1771810869747",
+      "name": "com latas",
+      "price": 72,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 12
+    },
+    {
+      "id": "prod-1771810917492",
+      "name": "combo lata",
+      "price": 72,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 12
+    },
+    {
+      "id": "prod-1771952718007",
+      "name": "Fritop Salgadinho",
+      "price": 4,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1771952757878",
+      "name": "Point Chips pacotão",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1771953397079",
+      "name": "Point chips 30g",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1771953415766",
+      "name": "Point Chips 50",
+      "price": 4,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1771953726914",
+      "name": "Cachorro Quente Batata",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1772215138951",
+      "name": "Tadala Baly",
+      "price": 25,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1772333546428",
+      "name": "Dose Black Label",
+      "price": 16,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_doses_1756500736217"
+    },
+    {
+      "id": "prod-1772339447153",
+      "name": "Skol 1l",
+      "price": 14,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1772540815665",
+      "name": "TUBIN",
+      "price": 4,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1772546939086",
+      "name": "Ovinhos de sabor",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1772813955070",
+      "name": "Água Proteina",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1772837711626",
+      "name": "Meia Frango/calabresa",
+      "price": 30,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1772924929339",
+      "name": "Pirulito Iogurte",
+      "price": 1,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1772998048958",
+      "name": "combo mulher",
+      "price": 25,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1772998908733",
+      "name": "Combo Mulher",
+      "price": 25,
+      "stock": 0,
+      "isCombo": true,
+      "categoryId": "cat_alcoolicas",
+      "comboItems": 3
+    },
+    {
+      "id": "prod-1772999606200",
+      "name": "Coxinha Crú",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1773016772274",
+      "name": "Mega Coxinha",
+      "price": 15,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1773344710573",
+      "name": "Mousse Sensação",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1773429322224",
+      "name": "JK Cigarro",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1773523610401",
+      "name": "chester field",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1773526342887",
+      "name": "80g  batata fritisco",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1773846728215",
+      "name": "Adc. Bisteca",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes"
+    },
+    {
+      "id": "prod-1773952170013",
+      "name": "Mousse limao",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1774456381770",
+      "name": "Malrboro",
+      "price": 13,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1774977266338",
+      "name": "Conti Cola 600ml",
+      "price": 6,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1775170555033",
+      "name": "Salgadinho 5",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1775183235245",
+      "name": "xuxinha",
+      "price": 1,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_cafes",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1775427147627",
+      "name": "Meia Pastel",
+      "price": 12,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1775652698069",
+      "name": "Bolinho de Carne",
+      "price": 8,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches"
+    },
+    {
+      "id": "prod-1775652715740",
+      "name": "Todinho",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_nao_alcoolicas"
+    },
+    {
+      "id": "prod-1775769523340",
+      "name": "Lagunitas",
+      "price": 10,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    },
+    {
+      "id": "prod-1775863283436",
+      "name": "happy din",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1776033634147",
+      "name": "chiclete Flics",
+      "price": 3,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1776450368925",
+      "name": "KitKat",
+      "price": 5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1776466499129",
+      "name": "Moranguete",
+      "price": 2,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1776466520571",
+      "name": "Amendoim DOCE",
+      "price": 3.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_outros"
+    },
+    {
+      "id": "prod-1776466540211",
+      "name": "amendoim 60g",
+      "price": 3.5,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_lanches",
+      "comboItems": null
+    },
+    {
+      "id": "prod-1776810364450",
+      "name": "Tequila",
+      "price": 7,
+      "stock": 0,
+      "isCombo": false,
+      "categoryId": "cat_alcoolicas"
+    }
+  ]
+}

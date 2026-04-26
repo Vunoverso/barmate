@@ -22,11 +22,13 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         if (!hasDatabaseUrl()) return null;
+        const normalizedEmail = credentials.email.toLowerCase().trim();
+        const normalizedPassword = credentials.password;
 
         const prismaClient = getPrismaClient();
 
         const user = await prismaClient.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
+          where: { email: normalizedEmail },
           include: {
             memberships: {
               include: { organization: true },
@@ -36,8 +38,9 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user?.passwordHash) return null;
+        if (user.status !== 'active') return null;
 
-        const isValid = await compare(credentials.password, user.passwordHash);
+        const isValid = await compare(normalizedPassword, user.passwordHash);
         if (!isValid) return null;
 
         const primaryMembership = user.memberships[0];

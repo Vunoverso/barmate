@@ -12,7 +12,8 @@
     "migrate:firestore:supabase": "node scripts/migrate-firestore-to-supabase.mjs",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "seed:users": "node scripts/seed-users.mjs"
+    "seed:users": "node scripts/seed-users.mjs",
+    "import:products": "node scripts/import-products-to-supabase.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
