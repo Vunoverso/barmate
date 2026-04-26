@@ -169,6 +169,8 @@ const normalizeValue = (value: unknown): unknown => {
   return value;
 };
 
+const getPrimaryKeyField = (tableName: string) => (tableName === 'app_state' ? 'key' : 'id');
+
 const currentOnlineState = () => {
   if (typeof navigator === 'undefined') return true;
   return navigator.onLine && getOfflineStatus().isOnline;
@@ -244,16 +246,57 @@ export function onSnapshot(
   onError?: (error: unknown) => void,
 ): () => void {
   let active = true;
+  let inFlight = false;
+  let refreshQueued = false;
   void initializeOfflineSync();
 
-  const refresh = async () => {
+  const runRefresh = async () => {
+    if (!active) return;
+    if (inFlight) {
+      refreshQueued = true;
+      return;
+    }
+
+    inFlight = true;
+
     try {
-      if (!active) return;
       const resolved = resolveTarget(target);
 
       if ('id' in resolved) {
-        const rows = await fetchRows(resolved.tableName, []);
-        const row = rows.find((item) => String(item.id) === resolved.id) ?? null;
+        const primaryKeyField = getPrimaryKeyField(resolved.tableName);
+        let row: Record<string, unknown> | null = null;
+
+        if (!supabase || !currentOnlineState()) {
+          const localSnapshot = await getLocalTableSnapshot(resolved.tableName);
+          row = ((localSnapshot?.rows ?? []) as Record<string, unknown>[])
+            .find((item) => String(item[primaryKeyField]) === resolved.id) ?? null;
+        } else {
+          const { data, error } = await supabase
+            .from(resolved.tableName)
+            .select('*')
+            .eq(primaryKeyField, resolved.id)
+            .maybeSingle();
+
+          if (error) {
+            console.error(`Supabase doc fetch error for ${resolved.tableName}:`, error);
+            const localSnapshot = await getLocalTableSnapshot(resolved.tableName);
+            row = ((localSnapshot?.rows ?? []) as Record<string, unknown>[])
+              .find((item) => String(item[primaryKeyField]) === resolved.id) ?? null;
+          } else if (data) {
+            const mapped = mapRowFromDb(resolved.tableName, data as Record<string, unknown>);
+            const localSnapshot = await getLocalTableSnapshot(resolved.tableName);
+            const existingRows = (localSnapshot?.rows ?? []) as Record<string, unknown>[];
+            const nextRows = [
+              ...existingRows.filter((item) => String(item[primaryKeyField]) !== resolved.id),
+              mapped,
+            ];
+            await persistTableSnapshot(resolved.tableName, nextRows);
+            row = mapped as Record<string, unknown>;
+          } else {
+            row = null;
+          }
+        }
+
         (callback as (snapshot: DocSnapshot) => void)(buildDocSnapshot(row, resolved.id));
         return;
       }
@@ -262,25 +305,30 @@ export function onSnapshot(
       (callback as (snapshot: CollectionSnapshot) => void)(buildCollectionSnapshot(applyFilters(rows, resolved.filters)));
     } catch (error) {
       onError?.(error);
+    } finally {
+      inFlight = false;
+      if (refreshQueued && active) {
+        refreshQueued = false;
+        void runRefresh();
+      }
     }
   };
 
-  void refresh();
+  void runRefresh();
   const interval = setInterval(() => {
-    void refresh();
-  }, 2500);
+    void runRefresh();
+  }, 6000);
 
   const handleDataChange = (event: Event) => {
     const customEvent = event as CustomEvent<{ tableName?: string }>;
     const tableName = customEvent.detail?.tableName;
     if (!tableName || tableName === target.tableName) {
-      void refresh();
+      void runRefresh();
     }
   };
 
   if (typeof window !== 'undefined') {
     window.addEventListener('barmate-offline-data-changed', handleDataChange);
-    window.addEventListener('barmate-offline-status-changed', handleDataChange);
   }
 
   return () => {
@@ -288,7 +336,6 @@ export function onSnapshot(
     clearInterval(interval);
     if (typeof window !== 'undefined') {
       window.removeEventListener('barmate-offline-data-changed', handleDataChange);
-      window.removeEventListener('barmate-offline-status-changed', handleDataChange);
     }
   };
 }
