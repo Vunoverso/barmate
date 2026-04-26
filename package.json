@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack -p 9000",
     "dev:clean": "rimraf .next && next dev --turbopack -p 9000",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "seed:users": "node scripts/seed-users.mjs",
-    "import:products": "node scripts/import-products-to-supabase.mjs"
+    "import:products": "node scripts/import-products-to-supabase.mjs",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
