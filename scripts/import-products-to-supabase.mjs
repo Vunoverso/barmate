@@ -41,7 +41,12 @@ const CATEGORY_FALLBACKS = new Map([
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
 const merge = args.includes('--merge');
-const skipCategories = args.includes('--skip-categories');
+// IMPORTANTE: por seguranca, categorias existentes nao sao mais sobrescritas
+// por padrao. Use --overwrite-categories para forcar. Em 25/04/2026 o script
+// rodou sem essa protecao e renomeou categorias customizadas do cliente
+// (ex: 'Doces' virou 'Outros'), causando um regression em producao.
+const overwriteCategories = args.includes('--overwrite-categories');
+const skipCategories = args.includes('--skip-categories') || !overwriteCategories;
 const inputPath = args.find((arg) => !arg.startsWith('--'));
 
 if (args.includes('--help')) {
@@ -264,6 +269,11 @@ async function main() {
   console.log(`Produtos no arquivo: ${importedProducts.length}`);
   console.log(`Categorias detectadas: ${importedCategories.length}`);
   console.log(`Modo: ${apply ? 'gravacao no Supabase' : 'validacao apenas'}${merge ? ' com merge por id' : ' com substituicao do catalogo'}`);
+  if (skipCategories) {
+    console.log('Categorias existentes serao PRESERVADAS (use --overwrite-categories para sobrescrever).');
+  } else {
+    console.log('ATENCAO: --overwrite-categories ativo - categorias existentes serao sobrescritas.');
+  }
 
   if (!apply) {
     console.log('Nada foi gravado. Rode novamente com --apply para importar.');
