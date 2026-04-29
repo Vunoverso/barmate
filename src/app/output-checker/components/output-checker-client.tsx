@@ -92,8 +92,10 @@ export default function OutputCheckerClient() {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('barmate-app-state-changed', loadData);
     return () => {
       window.removeEventListener('storage', loadData);
+      window.removeEventListener('barmate-app-state-changed', loadData);
     }
   }, [loadData]);
   

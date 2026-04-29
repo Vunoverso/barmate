@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import CategoryManagement from './category-management';
 
 export default function SettingsClient() {
   const [isMounted, setIsMounted] = useState(false);
@@ -256,6 +257,8 @@ export default function SettingsClient() {
             <Button onClick={handleSaveFees} variant="secondary"><Save className="mr-2 h-4 w-4" /> Salvar Taxas</Button>
         </CardFooter>
       </Card>
+
+      <CategoryManagement />
 
       <Card>
         <CardHeader><CardTitle>Gestão de Comandas (Segurança Extra)</CardTitle><CardDescription>Exportar ou restaurar apenas as mesas abertas no momento.</CardDescription></CardHeader>

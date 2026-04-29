@@ -93,10 +93,13 @@ export default function CashRegisterClient() {
             loadInitialData();
         }
     };
+    const handleAppStateChange = () => loadInitialData();
 
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('barmate-app-state-changed', handleAppStateChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('barmate-app-state-changed', handleAppStateChange);
     };
   }, [loadInitialData]); 
 

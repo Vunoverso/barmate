@@ -67,8 +67,12 @@ export default function ProductManagement() {
 
   useEffect(() => {
     fetchData();
-    window.addEventListener('storage', fetchData); 
-    return () => window.removeEventListener('storage', fetchData);
+    window.addEventListener('storage', fetchData);
+    window.addEventListener('barmate-app-state-changed', fetchData);
+    return () => {
+      window.removeEventListener('storage', fetchData);
+      window.removeEventListener('barmate-app-state-changed', fetchData);
+    };
   }, [fetchData]);
 
   const handleAddProduct = useCallback((product: Omit<Product, 'id'>) => {

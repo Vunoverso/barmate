@@ -220,12 +220,14 @@ export default function OrdersClient() {
     }
   }, [currentOrderId, currentOrder?.name]);
 
-  const updateOrdersAndSync = async (updatedOrders: ActiveOrder[]) => {
+  const updateOrdersAndSync = (updatedOrders: ActiveOrder[]) => {
       const now = new Date().toISOString();
       const targetOrder = updatedOrders.find(o => o.id === currentOrderId);
       if (targetOrder) {
           const updatedTarget = { ...targetOrder, updatedAt: now };
-          await syncOrderToFirestore(updatedTarget);
+          // Atualizacao otimista local: UI responde instantaneamente, sync com Supabase em background.
+          setOpenOrders(prev => prev.map(o => o.id === updatedTarget.id ? updatedTarget : o));
+          void syncOrderToFirestore(updatedTarget);
       }
   };
 

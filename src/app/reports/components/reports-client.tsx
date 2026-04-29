@@ -95,9 +95,11 @@ export default function ReportsClient() {
         loadData();
     }
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('barmate-app-state-changed', handleStorageChange);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('barmate-app-state-changed', handleStorageChange);
     };
   }, [loadData]);
 

@@ -1,6 +1,6 @@
 
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest } from '@/types';
-import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, type LucideIcon } from 'lucide-react';
+import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, IceCream, Cookie, Pizza, Soup, Sandwich, Salad, Drumstick, type LucideIcon } from 'lucide-react';
 
 // --- DATA KEYS ---
 export const DATA_KEYS = [
@@ -102,7 +102,8 @@ export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 1.99, cred
 
 // --- UI Helpers ---
 export const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
-  Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Wallet, Users
+  Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Wallet, Users,
+  IceCream, Cookie, Pizza, Soup, Sandwich, Salad, Drumstick,
 };
 
 export const PAYMENT_METHODS: { name: string; value: PaymentMethod; icon: LucideIcon }[] = [

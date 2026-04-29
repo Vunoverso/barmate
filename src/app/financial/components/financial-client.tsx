@@ -154,9 +154,12 @@ export default function FinancialClient() {
     const handleStorageChange = (event: StorageEvent) => {
         loadData();
     };
+    const handleAppStateChange = () => loadData();
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('barmate-app-state-changed', handleAppStateChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('barmate-app-state-changed', handleAppStateChange);
     };
   }, [loadData]);
   

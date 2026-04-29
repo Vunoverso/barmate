@@ -104,12 +104,8 @@ export function hasAppStateKey(key: string) {
   return appStateCache.has(key);
 }
 
-export async function setAppState<T>(key: string, value: T) {
-  const updatedAt = new Date().toISOString();
-  appStateCache.set(key, { value, updatedAt, pending: true });
-  await persistAppStateRecord({ key, value, updatedAt, pending: true });
-
-  if (supabase && navigator.onLine) {
+async function syncAppStateToRemote(key: string, value: unknown, updatedAt: string) {
+  if (supabase && typeof navigator !== 'undefined' && navigator.onLine) {
     const { error } = await supabase.from('app_state').upsert({
       key,
       value,
@@ -125,7 +121,11 @@ export async function setAppState<T>(key: string, value: T) {
         payload: { key, value, updated_at: updatedAt },
         updatedAt,
       });
-    } else {
+      return;
+    }
+
+    const cached = appStateCache.get(key);
+    if (cached && cached.updatedAt === updatedAt) {
       appStateCache.set(key, { value, updatedAt, pending: false });
       await persistAppStateRecord({ key, value, updatedAt, pending: false });
     }
@@ -138,8 +138,17 @@ export async function setAppState<T>(key: string, value: T) {
       updatedAt,
     });
   }
+}
 
+export async function setAppState<T>(key: string, value: T) {
+  const updatedAt = new Date().toISOString();
+  appStateCache.set(key, { value, updatedAt, pending: true });
+  // Atualiza cache local imediatamente e notifica listeners para UI responsiva.
+  await persistAppStateRecord({ key, value, updatedAt, pending: true });
   notifyStateChange(key);
+
+  // Sincroniza com Supabase em background (fire-and-forget) para nao travar a UI.
+  void syncAppStateToRemote(key, value, updatedAt);
 }
 
 export async function removeAppState(key: string) {
