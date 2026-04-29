@@ -60,7 +60,12 @@ export async function hydrateAppState() {
         for (const row of (data as AppStateRow[] | null) ?? []) {
           const existing = appStateCache.get(row.key);
           const remoteUpdatedAt = row.updated_at ?? new Date().toISOString();
-          if (!existing || !existing.pending || remoteUpdatedAt >= existing.updatedAt) {
+          // Remote vence somente quando: (a) nao ha local, ou (b) local nao e
+          // pendente E o remoto e estritamente mais novo. Empate ou pendente
+          // local sempre preserva o cache local (evita revert apos write recente).
+          const shouldUseRemote =
+            !existing || (!existing.pending && remoteUpdatedAt > existing.updatedAt);
+          if (shouldUseRemote) {
             appStateCache.set(row.key, {
               value: row.value,
               updatedAt: remoteUpdatedAt,

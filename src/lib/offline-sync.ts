@@ -233,6 +233,13 @@ export const initializeOfflineSync = async () => {
   if (navigator.onLine) {
     void flushPendingMutations();
   }
+
+  // Drena pendencias periodicamente (caso o usuario fique online sem disparar evento).
+  setInterval(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine && memoryMutations.length > 0) {
+      void flushPendingMutations();
+    }
+  }, 10_000);
 };
 
 export const getLocalAppStateRecord = async (key: string) => {
@@ -297,7 +304,11 @@ export const getLocalTableSnapshot = async (tableName: string) => {
   return snapshot ?? undefined;
 };
 
-export const persistTableSnapshot = async (tableName: string, rows: Record<string, unknown>[]) => {
+export const persistTableSnapshot = async (
+  tableName: string,
+  rows: Record<string, unknown>[],
+  options?: { silent?: boolean },
+) => {
   const snapshot: TableSnapshotRecord = {
     tableName,
     rows,
@@ -311,8 +322,13 @@ export const persistTableSnapshot = async (tableName: string, rows: Record<strin
     await withStores('readwrite', async ({ table_snapshots }) => idbPut(table_snapshots, snapshot));
   }
 
-  emitDataChange(tableName);
+  if (!options?.silent) {
+    emitDataChange(tableName);
+  }
 };
+
+export const hasPendingMutationsForTable = (tableName: string) =>
+  memoryMutations.some((mutation) => mutation.tableName === tableName);
 
 const writeMutationToLocal = async (mutation: PendingMutation) => {
   const database = await openDatabase();
@@ -366,27 +382,13 @@ const updateRemoteAndLocal = async (mutation: PendingMutation) => {
     throw error;
   }
 
+  // Last-writer-wins: confiamos na intencao do usuario local. Nao descartamos
+  // a mutacao quando o remoto parece mais novo - o usuario pode ter ficado
+  // offline e o stamp remoto ja foi atualizado por outra sincronizacao.
+  // Apenas registramos para diagnostico.
   const remoteStamp = remoteUpdatedAt(remote as Record<string, unknown> | null | undefined);
   if (remoteStamp && remoteStamp > mutation.updatedAt) {
-    updateStatus({ conflicts: status.conflicts + 1, lastError: `Conflito em ${mutation.tableName}:${mutation.key}` });
-
-    if (remote) {
-      if (mutation.tableName === 'app_state') {
-        await persistAppStateRecord({
-          key: mutation.key,
-          value: (remote as Record<string, unknown>).value,
-          updatedAt: remoteStamp,
-          pending: false,
-        });
-      } else {
-        const snapshot = await getLocalTableSnapshot(mutation.tableName);
-        const rows = (snapshot?.rows ?? []).filter((row) => String(row[primaryKeyField]) !== mutation.key);
-        rows.push(remote as Record<string, unknown>);
-        await persistTableSnapshot(mutation.tableName, rows);
-      }
-    }
-
-    return;
+    console.warn(`[offline-sync] forcando upsert em ${mutation.tableName}:${mutation.key} (remoto mais recente, mas mutacao local prevalece).`);
   }
 
   if (mutation.operation === 'delete') {

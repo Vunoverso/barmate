@@ -3,6 +3,7 @@ import {
   enqueueMutation,
   getLocalTableSnapshot,
   getOfflineStatus,
+  hasPendingMutationsForTable,
   initializeOfflineSync,
   persistTableSnapshot,
   emitOfflineDataChange,
@@ -183,12 +184,51 @@ const applyFilters = (rows: Record<string, unknown>[], filters: WhereClause[]) =
   }));
 };
 
+const rowUpdatedAt = (row: Record<string, unknown> | null | undefined) => {
+  if (!row) return '';
+  const value = (row as any).updatedAt ?? (row as any).updated_at;
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === 'string' ? value : '';
+};
+
+const mergeRowsPreferringLocal = (
+  tableName: string,
+  remoteRows: Record<string, unknown>[],
+  localRows: Record<string, unknown>[],
+) => {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of remoteRows) {
+    map.set(String(row.id), row);
+  }
+  // Mantem rows locais quando elas sao mais novas que o remoto OU quando
+  // ainda existem mutacoes pendentes para a tabela (write em transito).
+  const hasPending = hasPendingMutationsForTable(tableName);
+  for (const local of localRows) {
+    const id = String(local.id);
+    const remote = map.get(id);
+    if (!remote) {
+      // Linha so existe localmente: pode ser write otimista ainda nao replicado.
+      // Mantem se ha pending ou se e recente (< 60s).
+      const localStamp = rowUpdatedAt(local);
+      if (hasPending || (localStamp && Date.now() - new Date(localStamp).getTime() < 60_000)) {
+        map.set(id, local);
+      }
+      continue;
+    }
+    if (rowUpdatedAt(local) > rowUpdatedAt(remote)) {
+      map.set(id, local);
+    }
+  }
+  return Array.from(map.values());
+};
+
 const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
   const localSnapshot = await getLocalTableSnapshot(tableName);
-  const localRows = applyFilters((localSnapshot?.rows ?? []) as Record<string, unknown>[], filters);
+  const localAll = (localSnapshot?.rows ?? []) as Record<string, unknown>[];
+  const localFiltered = applyFilters(localAll, filters);
 
   if (!supabase || !currentOnlineState()) {
-    return localRows;
+    return localFiltered;
   }
 
   let request = supabase.from(tableName).select('*');
@@ -204,12 +244,19 @@ const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
   const { data, error } = await request;
   if (error) {
     console.error(`Supabase fetch error for ${tableName}:`, error);
-    return localRows;
+    return localFiltered;
   }
 
-  const rows = ((data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
-  await persistTableSnapshot(tableName, rows);
-  return applyFilters(rows, filters);
+  const remoteRows = ((data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
+  const merged = mergeRowsPreferringLocal(tableName, remoteRows, localAll);
+  // Persistencia silenciosa: evita loop com onSnapshot que escuta data-changed.
+  await persistTableSnapshot(tableName, merged, { silent: true });
+  return applyFilters(merged, filters);
+};
+
+const readLocalRows = async (tableName: string, filters: WhereClause[] = []) => {
+  const localSnapshot = await getLocalTableSnapshot(tableName);
+  return applyFilters((localSnapshot?.rows ?? []) as Record<string, unknown>[], filters);
 };
 
 const buildCollectionSnapshot = (rows: Record<string, unknown>[]): CollectionSnapshot => ({
@@ -246,37 +293,43 @@ export function onSnapshot(
   let active = true;
   void initializeOfflineSync();
 
-  const refresh = async () => {
+  const refresh = async (localOnly = false) => {
     try {
       if (!active) return;
       const resolved = resolveTarget(target);
 
       if ('id' in resolved) {
-        const rows = await fetchRows(resolved.tableName, []);
+        const rows = localOnly
+          ? await readLocalRows(resolved.tableName)
+          : await fetchRows(resolved.tableName, []);
         const row = rows.find((item) => String(item.id) === resolved.id) ?? null;
         (callback as (snapshot: DocSnapshot) => void)(buildDocSnapshot(row, resolved.id));
         return;
       }
 
-      const rows = await fetchRows(resolved.tableName, resolved.filters);
+      const rows = localOnly
+        ? await readLocalRows(resolved.tableName, resolved.filters)
+        : await fetchRows(resolved.tableName, resolved.filters);
       (callback as (snapshot: CollectionSnapshot) => void)(buildCollectionSnapshot(applyFilters(rows, resolved.filters)));
     } catch (error) {
       onError?.(error);
     }
   };
 
-  void refresh();
-  // Polling reduzido: mutacoes locais ja emitem 'barmate-offline-data-changed' imediatamente.
-  // Polling serve apenas como fallback para mudancas remotas vindas de outros dispositivos.
+  // Primeira leitura: tenta remoto se possivel.
+  void refresh(false);
+  // Polling ocasional para capturar mudancas vindas de outros dispositivos.
   const interval = setInterval(() => {
-    void refresh();
+    void refresh(false);
   }, 15000);
 
   const handleDataChange = (event: Event) => {
     const customEvent = event as CustomEvent<{ tableName?: string }>;
     const tableName = customEvent.detail?.tableName;
     if (!tableName || tableName === target.tableName) {
-      void refresh();
+      // Mudanca local: re-renderiza apenas com snapshot local (rapido, sem rede,
+      // sem risco de loop com persistTableSnapshot remoto).
+      void refresh(true);
     }
   };
 
