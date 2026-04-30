@@ -5,6 +5,10 @@ export type ProductCategory = {
   id: string;
   name: string;
   iconName: string;
+  /** Optional ordering for digital menu (lower first). */
+  displayOrder?: number;
+  /** Hide entire category from public digital menu. */
+  isVisibleInMenu?: boolean;
 };
 
 export interface Client {
@@ -23,6 +27,14 @@ export interface Product {
   stock?: number | null;
   isCombo?: boolean | null;
   comboItems?: number | null;
+  /** Optional description shown in digital menu. */
+  description?: string | null;
+  /** Optional product image URL (Supabase Storage or external). */
+  imageUrl?: string | null;
+  /** Hide single product from public digital menu. */
+  isVisibleInMenu?: boolean;
+  /** Highlight in "recommended" rail of digital menu. */
+  isFeatured?: boolean;
 }
 
 export interface OrderItem extends Product {
@@ -38,6 +50,12 @@ export interface OrderItem extends Product {
   addedAt?: string; // ISO string of when the item was added
   forceKitchenVisible?: boolean; // Manual flag to show in kitchen even if old
   isPaid?: boolean; // Indica se o item individual já foi pago em uma separação de conta
+  /** Quem lançou o item: 'staff' (garçom/operador) ou 'guest' (cliente via QR). */
+  addedBy?: 'staff' | 'guest';
+  /** Quando true, item ainda aguarda aprovação do garçom para virar pedido firme. */
+  pendingApproval?: boolean;
+  /** Observação livre escrita pelo cliente ao pedir (ex: "sem cebola"). */
+  guestNote?: string | null;
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';
@@ -74,6 +92,11 @@ export interface ActiveOrder {
   isShared?: boolean;
   viewerCount?: number;
   updatedAt?: string;
+  /** Mesa associada (cardápio digital). Mantido opcional para retrocompatibilidade. */
+  tableId?: string | null;
+  tableLabel?: string | null;
+  /** Numero da comanda (display) opcionalmente fornecido pelo cliente ao escanear. */
+  comandaNumber?: string | null;
 }
 
 export interface CashAdjustment {
@@ -128,4 +151,40 @@ export interface GuestRequest {
   associatedOrderId?: string | null;
   intent?: 'create' | 'view';
   requestedAt: any; // Firestore Timestamp
+  /** Mesa de origem quando o request veio do cardápio digital. */
+  tableId?: string | null;
+  tableLabel?: string | null;
+  /** Numero da comanda fornecido pelo cliente (opcional). */
+  comandaNumber?: string | null;
+  /** Itens já pré-selecionados no carrinho do cliente (Fase 3). */
+  cartItems?: OrderItem[];
+}
+
+export interface Table {
+  id: string;
+  /** Slug curto (6 chars base32) usado no QR `/m/<slug>`. */
+  slug: string;
+  /** Numero/identificador da mesa exibido para o cliente. */
+  number: string;
+  /** Rótulo opcional ex: "Varanda 1". */
+  label?: string | null;
+  /** Descrição interna (não exibida ao cliente). */
+  description?: string | null;
+  /** Capacidade default. */
+  defaultGuestCount?: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ServiceCall {
+  id: string;
+  tableId?: string | null;
+  tableLabel?: string | null;
+  orderId?: string | null;
+  guestName?: string | null;
+  reason?: 'waiter' | 'bill' | 'other';
+  message?: string | null;
+  status: 'pending' | 'attended' | 'dismissed';
+  createdAt: string;
 }

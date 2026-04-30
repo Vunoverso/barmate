@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest, Table } from '@/types';
 import { getAppState, setAppState, hydrateAppState, hasAppStateKey } from './app-state';
 import { db, collection, getDocs, doc, setDoc } from './supabase-firestore';
 import {
@@ -15,6 +15,8 @@ import {
     INITIAL_SECONDARY_CASH_BOX,
     INITIAL_BANK_ACCOUNT,
     INITIAL_TRANSACTION_FEES,
+    INITIAL_TABLES,
+    INITIAL_MENU_BRANDING,
     KEY_PRODUCT_CATEGORIES,
     KEY_PRODUCTS,
     KEY_SALES,
@@ -29,6 +31,9 @@ import {
     KEY_SECONDARY_CASH_BOX,
     KEY_BANK_ACCOUNT,
     KEY_CLOSED_SESSIONS,
+    KEY_TABLES,
+    KEY_MENU_BRANDING,
+    type MenuBranding,
 } from './constants';
 
 const sessionStateCache = new Map<string, unknown>();
@@ -266,6 +271,33 @@ export function saveCounterSaleDraft<T>(key: string, value: T) {
 
 export function removeCounterSaleDraft(key: string) {
   sessionStateCache.delete(key);
+}
+
+// --- Tables (cardapio digital) ---
+
+export function getTables(): Table[] {
+  return getAppState<Table[]>(KEY_TABLES, INITIAL_TABLES);
+}
+
+export async function saveTables(tables: Table[]) {
+  await setAppState(KEY_TABLES, tables);
+}
+
+/** Resolve mesa por slug (case-insensitive). Retorna null se nao existir/estiver inativa. */
+export function findTableBySlug(slug: string): Table | null {
+  const target = slug.trim().toLowerCase();
+  if (!target) return null;
+  return getTables().find((t) => t.slug.toLowerCase() === target && t.isActive) ?? null;
+}
+
+// --- Menu Branding (visual do cardapio digital) ---
+
+export function getMenuBranding(): MenuBranding {
+  return getAppState<MenuBranding>(KEY_MENU_BRANDING, INITIAL_MENU_BRANDING);
+}
+
+export async function saveMenuBranding(branding: MenuBranding) {
+  await setAppState(KEY_MENU_BRANDING, branding);
 }
 
 

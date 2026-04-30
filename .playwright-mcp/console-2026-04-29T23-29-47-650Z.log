@@ -1,0 +1,30 @@
+[     532ms] [ERROR] Falha ao sincronizar alterações pendentes: Error: Invalid relation name: relation must be a non-empty string.
+    at e.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:17:11429)
+    at tw.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:37:35659)
+    at L (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:17593)
+    at P (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:18654) @ https://barmate.vercel.app/_next/static/chunks/1684-6fb9175694d838f4.js:0
+[   10508ms] [ERROR] Falha ao sincronizar alterações pendentes: Error: Invalid relation name: relation must be a non-empty string.
+    at e.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:17:11429)
+    at tw.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:37:35659)
+    at L (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:17593)
+    at P (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:18654) @ https://barmate.vercel.app/_next/static/chunks/1684-6fb9175694d838f4.js:0
+[   20509ms] [ERROR] Falha ao sincronizar alterações pendentes: Error: Invalid relation name: relation must be a non-empty string.
+    at e.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:17:11429)
+    at tw.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:37:35659)
+    at L (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:17593)
+    at P (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:18654) @ https://barmate.vercel.app/_next/static/chunks/1684-6fb9175694d838f4.js:0
+[   30506ms] [ERROR] Falha ao sincronizar alterações pendentes: Error: Invalid relation name: relation must be a non-empty string.
+    at e.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:17:11429)
+    at tw.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:37:35659)
+    at L (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:17593)
+    at P (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:18654) @ https://barmate.vercel.app/_next/static/chunks/1684-6fb9175694d838f4.js:0
+[   40503ms] [ERROR] Falha ao sincronizar alterações pendentes: Error: Invalid relation name: relation must be a non-empty string.
+    at e.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:17:11429)
+    at tw.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:37:35659)
+    at L (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:17593)
+    at P (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:18654) @ https://barmate.vercel.app/_next/static/chunks/1684-6fb9175694d838f4.js:0
+[   50502ms] [ERROR] Falha ao sincronizar alterações pendentes: Error: Invalid relation name: relation must be a non-empty string.
+    at e.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:17:11429)
+    at tw.from (https://barmate.vercel.app/_next/static/chunks/4401-2611115a3b036dba.js:37:35659)
+    at L (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:17593)
+    at P (https://barmate.vercel.app/_next/static/chunks/3453-8ed8a267cc3e42d3.js:1:18654) @ https://barmate.vercel.app/_next/static/chunks/1684-6fb9175694d838f4.js:0

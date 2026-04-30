@@ -1,5 +1,5 @@
 
-import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest } from '@/types';
+import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest, Table } from '@/types';
 import { Beer, Wine, Martini, Coffee, UtensilsCrossed, CakeSlice, Package, Banknote, CreditCard, QrCode, Wallet, Users, IceCream, Cookie, Pizza, Soup, Sandwich, Salad, Drumstick, type LucideIcon } from 'lucide-react';
 
 // --- DATA KEYS ---
@@ -36,6 +36,8 @@ export const KEY_SECONDARY_CASH_BOX = 'barmate_secondaryCashBox_v2';
 export const KEY_BANK_ACCOUNT = 'barmate_bankAccount_v2';
 export const KEY_VISUALLY_REMOVED_FINANCIAL_ENTRIES = 'barmate_session_visuallyRemovedFinancialEntries';
 export const KEY_VISUALLY_REMOVED_ADJUSTMENTS = 'barmate_session_visuallyRemovedAdjustments';
+export const KEY_TABLES = 'barmate_tables_v1';
+export const KEY_MENU_BRANDING = 'barmate_menuBranding_v1';
 
 
 // --- INITIAL DATA ---
@@ -98,6 +100,30 @@ export const INITIAL_CASH_REGISTER_STATUS: CashRegisterStatus = { status: 'close
 export const INITIAL_SECONDARY_CASH_BOX: SecondaryCashBox = { baseBalance: 0 };
 export const INITIAL_BANK_ACCOUNT: BankAccount = { baseBalance: 0 };
 export const INITIAL_TRANSACTION_FEES: TransactionFees = { debitRate: 1.99, creditRate: 4.99, pixRate: 0.99 };
+
+export const INITIAL_TABLES: Table[] = [];
+
+export type MenuBranding = {
+  /** Hex color (#RRGGBB) usado como cor primaria no cardápio digital. */
+  primaryColor?: string | null;
+  coverImage?: string | null;
+  welcomeMessage?: string | null;
+  /** Quando true, todo item lançado pelo cliente fica como pendingApproval até o garçom aprovar. */
+  requireWaiterApproval?: boolean;
+  /** Quando false, o cardápio digital fica em modo somente-leitura (cliente só vê, não pede). */
+  allowGuestSelfOrder?: boolean;
+  /** Quando true, exibe campo "número da comanda" no fluxo do cliente. */
+  askComandaNumber?: boolean;
+};
+
+export const INITIAL_MENU_BRANDING: MenuBranding = {
+  primaryColor: null,
+  coverImage: null,
+  welcomeMessage: null,
+  requireWaiterApproval: true,
+  allowGuestSelfOrder: true,
+  askComandaNumber: false,
+};
 
 
 // --- UI Helpers ---
