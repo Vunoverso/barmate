@@ -43,3 +43,9 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# screenshots / playwright artifacts (debug only)
+.playwright-mcp/
+*.png
+!public/**/*.png
+!docs/**/*.png
