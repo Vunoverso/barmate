@@ -186,6 +186,8 @@ export default function OrdersClient() {
 
   useEffect(() => {
     fetchData();
+    window.addEventListener('barmate-app-state-changed', fetchData);
+    return () => window.removeEventListener('barmate-app-state-changed', fetchData);
   }, [fetchData]);
 
   const currentOrder = useMemo(() => openOrders.find(o => o.id === currentOrderId), [openOrders, currentOrderId]);

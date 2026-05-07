@@ -95,6 +95,11 @@ export async function hydrateAppState() {
 
     hydrated = true;
     setHydrationStatus(false);
+
+    // Notifica todos os componentes que o estado foi hidratado
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(APP_STATE_EVENT, { detail: { key: '__hydrated__' } }));
+    }
   })();
 
   return hydrationPromise;

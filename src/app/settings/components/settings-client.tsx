@@ -62,6 +62,8 @@ export default function SettingsClient() {
   useEffect(() => {
     loadData();
     setIsMounted(true);
+    window.addEventListener('barmate-app-state-changed', loadData);
+    return () => window.removeEventListener('barmate-app-state-changed', loadData);
   }, [loadData]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
