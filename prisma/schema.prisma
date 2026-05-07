@@ -49,6 +49,48 @@ model Membership {
   @@unique([organizationId, userId])
 }
 
+// ---------- Dados Operacionais (substitui Supabase) ----------
+
+/// Armazena todos os estados operacionais como JSON (produtos, vendas, etc.)
+model AppState {
+  id             String   @id @default(cuid())
+  key            String
+  organizationId String
+  value          Json
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@map("app_state")
+}
+
+/// Comandas abertas com suporte a soft-delete
+model OpenOrder {
+  id             String    @id
+  organizationId String
+  data           Json
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId])
+  @@index([organizationId, deletedAt])
+  @@map("open_orders")
+}
+
+/// Pedidos de convidados via QR code
+model GuestRequest {
+  id                String    @id @default(cuid())
+  organizationId    String
+  associatedOrderId String?
+  data              Json
+  requestedAt       DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@map("guest_requests")
+}
+
 model Account {
   id                 String  @id @default(cuid())
   userId             String

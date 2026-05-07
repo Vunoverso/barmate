@@ -1,4 +1,22 @@
-import { supabase } from './supabaseClient';
+/** URL base para as API routes de banco de dados */
+const API_BASE = '/api/db';
+
+/** Faz uma chamada autenticada para nossa API de dados */
+async function callDbApi(
+  path: string,
+  options: RequestInit = {},
+): Promise<{ ok: boolean; data?: unknown }> {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+    });
+    return { ok: res.ok, data: res.ok ? await res.json() : null };
+  } catch {
+    return { ok: false };
+  }
+}
 
 type OfflineStatus = {
   isOnline: boolean;
@@ -367,33 +385,17 @@ const removeMutation = async (mutationId: string) => {
 };
 
 const updateRemoteAndLocal = async (mutation: PendingMutation) => {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
   const primaryKeyField = getPrimaryKeyField(mutation.tableName);
-  const { data: remote, error } = await supabase
-    .from(mutation.tableName)
-    .select('*')
-    .eq(primaryKeyField, mutation.key)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  // Last-writer-wins: confiamos na intencao do usuario local. Nao descartamos
-  // a mutacao quando o remoto parece mais novo - o usuario pode ter ficado
-  // offline e o stamp remoto ja foi atualizado por outra sincronizacao.
-  // Apenas registramos para diagnostico.
-  const remoteStamp = remoteUpdatedAt(remote as Record<string, unknown> | null | undefined);
-  if (remoteStamp && remoteStamp > mutation.updatedAt) {
-    console.warn(`[offline-sync] forcando upsert em ${mutation.tableName}:${mutation.key} (remoto mais recente, mas mutacao local prevalece).`);
-  }
 
   if (mutation.operation === 'delete') {
-    const { error: deleteError } = await supabase.from(mutation.tableName).delete().eq(primaryKeyField, mutation.key);
-    if (deleteError) throw deleteError;
+    let path: string;
+    if (mutation.tableName === 'app_state') {
+      path = `/app-state?key=${encodeURIComponent(mutation.key)}`;
+    } else {
+      path = `/${mutation.tableName}?id=${encodeURIComponent(mutation.key)}`;
+    }
+    const result = await callDbApi(path, { method: 'DELETE' });
+    if (!result.ok) throw new Error(`DELETE ${mutation.tableName} falhou`);
 
     if (mutation.tableName === 'app_state') {
       await removeAppStateRecord(mutation.key);
@@ -406,8 +408,18 @@ const updateRemoteAndLocal = async (mutation: PendingMutation) => {
   }
 
   const payload = mutation.payload ?? {};
-  const { error: upsertError } = await supabase.from(mutation.tableName).upsert(payload);
-  if (upsertError) throw upsertError;
+  let path: string;
+  if (mutation.tableName === 'app_state') {
+    path = '/app-state';
+  } else {
+    path = `/${mutation.tableName}`;
+  }
+
+  const result = await callDbApi(path, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!result.ok) throw new Error(`UPSERT ${mutation.tableName} falhou`);
 
   if (mutation.tableName === 'app_state') {
     await persistAppStateRecord({
@@ -427,7 +439,7 @@ const updateRemoteAndLocal = async (mutation: PendingMutation) => {
 };
 
 export const flushPendingMutations = async () => {
-  if (status.isSyncing || !navigator.onLine || !supabase) {
+  if (status.isSyncing || !navigator.onLine) {
     return;
   }
 

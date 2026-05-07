@@ -1,4 +1,3 @@
-import { supabase } from './supabaseClient';
 import {
   enqueueMutation,
   getLocalTableSnapshot,
@@ -8,6 +7,24 @@ import {
   persistTableSnapshot,
   emitOfflineDataChange,
 } from './offline-sync';
+
+/** Chama nossas API routes de banco de dados */
+async function callApi(
+  path: string,
+  options: RequestInit = {},
+): Promise<{ ok: boolean; data?: unknown }> {
+  try {
+    const res = await fetch(`/api/db${path}`, {
+      ...options,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+    });
+    if (!res.ok) return { ok: false };
+    return { ok: true, data: await res.json() };
+  } catch {
+    return { ok: false };
+  }
+}
 
 type WhereClause = {
   field: string;
@@ -124,14 +141,14 @@ const mapRowToDb = (tableName: string, row: Record<string, unknown>) => {
   return row;
 };
 
-export const db = supabase;
+export const db = true; // compatibilidade: indica que o cliente DB está disponível
 
-export const collection = (_db: typeof supabase, tableName: string): CollectionRef => ({
+export const collection = (_db: unknown, tableName: string): CollectionRef => ({
   kind: 'collection',
   tableName,
 });
 
-export const doc = (_db: typeof supabase, tableName: string, id: string): DocRef => ({
+export const doc = (_db: unknown, tableName: string, id: string): DocRef => ({
   kind: 'doc',
   tableName,
   id,
@@ -227,29 +244,25 @@ const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
   const localAll = (localSnapshot?.rows ?? []) as Record<string, unknown>[];
   const localFiltered = applyFilters(localAll, filters);
 
-  if (!supabase || !currentOnlineState()) {
+  if (!currentOnlineState()) {
     return localFiltered;
   }
 
-  let request = supabase.from(tableName).select('*');
-  for (const filter of filters) {
-    if (filter.op === '==') {
-      request = request.eq(filter.field, filter.value as never);
-    }
-    if (filter.op === '!=') {
-      request = request.neq(filter.field, filter.value as never);
-    }
-  }
+  // Mapeia table name para o path da API
+  const apiPath = tableName === 'open_orders' ? '/open-orders'
+    : tableName === 'guest_requests' ? '/guest-requests'
+    : null;
 
-  const { data, error } = await request;
-  if (error) {
-    console.error(`Supabase fetch error for ${tableName}:`, error);
+  if (!apiPath) return localFiltered;
+
+  const result = await callApi(apiPath);
+  if (!result.ok) {
+    console.error(`API fetch error for ${tableName}`);
     return localFiltered;
   }
 
-  const remoteRows = ((data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
+  const remoteRows = ((result.data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
   const merged = mergeRowsPreferringLocal(tableName, remoteRows, localAll);
-  // Persistencia silenciosa: evita loop com onSnapshot que escuta data-changed.
   await persistTableSnapshot(tableName, merged, { silent: true });
   return applyFilters(merged, filters);
 };
@@ -321,24 +334,10 @@ export function onSnapshot(
   // Primeira leitura remota.
   void refresh(false);
 
-  // Supabase Realtime: recebe mudancas instantaneamente sem polling.
-  let realtimeChannel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
-  if (supabase) {
-    const channelName = `realtime-${tableName}-${Math.random().toString(36).slice(2, 8)}`;
-    realtimeChannel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes' as any,
-        { event: '*', schema: 'public', table: tableName },
-        () => { void refresh(false); },
-      )
-      .subscribe();
-  }
-
-  // Polling de fallback a cada 30s (cobre casos de reconexao/offline->online).
+  // Polling a cada 15s para sincronizar dados entre dispositivos
   const interval = setInterval(() => {
     void refresh(false);
-  }, 30000);
+  }, 15000);
 
   const handleDataChange = (event: Event) => {
     const customEvent = event as CustomEvent<{ tableName?: string }>;
@@ -356,7 +355,6 @@ export function onSnapshot(
   return () => {
     active = false;
     clearInterval(interval);
-    realtimeChannel?.unsubscribe();
     if (typeof window !== 'undefined') {
       window.removeEventListener('barmate-offline-data-changed', handleDataChange);
       window.removeEventListener('barmate-offline-status-changed', handleDataChange);
@@ -374,26 +372,28 @@ export const addDoc = async (reference: CollectionRef, data: Record<string, unkn
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
-  if (!supabase || !currentOnlineState()) {
+  const apiPath = reference.tableName === 'open_orders' ? '/open-orders' : `/${reference.tableName}`;
+  const updatedAt = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
+
+  if (!currentOnlineState()) {
     await enqueueMutation({
       tableName: reference.tableName,
       operation: 'upsert',
       key: id,
       payload: dbPayload,
-      updatedAt: String((dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString())),
+      updatedAt,
     });
     return { id };
   }
 
-  void supabase.from(reference.tableName).insert(dbPayload).then(({ error }) => {
-    if (error) {
-      console.error(`Erro ao inserir em ${reference.tableName}:`, error);
+  void callApi(apiPath, { method: 'POST', body: JSON.stringify(dbPayload) }).then((result) => {
+    if (!result.ok) {
       void enqueueMutation({
         tableName: reference.tableName,
         operation: 'upsert',
         key: id,
         payload: dbPayload,
-        updatedAt: String((dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString())),
+        updatedAt,
       });
     }
   });
@@ -413,30 +413,31 @@ export const setDoc = async (reference: DocRef, data: Record<string, unknown>, o
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
   const nextRows = [...(localSnapshot?.rows ?? []).filter((row) => String(row.id) !== reference.id), localRow];
   await persistTableSnapshot(reference.tableName, nextRows);
-  // Notifica listeners locais imediatamente (UI otimista, antes do supabase responder).
+  // Notifica listeners locais imediatamente (UI otimista).
   emitOfflineDataChange(reference.tableName);
 
-  if (!supabase || !currentOnlineState()) {
+  const apiPath = reference.tableName === 'open_orders' ? '/open-orders' : `/${reference.tableName}`;
+  const updatedAt = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
+
+  if (!currentOnlineState()) {
     await enqueueMutation({
       tableName: reference.tableName,
       operation: 'upsert',
       key: reference.id,
       payload: dbPayload,
-      updatedAt: String((dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString())),
+      updatedAt,
     });
     return;
   }
 
-  // Fire-and-forget: nao bloqueia a UI esperando o roundtrip do Supabase.
-  void supabase.from(reference.tableName).upsert(dbPayload).then(({ error }) => {
-    if (error) {
-      console.error(`Erro ao atualizar ${reference.tableName}:`, error);
+  void callApi(apiPath, { method: 'POST', body: JSON.stringify(dbPayload) }).then((result) => {
+    if (!result.ok) {
       void enqueueMutation({
         tableName: reference.tableName,
         operation: 'upsert',
         key: reference.id,
         payload: dbPayload,
-        updatedAt: String((dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString())),
+        updatedAt,
       });
     }
   });
@@ -461,26 +462,28 @@ export const updateDoc = async (reference: DocRef, data: Record<string, unknown>
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
-  if (!supabase || !currentOnlineState()) {
+  const apiPathUpd = reference.tableName === 'open_orders' ? '/open-orders' : `/${reference.tableName}`;
+  const updatedAtUpd = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
+
+  if (!currentOnlineState()) {
     await enqueueMutation({
       tableName: reference.tableName,
       operation: 'upsert',
       key: reference.id,
       payload: dbPayload,
-      updatedAt: String((dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString())),
+      updatedAt: updatedAtUpd,
     });
     return;
   }
 
-  void supabase.from(reference.tableName).upsert(dbPayload).then(({ error }) => {
-    if (error) {
-      console.error(`Erro ao sincronizar ${reference.tableName}:`, error);
+  void callApi(apiPathUpd, { method: 'POST', body: JSON.stringify(dbPayload) }).then((result) => {
+    if (!result.ok) {
       void enqueueMutation({
         tableName: reference.tableName,
         operation: 'upsert',
         key: reference.id,
         payload: dbPayload,
-        updatedAt: String((dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString())),
+        updatedAt: updatedAtUpd,
       });
     }
   });
@@ -492,48 +495,44 @@ export const deleteDoc = async (reference: DocRef) => {
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
-  if (!supabase || !currentOnlineState()) {
+  const apiPathDel = reference.tableName === 'open_orders'
+    ? `/open-orders?id=${encodeURIComponent(reference.id)}`
+    : `/${reference.tableName}?id=${encodeURIComponent(reference.id)}`;
+  const updatedAtDel = new Date().toISOString();
+
+  if (!currentOnlineState()) {
     await enqueueMutation({
       tableName: reference.tableName,
       operation: 'delete',
       key: reference.id,
-      updatedAt: new Date().toISOString(),
+      updatedAt: updatedAtDel,
     });
     return;
   }
 
-  void supabase.from(reference.tableName).delete().eq('id', reference.id).then(({ error }) => {
-    if (error) {
-      console.error(`Erro ao excluir ${reference.tableName}:`, error);
+  void callApi(apiPathDel, { method: 'DELETE' }).then((result) => {
+    if (!result.ok) {
       void enqueueMutation({
         tableName: reference.tableName,
         operation: 'delete',
         key: reference.id,
-        updatedAt: new Date().toISOString(),
+        updatedAt: updatedAtDel,
       });
     }
   });
 };
 
 export const getDoc = async (reference: DocRef) => {
-  if (!supabase || !currentOnlineState()) {
-    const localSnapshot = await getLocalTableSnapshot(reference.tableName);
-    const row = (localSnapshot?.rows ?? []).find((item) => String(item.id) === reference.id) ?? null;
-    return buildDocSnapshot(row, reference.id);
-  }
-
-  const { data, error } = await supabase.from(reference.tableName).select('*').eq('id', reference.id).maybeSingle();
-  if (error) {
-    console.error(`Supabase getDoc error for ${reference.tableName}:`, error);
-    const localSnapshot = await getLocalTableSnapshot(reference.tableName);
-    const row = (localSnapshot?.rows ?? []).find((item) => String(item.id) === reference.id) ?? null;
-    return buildDocSnapshot(row, reference.id);
-  }
-
-  const row = mapRowFromDb(reference.tableName, data as Record<string, unknown>);
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
-  const nextRows = [...(localSnapshot?.rows ?? []).filter((item) => String(item.id) !== reference.id), row];
-  await persistTableSnapshot(reference.tableName, nextRows);
+  const localRow = (localSnapshot?.rows ?? []).find((item) => String(item.id) === reference.id) ?? null;
+
+  if (!currentOnlineState()) {
+    return buildDocSnapshot(localRow, reference.id);
+  }
+
+  // Busca via fetchRows (que já cacheia o snapshot completo)
+  const allRows = await fetchRows(reference.tableName, []);
+  const row = allRows.find((item) => String(item.id) === reference.id) ?? localRow;
   return buildDocSnapshot(row, reference.id);
 };
 

@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, Store, Banknote, Users, ClipboardCheck, QrCode, ChefHat } from 'lucide-react';
+import { Home, Package, LineChart, Menu, HandCoins, Settings, LogOut, Store, Banknote, Users, ClipboardCheck, QrCode, ChefHat, Armchair } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -116,6 +116,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     { href: '/orders', label: 'Comandas', icon: HandCoins, badge: pendingRequestsCount },
     { href: '/pedidos', label: 'Pedidos', icon: ChefHat, badge: pendingKitchenCount },
     { href: '/qrcode', label: 'QR Code Geral', icon: QrCode },
+    { href: '/mesas', label: 'Mesas / Cardápio', icon: Armchair },
     { href: '/output-checker', label: 'Verificar Saídas', icon: ClipboardCheck },
     { href: '/products', label: 'Produtos', icon: Package },
     { href: '/clients', label: 'Clientes', icon: Users },

@@ -1,4 +1,3 @@
-import { supabase } from './supabaseClient';
 import {
   enqueueMutation,
   getLocalAppStateRecord,
@@ -12,6 +11,7 @@ import {
 type AppStateRow = {
   key: string;
   value: unknown;
+  updatedAt?: string;
   updated_at?: string;
 };
 
@@ -34,6 +34,17 @@ const notifyStateChange = (key: string) => {
 
 export const getAppStateEventName = () => APP_STATE_EVENT;
 
+/** Busca app_state da nossa própria API (PostgreSQL Vultr) */
+async function fetchRemoteAppState(): Promise<AppStateRow[]> {
+  try {
+    const res = await fetch('/api/db/app-state', { credentials: 'include' });
+    if (!res.ok) return [];
+    return (await res.json()) as AppStateRow[];
+  } catch {
+    return [];
+  }
+}
+
 export async function hydrateAppState() {
   if (hydrated || hydrationPromise) {
     return hydrationPromise ?? Promise.resolve();
@@ -52,33 +63,25 @@ export async function hydrateAppState() {
       });
     });
 
-    if (supabase && navigator.onLine) {
-      const { data, error } = await supabase.from('app_state').select('key,value,updated_at');
-      if (error) {
-        console.error('Erro ao carregar app_state do Supabase:', error);
-      } else {
-        for (const row of (data as AppStateRow[] | null) ?? []) {
-          const existing = appStateCache.get(row.key);
-          const remoteUpdatedAt = row.updated_at ?? new Date().toISOString();
-          // Remote vence somente quando: (a) nao ha local, ou (b) local nao e
-          // pendente E o remoto e estritamente mais novo. Empate ou pendente
-          // local sempre preserva o cache local (evita revert apos write recente).
-          const shouldUseRemote =
-            !existing || (!existing.pending && remoteUpdatedAt > existing.updatedAt);
-          if (shouldUseRemote) {
-            appStateCache.set(row.key, {
-              value: row.value,
-              updatedAt: remoteUpdatedAt,
-              pending: false,
-            });
-
-            await persistAppStateRecord({
-              key: row.key,
-              value: row.value,
-              updatedAt: remoteUpdatedAt,
-              pending: false,
-            });
-          }
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      const rows = await fetchRemoteAppState();
+      for (const row of rows) {
+        const existing = appStateCache.get(row.key);
+        const remoteUpdatedAt = row.updatedAt ?? row.updated_at ?? new Date().toISOString();
+        const shouldUseRemote =
+          !existing || (!existing.pending && remoteUpdatedAt > existing.updatedAt);
+        if (shouldUseRemote) {
+          appStateCache.set(row.key, {
+            value: row.value,
+            updatedAt: remoteUpdatedAt,
+            pending: false,
+          });
+          await persistAppStateRecord({
+            key: row.key,
+            value: row.value,
+            updatedAt: remoteUpdatedAt,
+            pending: false,
+          });
         }
       }
     }
@@ -110,15 +113,24 @@ export function hasAppStateKey(key: string) {
 }
 
 async function syncAppStateToRemote(key: string, value: unknown, updatedAt: string) {
-  if (supabase && typeof navigator !== 'undefined' && navigator.onLine) {
-    const { error } = await supabase.from('app_state').upsert({
-      key,
-      value,
-      updated_at: updatedAt,
-    });
+  if (typeof navigator !== 'undefined' && navigator.onLine) {
+    try {
+      const res = await fetch('/api/db/app-state', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value }),
+      });
 
-    if (error) {
-      console.error(`Erro ao salvar app_state[${key}] no Supabase:`, error);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const cached = appStateCache.get(key);
+      if (cached && cached.updatedAt === updatedAt) {
+        appStateCache.set(key, { value, updatedAt, pending: false });
+        await persistAppStateRecord({ key, value, updatedAt, pending: false });
+      }
+    } catch (err) {
+      console.error(`Erro ao salvar app_state[${key}]:`, err);
       await enqueueMutation({
         tableName: 'app_state',
         operation: 'upsert',
@@ -126,13 +138,6 @@ async function syncAppStateToRemote(key: string, value: unknown, updatedAt: stri
         payload: { key, value, updated_at: updatedAt },
         updatedAt,
       });
-      return;
-    }
-
-    const cached = appStateCache.get(key);
-    if (cached && cached.updatedAt === updatedAt) {
-      appStateCache.set(key, { value, updatedAt, pending: false });
-      await persistAppStateRecord({ key, value, updatedAt, pending: false });
     }
   } else {
     await enqueueMutation({
@@ -148,11 +153,8 @@ async function syncAppStateToRemote(key: string, value: unknown, updatedAt: stri
 export async function setAppState<T>(key: string, value: T) {
   const updatedAt = new Date().toISOString();
   appStateCache.set(key, { value, updatedAt, pending: true });
-  // Atualiza cache local imediatamente e notifica listeners para UI responsiva.
   await persistAppStateRecord({ key, value, updatedAt, pending: true });
   notifyStateChange(key);
-
-  // Sincroniza com Supabase em background (fire-and-forget) para nao travar a UI.
   void syncAppStateToRemote(key, value, updatedAt);
 }
 
@@ -162,24 +164,19 @@ export async function removeAppState(key: string) {
 
   const updatedAt = new Date().toISOString();
 
-  if (supabase && navigator.onLine) {
-    const { error } = await supabase.from('app_state').delete().eq('key', key);
-    if (error) {
-      console.error(`Erro ao remover app_state[${key}] no Supabase:`, error);
-      await enqueueMutation({
-        tableName: 'app_state',
-        operation: 'delete',
-        key,
-        updatedAt,
+  if (typeof navigator !== 'undefined' && navigator.onLine) {
+    try {
+      const res = await fetch(`/api/db/app-state?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        credentials: 'include',
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error(`Erro ao remover app_state[${key}]:`, err);
+      await enqueueMutation({ tableName: 'app_state', operation: 'delete', key, updatedAt });
     }
   } else {
-    await enqueueMutation({
-      tableName: 'app_state',
-      operation: 'delete',
-      key,
-      updatedAt,
-    });
+    await enqueueMutation({ tableName: 'app_state', operation: 'delete', key, updatedAt });
   }
 
   notifyStateChange(key);
