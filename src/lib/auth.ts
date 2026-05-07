@@ -25,15 +25,21 @@ export const authOptions: NextAuthOptions = {
         const normalizedEmail = credentials.email.toLowerCase().trim();
         const normalizedPassword = credentials.password;
 
-        const user = await prisma.user.findUnique({
-          where: { email: normalizedEmail },
-          include: {
-            memberships: {
-              include: { organization: true },
-              orderBy: { createdAt: 'asc' },
+        let user;
+        try {
+          user = await prisma.user.findUnique({
+            where: { email: normalizedEmail },
+            include: {
+              memberships: {
+                include: { organization: true },
+                orderBy: { createdAt: 'asc' },
+              },
             },
-          },
-        });
+          });
+        } catch (dbErr) {
+          console.error('[auth] Prisma error during login:', dbErr);
+          return null;
+        }
 
         if (!user?.passwordHash) return null;
         if (user.status !== 'active') return null;
