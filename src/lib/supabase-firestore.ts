@@ -293,42 +293,57 @@ export function onSnapshot(
   let active = true;
   void initializeOfflineSync();
 
+  const resolved = resolveTarget(target);
+  const tableName = resolved.tableName;
+
   const refresh = async (localOnly = false) => {
     try {
       if (!active) return;
-      const resolved = resolveTarget(target);
 
       if ('id' in resolved) {
         const rows = localOnly
-          ? await readLocalRows(resolved.tableName)
-          : await fetchRows(resolved.tableName, []);
+          ? await readLocalRows(tableName)
+          : await fetchRows(tableName, []);
         const row = rows.find((item) => String(item.id) === resolved.id) ?? null;
         (callback as (snapshot: DocSnapshot) => void)(buildDocSnapshot(row, resolved.id));
         return;
       }
 
       const rows = localOnly
-        ? await readLocalRows(resolved.tableName, resolved.filters)
-        : await fetchRows(resolved.tableName, resolved.filters);
+        ? await readLocalRows(tableName, resolved.filters)
+        : await fetchRows(tableName, resolved.filters);
       (callback as (snapshot: CollectionSnapshot) => void)(buildCollectionSnapshot(applyFilters(rows, resolved.filters)));
     } catch (error) {
       onError?.(error);
     }
   };
 
-  // Primeira leitura: tenta remoto se possivel.
+  // Primeira leitura remota.
   void refresh(false);
-  // Polling ocasional para capturar mudancas vindas de outros dispositivos.
+
+  // Supabase Realtime: recebe mudancas instantaneamente sem polling.
+  let realtimeChannel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+  if (supabase) {
+    const channelName = `realtime-${tableName}-${Math.random().toString(36).slice(2, 8)}`;
+    realtimeChannel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: tableName },
+        () => { void refresh(false); },
+      )
+      .subscribe();
+  }
+
+  // Polling de fallback a cada 30s (cobre casos de reconexao/offline->online).
   const interval = setInterval(() => {
     void refresh(false);
-  }, 15000);
+  }, 30000);
 
   const handleDataChange = (event: Event) => {
     const customEvent = event as CustomEvent<{ tableName?: string }>;
-    const tableName = customEvent.detail?.tableName;
-    if (!tableName || tableName === target.tableName) {
-      // Mudanca local: re-renderiza apenas com snapshot local (rapido, sem rede,
-      // sem risco de loop com persistTableSnapshot remoto).
+    const evtTable = customEvent.detail?.tableName;
+    if (!evtTable || evtTable === tableName) {
       void refresh(true);
     }
   };
@@ -341,6 +356,7 @@ export function onSnapshot(
   return () => {
     active = false;
     clearInterval(interval);
+    realtimeChannel?.unsubscribe();
     if (typeof window !== 'undefined') {
       window.removeEventListener('barmate-offline-data-changed', handleDataChange);
       window.removeEventListener('barmate-offline-status-changed', handleDataChange);
