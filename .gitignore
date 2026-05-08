@@ -37,6 +37,12 @@ pnpm-debug.log*
 *.docx
 *.db
 
+# supabase/data exports (contain sensitive customer data)
+scripts/supabase-*.json
+scripts/import-*.mjs
+barmate_app_state_partial.json
+*.csv
+
 # vercel
 .vercel
 
