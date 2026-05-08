@@ -158,6 +158,12 @@ export interface GuestRequest {
   comandaNumber?: string | null;
   /** Itens já pré-selecionados no carrinho do cliente (Fase 3). */
   cartItems?: OrderItem[];
+  /** Tipo de requisição: 'service_call' para chamado de atendente, undefined para novo pedido. */
+  requestType?: 'service_call';
+  /** Razão do chamado de atendente. */
+  reason?: 'waiter' | 'bill' | 'other';
+  /** Mensagem associada ao chamado. */
+  message?: string | null;
 }
 
 export interface Table {

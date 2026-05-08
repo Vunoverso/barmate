@@ -1,163 +1,260 @@
-
 "use client";
 
-import { useState, useEffect } from 'react';
-import { db, collection, addDoc, doc, onSnapshot, serverTimestamp } from '@/lib/supabase-firestore';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, UserCircle2, Clock } from 'lucide-react';
+import { Loader2, UserCircle2, Clock, QrCode } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getCounterSaleDraft, removeCounterSaleDraft, saveCounterSaleDraft } from '@/lib/data-access';
 
 const GUEST_NAME_KEY = 'barmate_guest_name';
 const GUEST_LAST_ORDER_KEY = 'barmate_last_order_id';
 const GUEST_REQUEST_ID_KEY = 'barmate_guest_request_id';
+const GUEST_TABLE_LABEL_KEY = 'barmate_guest_table_label';
+const GUEST_COMANDA_KEY = 'barmate_guest_comanda_number';
+const POLL_INTERVAL_MS = 3500;
+
+type RequestStatus = 'idle' | 'pending' | 'approved';
+
+type PublicGuestRequest = {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  associatedOrderId?: string | null;
+};
 
 export default function GuestRegisterPage() {
-    const [name, setName] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [requestId, setRequestId] = useState<string | null>(null);
-    const [status, setStatus] = useState<'idle' | 'pending' | 'approved'>('idle');
-    const [barInfo, setBarInfo] = useState({ name: 'BarMate', logo: '', logoScale: 1 });
-    
-    const router = useRouter();
-    const { toast } = useToast();
+  const [name, setName] = useState('');
+  const [tableLabel, setTableLabel] = useState('');
+  const [comandaNumber, setComandaNumber] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [status, setStatus] = useState<RequestStatus>('idle');
 
-    useEffect(() => {
-        const savedName = getCounterSaleDraft<string>(GUEST_NAME_KEY, '');
-        if (savedName) setName(savedName);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
 
-        const lastOrderId = getCounterSaleDraft<string>(GUEST_LAST_ORDER_KEY, '');
-        const savedRequestId = getCounterSaleDraft<string>(GUEST_REQUEST_ID_KEY, '');
-        
-        // Se já tem uma comanda ativa e não está pendente de uma nova, redireciona direto
-        if (lastOrderId && !savedRequestId) {
-            router.push(`/my-order/${lastOrderId}`);
-            return;
-        }
+  const organizationId = useMemo(() => searchParams.get('org')?.trim() || null, [searchParams]);
+  const mesaFromQuery = useMemo(() => searchParams.get('mesa')?.trim() || '', [searchParams]);
 
-        if (savedRequestId) {
-            setRequestId(savedRequestId);
-            setStatus('pending');
-        }
-    }, [router]);
+  useEffect(() => {
+    const savedName = getCounterSaleDraft<string>(GUEST_NAME_KEY, '');
+    const savedTable = getCounterSaleDraft<string>(GUEST_TABLE_LABEL_KEY, '');
+    const savedComanda = getCounterSaleDraft<string>(GUEST_COMANDA_KEY, '');
 
-    useEffect(() => {
-        if (!db) return;
-        const unsubscribe = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setBarInfo({
-                    name: data.barName || 'BarMate',
-                    logo: data.barLogo || '',
-                    logoScale: data.barLogoScale || 1
-                });
-            }
-        });
-        return () => unsubscribe();
-    }, []);
+    if (savedName) setName(savedName);
+    if (savedTable) setTableLabel(savedTable);
+    if (savedComanda) setComandaNumber(savedComanda);
 
-    useEffect(() => {
-        if (!requestId || !db) return;
-        const unsubscribe = onSnapshot(doc(db, 'guest_requests', requestId), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                if (data.status === 'approved' && data.associatedOrderId) {
-                    void saveCounterSaleDraft(GUEST_LAST_ORDER_KEY, data.associatedOrderId);
-                    removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
-                    router.push(`/my-order/${data.associatedOrderId}`);
-                } else if (data.status === 'rejected') {
-                    removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
-                    setRequestId(null);
-                    setStatus('idle');
-                    toast({ title: "Solicitação Recusada", variant: "destructive" });
-                }
-            }
-        });
-        return () => unsubscribe();
-    }, [requestId, router, toast]);
-
-    const handleSendRequest = async (intent: 'create' | 'view') => {
-        if (!name.trim() || !db) return;
-        setIsSubmitting(true);
-        void saveCounterSaleDraft(GUEST_NAME_KEY, name.trim());
-        try {
-            const docRef = await addDoc(collection(db, 'guest_requests'), {
-                name: name.trim(),
-                status: 'pending',
-                intent: intent,
-                requestedAt: serverTimestamp(),
-            });
-            void saveCounterSaleDraft(GUEST_REQUEST_ID_KEY, docRef.id);
-            setRequestId(docRef.id);
-            setStatus('pending');
-        } catch (error) {
-            toast({ title: "Erro na Conexão", variant: "destructive" });
-        } finally { setIsSubmitting(false); }
-    };
-
-    if (status === 'pending') {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-                <Card className="w-full max-w-md text-center shadow-xl">
-                    <CardHeader>
-                        <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit mb-4"><Clock className="h-10 w-10 text-primary animate-pulse" /></div>
-                        <CardTitle className="text-2xl">Aguardando Liberação</CardTitle>
-                        <CardDescription>Olá, <strong>{name}</strong>! Sua solicitação foi enviada.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col items-center gap-2 mb-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /><p className="text-xs font-bold opacity-50">SINCRO EM TEMPO REAL</p></div>
-                        <Button variant="outline" className="w-full" onClick={() => { removeCounterSaleDraft(GUEST_REQUEST_ID_KEY); setRequestId(null); setStatus('idle'); }}>Cancelar</Button>
-                    </CardContent>
-                </Card>
-            </div>
-        );
+    if (mesaFromQuery) {
+      const normalizedMesa = mesaFromQuery.toUpperCase();
+      setTableLabel((current) => current || `Mesa ${normalizedMesa}`);
     }
 
+    const lastOrderId = getCounterSaleDraft<string>(GUEST_LAST_ORDER_KEY, '');
+    const savedRequestId = getCounterSaleDraft<string>(GUEST_REQUEST_ID_KEY, '');
+
+    if (lastOrderId && !savedRequestId) {
+      router.push(`/my-order/${lastOrderId}`);
+      return;
+    }
+
+    if (savedRequestId) {
+      setRequestId(savedRequestId);
+      setStatus('pending');
+    }
+  }, [mesaFromQuery, router]);
+
+  useEffect(() => {
+    if (!requestId) return;
+
+    const pollStatus = async () => {
+      try {
+        const response = await fetch(`/api/public/guest-requests/${encodeURIComponent(requestId)}`, {
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json() as PublicGuestRequest;
+
+        if (data.status === 'approved' && data.associatedOrderId) {
+          await saveCounterSaleDraft(GUEST_LAST_ORDER_KEY, data.associatedOrderId);
+          removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
+          setStatus('approved');
+          router.push(`/my-order/${data.associatedOrderId}`);
+          return;
+        }
+
+        if (data.status === 'rejected') {
+          removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
+          setRequestId(null);
+          setStatus('idle');
+          toast({ title: 'Solicitação recusada', variant: 'destructive' });
+        }
+      } catch {
+        // Silencioso: o polling tenta novamente no próximo ciclo.
+      }
+    };
+
+    void pollStatus();
+    const interval = setInterval(() => {
+      void pollStatus();
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [requestId, router, toast]);
+
+  const handleSendRequest = async (intent: 'create' | 'view') => {
+    if (!name.trim()) {
+      toast({ title: 'Informe seu nome', variant: 'destructive' });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    await saveCounterSaleDraft(GUEST_NAME_KEY, name.trim());
+    await saveCounterSaleDraft(GUEST_TABLE_LABEL_KEY, tableLabel.trim());
+    await saveCounterSaleDraft(GUEST_COMANDA_KEY, comandaNumber.trim());
+
+    try {
+      const response = await fetch('/api/public/guest-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          intent,
+          tableLabel: tableLabel.trim() || null,
+          comandaNumber: comandaNumber.trim() || null,
+          organizationId,
+        }),
+      });
+
+      if (!response.ok) {
+        toast({ title: 'Não foi possível enviar a solicitação', variant: 'destructive' });
+        return;
+      }
+
+      const data = await response.json() as { id?: string };
+      if (!data.id) {
+        toast({ title: 'Resposta inválida do servidor', variant: 'destructive' });
+        return;
+      }
+
+      await saveCounterSaleDraft(GUEST_REQUEST_ID_KEY, data.id);
+      setRequestId(data.id);
+      setStatus('pending');
+    } catch {
+      toast({ title: 'Erro de conexão', variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const cancelPending = () => {
+    removeCounterSaleDraft(GUEST_REQUEST_ID_KEY);
+    setRequestId(null);
+    setStatus('idle');
+  };
+
+  if (status === 'pending') {
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-            <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary overflow-hidden">
-                <CardHeader className="text-center pb-4">
-                    <div className="mx-auto mb-4 flex items-center justify-center h-32 w-32 rounded-full overflow-hidden bg-background shadow-lg border-4 border-primary/5">
-                        {barInfo.logo ? (
-                            <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-white">
-                                <img 
-                                    src={barInfo.logo} 
-                                    alt="Logo" 
-                                    className="max-w-none transition-transform" 
-                                    style={{ transform: `scale(${barInfo.logoScale})`, width: '128px', height: '128px', objectFit: 'contain' }}
-                                />
-                            </div>
-                        ) : (
-                            <UserCircle2 className="h-16 w-16 text-primary/20" />
-                        )}
-                    </div>
-                    <CardTitle className="text-2xl font-black uppercase mb-1">{barInfo.name}</CardTitle>
-                    <CardDescription>Identifique-se para acessar seu consumo.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="space-y-2">
-                        <Label className="font-bold text-xs uppercase opacity-70">Nome e Sobrenome</Label>
-                        <Input value={name} onChange={(e) => setName(e.target.value)} className="h-12 text-lg font-semibold" placeholder="Ex: João Silva" />
-                    </div>
-                    <div className="flex flex-col gap-3">
-                        <Button className="w-full h-14 text-lg font-bold flex flex-col" disabled={isSubmitting || !name.trim()} onClick={() => handleSendRequest('create')}>
-                            <span>Solicitar Criação de Comanda</span>
-                            <span className="text-[10px] font-normal opacity-70">Ainda não tenho uma conta</span>
-                        </Button>
-                        <Button variant="secondary" className="w-full h-14 text-lg font-bold flex flex-col" disabled={isSubmitting || !name.trim()} onClick={() => handleSendRequest('view')}>
-                            <span>Ver Minha Comanda Aberta</span>
-                            <span className="text-[10px] font-normal opacity-70">Já estou consumindo</span>
-                        </Button>
-                    </div>
-                </CardContent>
-                <CardFooter className="justify-center border-t py-4">
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50">Sincronização Online BarMate</p>
-                </CardFooter>
-            </Card>
-        </div>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
+        <Card className="w-full max-w-md text-center shadow-xl">
+          <CardHeader>
+            <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit mb-4">
+              <Clock className="h-10 w-10 text-primary animate-pulse" />
+            </div>
+            <CardTitle className="text-2xl">Aguardando liberação</CardTitle>
+            <CardDescription>
+              {name ? `Olá, ${name}!` : 'Seu pedido está em análise.'} A equipe vai vincular sua comanda.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center gap-2 mb-4">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <p className="text-xs font-bold opacity-50 uppercase tracking-wide">Atualizando automaticamente</p>
+            </div>
+            <Button variant="outline" className="w-full" onClick={cancelPending}>Cancelar solicitação</Button>
+          </CardContent>
+        </Card>
+      </div>
     );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
+      <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary overflow-hidden">
+        <CardHeader className="text-center pb-4">
+          <div className="mx-auto mb-4 flex items-center justify-center h-24 w-24 rounded-full overflow-hidden bg-background shadow-lg border-4 border-primary/5">
+            <QrCode className="h-10 w-10 text-primary/60" />
+          </div>
+          <CardTitle className="text-2xl font-black uppercase mb-1">Acesso da Mesa</CardTitle>
+          <CardDescription>Informe seus dados para abrir/consultar a comanda e pedir pelo cardápio digital.</CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="font-bold text-xs uppercase opacity-70">Nome e sobrenome</Label>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="h-11 text-base font-semibold"
+              placeholder="Ex: João Silva"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label className="font-bold text-xs uppercase opacity-70">Mesa</Label>
+              <Input
+                value={tableLabel}
+                onChange={(event) => setTableLabel(event.target.value)}
+                className="h-11"
+                placeholder="Ex: Mesa 4"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold text-xs uppercase opacity-70">Comanda</Label>
+              <Input
+                value={comandaNumber}
+                onChange={(event) => setComandaNumber(event.target.value)}
+                className="h-11"
+                placeholder="Opcional"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 pt-2">
+            <Button
+              className="w-full h-12 text-base font-bold"
+              disabled={isSubmitting || !name.trim()}
+              onClick={() => void handleSendRequest('create')}
+            >
+              Solicitar criação de comanda
+            </Button>
+            <Button
+              variant="secondary"
+              className="w-full h-12 text-base font-bold"
+              disabled={isSubmitting || !name.trim()}
+              onClick={() => void handleSendRequest('view')}
+            >
+              Já tenho comanda
+            </Button>
+          </div>
+        </CardContent>
+
+        <CardFooter className="justify-center border-t py-4">
+          <p className="text-[10px] text-muted-foreground uppercase font-bold opacity-50">
+            Após aprovação, você entra direto no cardápio e acompanha sua comanda.
+          </p>
+        </CardFooter>
+      </Card>
+    </div>
+  );
 }

@@ -25,9 +25,33 @@ export default function QRCodeDisplay() {
                 origin = origin.replace(/\d+-/, '9000-');
             }
 
-            const url = `${origin}/guest/register`;
-            setRegisterUrl(url);
-            setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}`);
+            const loadSession = async () => {
+                try {
+                    const response = await fetch('/api/auth/session', { cache: 'no-store' });
+                    if (!response.ok) {
+                        const fallbackUrl = `${origin}/guest/register`;
+                        setRegisterUrl(fallbackUrl);
+                        setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(fallbackUrl)}`);
+                        return;
+                    }
+
+                    const session = await response.json() as { user?: { organizationId?: string } };
+                    const orgId = session.user?.organizationId ?? null;
+
+                    const url = orgId
+                        ? `${origin}/guest/register?org=${encodeURIComponent(orgId)}`
+                        : `${origin}/guest/register`;
+
+                    setRegisterUrl(url);
+                    setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}`);
+                } catch {
+                    const fallbackUrl = `${origin}/guest/register`;
+                    setRegisterUrl(fallbackUrl);
+                    setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(fallbackUrl)}`);
+                }
+            };
+
+            void loadSession();
         }
     }, []);
 
@@ -99,7 +123,7 @@ export default function QRCodeDisplay() {
                     </div>
                     <div className="flex gap-4">
                         <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 font-bold">2</div>
-                        <p className="text-sm">Ele digita o nome dele (ex: "Carlos - Mesa 4") e clica em entrar.</p>
+                        <p className="text-sm">Ele informa nome, mesa e número da comanda (se houver) e solicita acesso.</p>
                     </div>
                     <div className="flex gap-4">
                         <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 font-bold">3</div>

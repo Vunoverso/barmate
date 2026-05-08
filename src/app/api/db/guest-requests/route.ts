@@ -16,14 +16,17 @@ export async function GET(req: NextRequest) {
     orderBy: { requestedAt: 'asc' },
   });
 
-  const result = rows.map((row) => ({
-    ...(row.data as Record<string, unknown>),
-    id: row.id,
-    organizationId: row.organizationId,
-    associatedOrderId: row.associatedOrderId,
-    requestedAt: row.requestedAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }));
+  const result = rows.map((row) => {
+    const data = row.data as Record<string, unknown>;
+    return {
+      ...data,
+      id: row.id,
+      organizationId: row.organizationId,
+      associatedOrderId: row.associatedOrderId ?? data.associatedOrderId ?? null,
+      requestedAt: row.requestedAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  });
 
   return NextResponse.json(result);
 }

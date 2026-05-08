@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -733,12 +733,20 @@ function ShareOrderDialog({ isOpen, onOpenChange, order }: { isOpen: boolean, on
         toast({ title: "Não foi possível copiar", description: "Copie o link manualmente pelo campo.", variant: "destructive" });
       }
     };
+
+    const shareOnWhatsApp = () => {
+      if (!url || !order) return;
+      const text = `Olá! Sua comanda ${order.name} está aqui: ${url}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Compartilhar</DialogTitle></DialogHeader>
                 <div className="flex flex-col items-center gap-4 py-4">
                     <div className="bg-white p-2 rounded-lg border-2">{url && <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`} alt="QR" className="w-40 h-40" />}</div>
                     <div className="flex gap-2 w-full"><Input value={url} readOnly /><Button size="icon" variant="outline" onClick={copyUrl}><Copy className="h-4 w-4" /></Button></div>
+                    <Button className="w-full" onClick={shareOnWhatsApp}><MessageCircle className="h-4 w-4 mr-2" /> Enviar via WhatsApp</Button>
                 </div>
                 <DialogFooter><DialogClose asChild><Button variant="secondary">Fechar</Button></DialogClose></DialogFooter>
             </DialogContent>
@@ -808,20 +816,26 @@ function AddCreditDialog({ onAdd, onCancel }: { onAdd: (amt: number, desc: strin
 
 function GuestRequestsDialog({ isOpen, onOpenChange, requests, openOrders, onApprove, onReject, onCreateFromRequest }: { isOpen: boolean, onOpenChange: (o: boolean) => void, requests: GuestRequest[], openOrders: ActiveOrder[], onApprove: (r: GuestRequest, oid: string) => void, onReject: (id: string) => void, onCreateFromRequest: (r: GuestRequest) => void }) {
     const [selectedOrderMap, setSelectedOrderMap] = useState<Record<string, string>>({});
+    
+    const isServiceCall = (req: GuestRequest) => req.requestType === 'service_call';
+    
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>Solicitações Pendentes</DialogTitle></DialogHeader>
                 <ScrollArea className="max-h-[60vh] pr-4"><div className="space-y-4 py-4">
-                        {requests.length === 0 ? <p className="text-center py-10 opacity-50">Nenhuma solicitação.</p> : requests.map(req => (
-                                <Card key={req.id} className="p-4 bg-muted/20 border-2">
+                        {requests.length === 0 ? <p className="text-center py-10 opacity-50">Nenhuma solicitação.</p> : requests.map(req => {
+                            const isService = isServiceCall(req);
+                            return (
+                                <Card key={req.id} className={cn("p-4 border-2", isService ? "bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700" : "bg-muted/20")}>
                                     <div className="flex flex-col gap-4">
-                                        <div className="flex justify-between"><div><p className="font-black text-xl uppercase text-primary">{req.name}</p><Badge className="mt-2">{req.intent === 'create' ? 'NOVA COMANDA' : 'VER CONTA'}</Badge></div><Button variant="ghost" size="icon" onClick={() => onReject(req.id)} className="text-destructive"><X className="h-5 w-5" /></Button></div>
+                                        <div className="flex justify-between"><div><p className="font-black text-xl uppercase text-primary">{req.name}</p><div className="flex gap-2 mt-2 flex-wrap">{isService ? <Badge className="bg-red-600 hover:bg-red-700"><Bell className="h-3 w-3 mr-1" /> CHAMADO ATENDENTE</Badge> : <Badge className="bg-blue-600 hover:bg-blue-700"><UserPlus className="h-3 w-3 mr-1" /> {req.intent === 'create' ? 'NOVA COMANDA' : 'VER CONTA'}</Badge>}{req.reason === 'bill' && <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">CONTA</Badge>}{req.message && <Badge variant="outline" className="border-gray-400">{req.message.substring(0, 20)}...</Badge>}</div></div><Button variant="ghost" size="icon" onClick={() => onReject(req.id)} className="text-destructive"><X className="h-5 w-5" /></Button></div>
                                         <div className="grid gap-3">{req.intent === 'create' && <Button className="w-full bg-green-600 text-white font-black" onClick={() => onCreateFromRequest(req)}><UserPlus className="mr-2 h-5 w-5" /> CRIAR AGORA</Button>}
                                             <div className="space-y-2 border-t pt-3"><Label className="text-[10px] uppercase font-bold opacity-50">Vincular a Mesa Existente</Label><div className="flex gap-2"><Select onValueChange={(val) => setSelectedOrderMap(p => ({ ...p, [req.id]: val }))} value={selectedOrderMap[req.id] || ""}><SelectTrigger className="flex-1"><SelectValue placeholder="Mesa..." /></SelectTrigger><SelectContent>{openOrders.map(o => (<SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>))}</SelectContent></Select><Button variant="secondary" disabled={!selectedOrderMap[req.id]} onClick={() => onApprove(req, selectedOrderMap[req.id])}><Check className="h-4 w-4" /></Button></div></div>
                                         </div>
                                     </div>
                                 </Card>
-                            ))}
+                            );
+                        })}
                     </div></ScrollArea>
                 <DialogFooter><Button variant="secondary" onClick={() => onOpenChange(false)}>Fechar</Button></DialogFooter>
             </DialogContent>

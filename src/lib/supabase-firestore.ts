@@ -80,6 +80,9 @@ const mapRowFromDb = (tableName: string, row: Record<string, unknown>) => {
       isShared: row.is_shared ?? row.isShared ?? false,
       clientId: row.client_id ?? row.clientId ?? null,
       clientName: row.client_name ?? row.clientName ?? null,
+      tableId: row.table_id ?? row.tableId ?? null,
+      tableLabel: row.table_label ?? row.tableLabel ?? null,
+      comandaNumber: row.comanda_number ?? row.comandaNumber ?? null,
       organizationId: row.organization_id ?? row.organizationId ?? null,
       deletedAt: row.deleted_at ?? row.deletedAt ?? null,
     };
@@ -91,6 +94,9 @@ const mapRowFromDb = (tableName: string, row: Record<string, unknown>) => {
       associatedOrderId: row.associated_order_id ?? row.associatedOrderId ?? null,
       requestedAt: row.requested_at ?? row.requestedAt,
       updatedAt: row.updated_at ?? row.updatedAt,
+      tableId: row.table_id ?? row.tableId ?? null,
+      tableLabel: row.table_label ?? row.tableLabel ?? null,
+      comandaNumber: row.comanda_number ?? row.comandaNumber ?? null,
       organizationId: row.organization_id ?? row.organizationId ?? null,
     };
   }
@@ -110,10 +116,14 @@ const mapRowToDb = (tableName: string, row: Record<string, unknown>) => {
       status: row.status ?? null,
       client_id: row.clientId ?? row.client_id ?? null,
       client_name: row.clientName ?? row.client_name ?? null,
+      table_id: row.tableId ?? row.table_id ?? null,
+      table_label: row.tableLabel ?? row.table_label ?? null,
+      comanda_number: row.comandaNumber ?? row.comanda_number ?? null,
       user_id: row.userId ?? row.user_id ?? null,
       is_shared: Boolean(row.isShared ?? row.is_shared ?? false),
       viewer_count: Number(row.viewerCount ?? row.viewer_count ?? 0),
       deleted_at: row.deletedAt ?? row.deleted_at ?? null,
+      data: row.data ?? null,
     };
   }
 
@@ -125,6 +135,12 @@ const mapRowToDb = (tableName: string, row: Record<string, unknown>) => {
       status: row.status ?? 'pending',
       intent: row.intent ?? 'view',
       associated_order_id: row.associatedOrderId ?? row.associated_order_id ?? null,
+      table_id: row.tableId ?? row.table_id ?? null,
+      table_label: row.tableLabel ?? row.table_label ?? null,
+      comanda_number: row.comandaNumber ?? row.comanda_number ?? null,
+      cart_items: row.cartItems ?? row.cart_items ?? null,
+      request_type: row.requestType ?? row.request_type ?? null,
+      message: row.message ?? null,
       requested_at: toIsoString(row.requestedAt ?? row.requested_at ?? new Date().toISOString()),
       updated_at: toIsoString(row.updatedAt ?? row.updated_at ?? new Date().toISOString()),
     };
