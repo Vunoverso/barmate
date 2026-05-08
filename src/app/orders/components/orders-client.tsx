@@ -166,14 +166,17 @@ export default function OrdersClient() {
   }, []);
 
   useEffect(() => {
-    if (!db) return;
-    const unsubscribe = onSnapshot(collection(db, 'guest_requests'), (snapshot) => {
-        const requests = snapshot.docs
-            .map(d => ({ id: d.id, ...d.data() } as GuestRequest))
-            .filter(r => r.status === 'pending');
-        setPendingRequests(requests);
-    });
-    return () => unsubscribe();
+    const fetchPendingRequests = async () => {
+      try {
+        const res = await fetch('/api/db/guest-requests');
+        if (!res.ok) return;
+        const data = await res.json() as GuestRequest[];
+        setPendingRequests(data.filter(r => r.status === 'pending'));
+      } catch {}
+    };
+    void fetchPendingRequests();
+    const interval = setInterval(() => void fetchPendingRequests(), 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = useCallback(() => {
@@ -697,7 +700,7 @@ export default function OrdersClient() {
         </DialogContent>
       </Dialog>
 
-      <GuestRequestsDialog isOpen={isRequestsDialogOpen} onOpenChange={setIsRequestsDialogOpen} requests={pendingRequests} openOrders={openOrders} onApprove={async (r, oid) => { if(!db) return; await updateDoc(doc(db, 'guest_requests', r.id), { status: 'approved', associatedOrderId: oid }); const o = openOrders.find(x => x.id === oid); if(o && !o.isShared) await syncOrderToFirestore({...o, isShared: true}); toast({title: "Aprovado!"}); }} onReject={async (id) => { if(!db) return; await updateDoc(doc(db, 'guest_requests', id), { status: 'rejected' }); }} onCreateFromRequest={async (r) => { const id = `ord-${Date.now()}`; await syncOrderToFirestore({ id, name: r.name, items: [], createdAt: new Date(), isShared: true, updatedAt: new Date().toISOString() }); if(db) await updateDoc(doc(db, 'guest_requests', r.id), { status: 'approved', associatedOrderId: id }); setCurrentOrderId(id); setIsRequestsDialogOpen(false); }} />
+      <GuestRequestsDialog isOpen={isRequestsDialogOpen} onOpenChange={setIsRequestsDialogOpen} requests={pendingRequests} openOrders={openOrders} onApprove={async (r, oid) => { const o = openOrders.find(x => x.id === oid); if(o && !o.isShared) await syncOrderToFirestore({...o, isShared: true}); await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: oid }) }); toast({title: "Aprovado!"}); }} onReject={async (reqId) => { const req = pendingRequests.find(r => r.id === reqId); if(req) await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...req, status: 'rejected' }) }); }} onCreateFromRequest={async (r) => { const id = `ord-${Date.now()}`; await syncOrderToFirestore({ id, name: r.name, items: [], createdAt: new Date(), isShared: true, updatedAt: new Date().toISOString() }); await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: id }) }); setCurrentOrderId(id); setIsRequestsDialogOpen(false); }} />
 
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
         <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Imprimir Extrato</DialogTitle></DialogHeader>

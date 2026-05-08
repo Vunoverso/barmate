@@ -408,12 +408,12 @@ const updateRemoteAndLocal = async (mutation: PendingMutation) => {
   }
 
   const payload = mutation.payload ?? {};
-  let path: string;
-  if (mutation.tableName === 'app_state') {
-    path = '/app-state';
-  } else {
-    path = `/${mutation.tableName}`;
-  }
+  const TABLE_PATH_MAP: Record<string, string> = {
+    app_state: '/app-state',
+    open_orders: '/open-orders',
+    guest_requests: '/guest-requests',
+  };
+  const path = TABLE_PATH_MAP[mutation.tableName] ?? `/${mutation.tableName}`;
 
   const result = await callDbApi(path, {
     method: 'POST',

@@ -388,7 +388,9 @@ export const addDoc = async (reference: CollectionRef, data: Record<string, unkn
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
-  const apiPath = reference.tableName === 'open_orders' ? '/open-orders' : `/${reference.tableName}`;
+  const apiPath = reference.tableName === 'open_orders' ? '/open-orders'
+    : reference.tableName === 'guest_requests' ? '/guest-requests'
+    : `/${reference.tableName}`;
   const updatedAt = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
 
   if (!currentOnlineState()) {
@@ -432,7 +434,9 @@ export const setDoc = async (reference: DocRef, data: Record<string, unknown>, o
   // Notifica listeners locais imediatamente (UI otimista).
   emitOfflineDataChange(reference.tableName);
 
-  const apiPath = reference.tableName === 'open_orders' ? '/open-orders' : `/${reference.tableName}`;
+  const apiPath = reference.tableName === 'open_orders' ? '/open-orders'
+    : reference.tableName === 'guest_requests' ? '/guest-requests'
+    : `/${reference.tableName}`;
   const updatedAt = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
 
   if (!currentOnlineState()) {
@@ -478,7 +482,9 @@ export const updateDoc = async (reference: DocRef, data: Record<string, unknown>
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
-  const apiPathUpd = reference.tableName === 'open_orders' ? '/open-orders' : `/${reference.tableName}`;
+  const apiPathUpd = reference.tableName === 'open_orders' ? '/open-orders'
+    : reference.tableName === 'guest_requests' ? '/guest-requests'
+    : `/${reference.tableName}`;
   const updatedAtUpd = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
 
   if (!currentOnlineState()) {
@@ -513,6 +519,8 @@ export const deleteDoc = async (reference: DocRef) => {
 
   const apiPathDel = reference.tableName === 'open_orders'
     ? `/open-orders?id=${encodeURIComponent(reference.id)}`
+    : reference.tableName === 'guest_requests'
+    ? `/guest-requests?id=${encodeURIComponent(reference.id)}`
     : `/${reference.tableName}?id=${encodeURIComponent(reference.id)}`;
   const updatedAtDel = new Date().toISOString();
 
