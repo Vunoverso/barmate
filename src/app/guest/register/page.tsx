@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ type PublicGuestRequest = {
   associatedOrderId?: string | null;
 };
 
-export default function GuestRegisterPage() {
+function GuestRegisterPageContent() {
   const [name, setName] = useState('');
   const [tableLabel, setTableLabel] = useState('');
   const [comandaNumber, setComandaNumber] = useState('');
@@ -256,5 +256,25 @@ export default function GuestRegisterPage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+function GuestRegisterFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
+      <Card className="w-full max-w-md shadow-xl">
+        <CardContent className="flex items-center justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function GuestRegisterPage() {
+  return (
+    <Suspense fallback={<GuestRegisterFallback />}>
+      <GuestRegisterPageContent />
+    </Suspense>
   );
 }
