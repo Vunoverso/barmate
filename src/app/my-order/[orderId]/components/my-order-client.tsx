@@ -103,6 +103,12 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
 
   const statusFlow: NonNullable<ActiveOrder['customerStatus']>[] = ['enviado', 'aceito', 'em_producao', 'finalizado', 'saiu_entrega', 'entregue'];
 
+  const orderOriginLabelMap: Record<NonNullable<ActiveOrder['orderOrigin']>, string> = {
+    mesa_qr: 'Mesa (QR)',
+    link_enviado: 'Link enviado',
+    interno: 'Interno',
+  };
+
   const normalizeDigits = (value: string) => value.replace(/\D/g, '');
 
   useEffect(() => {
@@ -199,6 +205,14 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   }, [order]);
 
   const openedAt = order?.createdAt ? new Date(order.createdAt) : null;
+
+  const inferredOrderOrigin = useMemo<NonNullable<ActiveOrder['orderOrigin']>>(() => {
+    if (!order) return 'interno';
+    if (order.orderOrigin) return order.orderOrigin;
+    if (order.tableId || order.tableLabel || order.comandaNumber) return 'mesa_qr';
+    if (order.isShared) return 'link_enviado';
+    return 'interno';
+  }, [order]);
 
   const inferredCustomerStatus = useMemo<NonNullable<ActiveOrder['customerStatus']>>(() => {
     if (!order) return 'enviado';
@@ -499,6 +513,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
           <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
             {order.tableLabel && <Badge variant="secondary">{order.tableLabel}</Badge>}
             {order.comandaNumber && <Badge variant="secondary">Comanda {order.comandaNumber}</Badge>}
+            <Badge variant="outline">Origem: {orderOriginLabelMap[inferredOrderOrigin]}</Badge>
             {order.status === 'paid' && <Badge className="bg-green-600">Comanda paga</Badge>}
             <Badge className="bg-blue-600">Status: {statusLabelMap[inferredCustomerStatus]}</Badge>
           </div>

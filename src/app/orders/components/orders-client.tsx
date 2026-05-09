@@ -68,6 +68,12 @@ const CUSTOMER_STATUS_LABEL: Record<NonNullable<ActiveOrder['customerStatus']>, 
   cancelado: 'Cancelado',
 };
 
+const ORDER_ORIGIN_LABEL: Record<NonNullable<ActiveOrder['orderOrigin']>, string> = {
+  mesa_qr: 'Mesa (QR)',
+  link_enviado: 'Link enviado',
+  interno: 'Interno',
+};
+
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado.</p>;
 
@@ -145,6 +151,13 @@ export default function OrdersClient() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
+
+  const inferOrderOrigin = (order: ActiveOrder): NonNullable<ActiveOrder['orderOrigin']> => {
+    if (order.orderOrigin) return order.orderOrigin;
+    if (order.tableId || order.tableLabel || order.comandaNumber) return 'mesa_qr';
+    if (order.isShared) return 'link_enviado';
+    return 'interno';
+  };
 
   const prepareForFirestore = (data: any) => JSON.parse(JSON.stringify(data, (k, v) => v === undefined ? null : v));
 
@@ -420,6 +433,7 @@ export default function OrdersClient() {
                           <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
                             <div className="min-w-0 flex items-center gap-2">
                               <div className="font-semibold text-xs truncate">{o.name}</div>
+                              <Badge variant="outline" className="text-[9px] h-5">{ORDER_ORIGIN_LABEL[inferOrderOrigin(o)]}</Badge>
                               {o.customerStatus && <Badge variant="outline" className="text-[9px] h-5">{CUSTOMER_STATUS_LABEL[o.customerStatus]}</Badge>}
                               {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
                               {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
@@ -586,7 +600,7 @@ export default function OrdersClient() {
 
       <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={async (d: any) => {
           const id = `ord-${Date.now()}`;
-          await syncOrderToFirestore({ id, ...d, items: [], createdAt: new Date(), updatedAt: new Date().toISOString() });
+          await syncOrderToFirestore({ id, ...d, items: [], orderOrigin: 'interno', createdAt: new Date(), updatedAt: new Date().toISOString() });
           setCurrentOrderId(id);
       }} clients={clients} />
 
@@ -749,7 +763,58 @@ export default function OrdersClient() {
         </DialogContent>
       </Dialog>
 
-      <GuestRequestsDialog isOpen={isRequestsDialogOpen} onOpenChange={setIsRequestsDialogOpen} requests={pendingRequests} openOrders={openOrders} onApprove={async (r, oid) => { const o = openOrders.find(x => x.id === oid); if(o && !o.isShared) await syncOrderToFirestore({...o, isShared: true}); await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: oid }) }); toast({title: "Aprovado!"}); }} onReject={async (reqId) => { const req = pendingRequests.find(r => r.id === reqId); if(req) await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...req, status: 'rejected' }) }); }} onCreateFromRequest={async (r) => { const id = `ord-${Date.now()}`; await syncOrderToFirestore({ id, name: r.name, items: [], createdAt: new Date(), isShared: true, updatedAt: new Date().toISOString() }); await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: id }) }); setCurrentOrderId(id); setIsRequestsDialogOpen(false); }} />
+      <GuestRequestsDialog
+        isOpen={isRequestsDialogOpen}
+        onOpenChange={setIsRequestsDialogOpen}
+        requests={pendingRequests}
+        openOrders={openOrders}
+        onApprove={async (r, oid) => {
+          const o = openOrders.find(x => x.id === oid);
+          if (o) {
+            const inferred: NonNullable<ActiveOrder['orderOrigin']> = (r.tableId || r.tableLabel || r.comandaNumber) ? 'mesa_qr' : inferOrderOrigin(o);
+            await syncOrderToFirestore({ ...o, isShared: true, orderOrigin: inferred });
+          }
+          await fetch('/api/db/guest-requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: oid }),
+          });
+          toast({ title: "Aprovado!" });
+        }}
+        onReject={async (reqId) => {
+          const req = pendingRequests.find(r => r.id === reqId);
+          if (req) {
+            await fetch('/api/db/guest-requests', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...req, status: 'rejected' }),
+            });
+          }
+        }}
+        onCreateFromRequest={async (r) => {
+          const id = `ord-${Date.now()}`;
+          const origin: NonNullable<ActiveOrder['orderOrigin']> = (r.tableId || r.tableLabel || r.comandaNumber) ? 'mesa_qr' : 'link_enviado';
+          await syncOrderToFirestore({
+            id,
+            name: r.name,
+            items: [],
+            createdAt: new Date(),
+            isShared: true,
+            orderOrigin: origin,
+            tableId: r.tableId ?? null,
+            tableLabel: r.tableLabel ?? null,
+            comandaNumber: r.comandaNumber ?? null,
+            updatedAt: new Date().toISOString(),
+          });
+          await fetch('/api/db/guest-requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: id }),
+          });
+          setCurrentOrderId(id);
+          setIsRequestsDialogOpen(false);
+        }}
+      />
 
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
         <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Imprimir Extrato</DialogTitle></DialogHeader>

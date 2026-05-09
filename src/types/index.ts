@@ -86,6 +86,8 @@ export interface ActiveOrder {
   createdAt: Date;
   items: OrderItem[];
   status?: 'open' | 'paid';
+  /** Origem explicita da comanda para evitar ambiguidade operacional. */
+  orderOrigin?: 'mesa_qr' | 'link_enviado' | 'interno';
   /** Status de acompanhamento exibido para o cliente do cardapio digital. */
   customerStatus?: 'enviado' | 'aceito' | 'em_producao' | 'finalizado' | 'saiu_entrega' | 'entregue' | 'cancelado';
   clientId?: string | null;
