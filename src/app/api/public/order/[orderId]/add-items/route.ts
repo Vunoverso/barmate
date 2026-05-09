@@ -14,6 +14,43 @@ type IncomingItem = {
   note?: string | null;
 };
 
+type IncomingCheckout = {
+  customerName: string;
+  phone: string;
+  cep: string;
+  addressLine: string;
+  addressNumber: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  complement?: string | null;
+  paymentMethod: 'dinheiro' | 'pix' | 'debito' | 'credito';
+  cashAmount?: number | null;
+};
+
+const asCheckout = (value: unknown): IncomingCheckout | null => {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const paymentMethodRaw = typeof raw.paymentMethod === 'string' ? raw.paymentMethod : '';
+  const paymentMethod = (['dinheiro', 'pix', 'debito', 'credito'] as const).includes(paymentMethodRaw as IncomingCheckout['paymentMethod'])
+    ? (paymentMethodRaw as IncomingCheckout['paymentMethod'])
+    : 'pix';
+
+  return {
+    customerName: typeof raw.customerName === 'string' ? raw.customerName.trim() : '',
+    phone: typeof raw.phone === 'string' ? raw.phone.trim() : '',
+    cep: typeof raw.cep === 'string' ? raw.cep.trim() : '',
+    addressLine: typeof raw.addressLine === 'string' ? raw.addressLine.trim() : '',
+    addressNumber: typeof raw.addressNumber === 'string' ? raw.addressNumber.trim() : '',
+    neighborhood: typeof raw.neighborhood === 'string' ? raw.neighborhood.trim() : '',
+    city: typeof raw.city === 'string' ? raw.city.trim() : '',
+    state: typeof raw.state === 'string' ? raw.state.trim() : '',
+    complement: typeof raw.complement === 'string' && raw.complement.trim() ? raw.complement.trim() : null,
+    paymentMethod,
+    cashAmount: typeof raw.cashAmount === 'number' && Number.isFinite(raw.cashAmount) ? raw.cashAmount : null,
+  };
+};
+
 const asItems = (value: unknown): IncomingItem[] => {
   if (!Array.isArray(value)) return [];
   return value
@@ -39,6 +76,7 @@ export async function POST(
   const body = await req.json() as Record<string, unknown>;
 
   const incomingItems = asItems(body.items);
+  const incomingCheckout = asCheckout(body.checkout);
   if (incomingItems.length === 0) {
     return NextResponse.json({ error: 'items are required' }, { status: 400 });
   }
@@ -116,6 +154,13 @@ export async function POST(
   const updatedData = {
     ...orderData,
     items: [...currentItems, ...additions],
+    lastGuestCheckout: incomingCheckout
+      ? {
+          ...incomingCheckout,
+          createdAt: new Date().toISOString(),
+          total: additions.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        }
+      : (orderData.lastGuestCheckout ?? null),
     updatedAt: new Date().toISOString(),
   };
 

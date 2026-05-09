@@ -114,6 +114,8 @@ export type MenuBranding = {
   allowGuestSelfOrder?: boolean;
   /** Quando true, exibe campo "número da comanda" no fluxo do cliente. */
   askComandaNumber?: boolean;
+  /** Telefone WhatsApp do estabelecimento (somente números com DDI+DDD). */
+  whatsappNumber?: string | null;
 };
 
 export const INITIAL_MENU_BRANDING: MenuBranding = {
@@ -123,6 +125,7 @@ export const INITIAL_MENU_BRANDING: MenuBranding = {
   requireWaiterApproval: true,
   allowGuestSelfOrder: true,
   askComandaNumber: false,
+  whatsappNumber: null,
 };
 
 

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { clearFinancialData, getTransactionFees, saveTransactionFees, getCompanyDetails, saveCompanyDetails, getOpenOrders, getProducts, getProductCategories, getClients, getSales, getFinancialEntries, getCashRegisterStatus, getClosedSessions } from '@/lib/data-access';
+import { clearFinancialData, getTransactionFees, saveTransactionFees, getCompanyDetails, saveCompanyDetails, getOpenOrders, getProducts, getProductCategories, getClients, getSales, getFinancialEntries, getCashRegisterStatus, getClosedSessions, getMenuBranding, saveMenuBranding } from '@/lib/data-access';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -31,6 +31,7 @@ export default function SettingsClient() {
   const [barAddress, setBarAddress] = useState('');
   const [barLogo, setBarLogo] = useState('');
   const [barLogoScale, setBarLogoScale] = useState(1);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
 
   // Fee states
   const [debitRate, setDebitRate] = useState('0');
@@ -52,6 +53,9 @@ export default function SettingsClient() {
     setBarAddress(companyDetails.barAddress);
     setBarLogo(companyDetails.barLogo);
     setBarLogoScale(companyDetails.barLogoScale);
+
+    const branding = getMenuBranding();
+    setWhatsappNumber((branding.whatsappNumber ?? '').trim());
 
     const fees = getTransactionFees();
     setDebitRate(fees.debitRate.toString().replace('.', ','));
@@ -87,6 +91,11 @@ export default function SettingsClient() {
       barAddress: barAddress.trim(),
       barLogo,
       barLogoScale,
+    });
+    const currentBranding = getMenuBranding();
+    await saveMenuBranding({
+      ...currentBranding,
+      whatsappNumber: whatsappNumber.trim() || null,
     });
     toast({ title: "Identidade Salva!", description: "Os dados do estabelecimento foram atualizados." });
   };
@@ -231,6 +240,15 @@ export default function SettingsClient() {
               <div className="space-y-2"><Label>CNPJ</Label><Input value={barCnpj} onChange={(e) => setBarCnpj(e.target.value)} /></div>
             </div>
             <div className="space-y-2"><Label>Endereço</Label><Textarea value={barAddress} onChange={(e) => setBarAddress(e.target.value)} /></div>
+            <div className="space-y-2">
+              <Label>WhatsApp para Pedidos</Label>
+              <Input
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="Ex: 5511999998888"
+              />
+              <p className="text-xs text-muted-foreground">Use somente números, incluindo DDI e DDD. Exemplo: 55 + 11 + número.</p>
+            </div>
             <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Identidade</Button>
           </CardContent>
         </form>

@@ -77,6 +77,7 @@ export async function GET(
       requireWaiterApproval: branding.requireWaiterApproval ?? true,
       allowGuestSelfOrder: branding.allowGuestSelfOrder ?? true,
       askComandaNumber: branding.askComandaNumber ?? false,
+      whatsappNumber: branding.whatsappNumber ?? null,
     },
   });
 }

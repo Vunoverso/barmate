@@ -12,6 +12,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -22,6 +24,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const ORDER_POLL_INTERVAL_MS = 5000;
 
@@ -31,7 +40,24 @@ type MenuPayload = {
   branding?: {
     allowGuestSelfOrder?: boolean;
     requireWaiterApproval?: boolean;
+    whatsappNumber?: string | null;
   };
+};
+
+type CheckoutPaymentMethod = 'dinheiro' | 'pix' | 'debito' | 'credito';
+
+type CheckoutData = {
+  customerName: string;
+  phone: string;
+  cep: string;
+  addressLine: string;
+  addressNumber: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  complement: string;
+  paymentMethod: CheckoutPaymentMethod;
+  cashAmount: string;
 };
 
 export default function MyOrderClient({ orderId }: { orderId: string }) {
@@ -46,9 +72,34 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   const [isLoadingMenu, setIsLoadingMenu] = useState(false);
   const [isSubmittingCart, setIsSubmittingCart] = useState(false);
   const [isCallingWaiter, setIsCallingWaiter] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [guestCart, setGuestCart] = useState<Record<string, number>>({});
+  const [checkout, setCheckout] = useState<CheckoutData>({
+    customerName: '',
+    phone: '',
+    cep: '',
+    addressLine: '',
+    addressNumber: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    complement: '',
+    paymentMethod: 'pix',
+    cashAmount: '',
+  });
   const prevItemsCount = useRef<number>(0);
   const { toast } = useToast();
+
+  const normalizeDigits = (value: string) => value.replace(/\D/g, '');
+
+  useEffect(() => {
+    if (!order?.name) return;
+    setCheckout((current) => {
+      if (current.customerName.trim()) return current;
+      return { ...current, customerName: order.name };
+    });
+  }, [order?.name]);
 
   const playNotificationSound = () => {
     try {
@@ -170,6 +221,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       setMenuCategories(data.categories ?? []);
       setAllowGuestSelfOrder(data.branding?.allowGuestSelfOrder ?? true);
       setRequireWaiterApproval(data.branding?.requireWaiterApproval ?? true);
+      setWhatsappNumber(normalizeDigits(data.branding?.whatsappNumber ?? ''));
       setIsMenuOpen(true);
     } catch {
       toast({ title: 'Erro ao carregar cardápio', variant: 'destructive' });
@@ -191,7 +243,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
     });
   };
 
-  const submitGuestOrder = async () => {
+  const submitGuestOrder = async (options?: { sendViaWhatsApp?: boolean }) => {
     if (!order || cartEntries.length === 0) return;
 
     setIsSubmittingCart(true);
@@ -204,6 +256,19 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             productId: entry.product.id,
             quantity: entry.quantity,
           })),
+          checkout: {
+            customerName: checkout.customerName.trim(),
+            phone: normalizeDigits(checkout.phone),
+            cep: normalizeDigits(checkout.cep),
+            addressLine: checkout.addressLine.trim(),
+            addressNumber: checkout.addressNumber.trim(),
+            neighborhood: checkout.neighborhood.trim(),
+            city: checkout.city.trim(),
+            state: checkout.state.trim(),
+            complement: checkout.complement.trim() || null,
+            paymentMethod: checkout.paymentMethod,
+            cashAmount: checkout.paymentMethod === 'dinheiro' ? Number(checkout.cashAmount.replace(',', '.')) || null : null,
+          },
         }),
       });
 
@@ -213,6 +278,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       }
 
       setGuestCart({});
+      setIsCheckoutOpen(false);
       setIsMenuOpen(false);
       toast({
         title: 'Pedido enviado',
@@ -220,11 +286,107 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
           ? 'Seu pedido foi enviado e aguarda confirmação do atendente.'
           : 'Seu pedido foi adicionado na comanda.',
       });
+
+      if (options?.sendViaWhatsApp) {
+        if (!whatsappNumber) {
+          toast({
+            title: 'WhatsApp não configurado',
+            description: 'Peça ao estabelecimento para configurar o número nas Configurações.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const addressParts = [
+          checkout.addressLine,
+          checkout.addressNumber,
+          checkout.neighborhood,
+          checkout.city,
+          checkout.state,
+          checkout.cep ? `CEP ${checkout.cep}` : '',
+          checkout.complement ? `Compl: ${checkout.complement}` : '',
+        ].filter(Boolean);
+
+        const paymentLine = checkout.paymentMethod === 'dinheiro'
+          ? `Dinheiro${checkout.cashAmount ? ` (troco para R$ ${checkout.cashAmount})` : ''}`
+          : checkout.paymentMethod === 'pix'
+            ? 'PIX'
+            : checkout.paymentMethod === 'debito'
+              ? 'Cartão de débito'
+              : 'Cartão de crédito';
+
+        const itemsText = cartEntries
+          .map((entry) => `- ${entry.quantity}x ${entry.product.name} (${formatCurrency(entry.product.price * entry.quantity)})`)
+          .join('\n');
+
+        const message = [
+          `Olá! Novo pedido da comanda ${order.name}.`,
+          '',
+          `Cliente: ${checkout.customerName || order.name}`,
+          `Telefone: ${checkout.phone || '-'}`,
+          '',
+          'Endereço:',
+          addressParts.join(', ') || '-',
+          '',
+          `Pagamento: ${paymentLine}`,
+          '',
+          'Itens:',
+          itemsText,
+          '',
+          `Total: ${formatCurrency(cartTotal)}`,
+        ].join('\n');
+
+        const url = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     } catch {
       toast({ title: 'Erro ao enviar pedido', variant: 'destructive' });
     } finally {
       setIsSubmittingCart(false);
     }
+  };
+
+  const handleLookupCep = async () => {
+    const cep = normalizeDigits(checkout.cep);
+    if (cep.length !== 8) return;
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!response.ok) return;
+      const data = await response.json() as {
+        logradouro?: string;
+        bairro?: string;
+        localidade?: string;
+        uf?: string;
+        erro?: boolean;
+      };
+      if (data.erro) return;
+
+      setCheckout((current) => ({
+        ...current,
+        addressLine: current.addressLine || (data.logradouro ?? ''),
+        neighborhood: current.neighborhood || (data.bairro ?? ''),
+        city: current.city || (data.localidade ?? ''),
+        state: current.state || (data.uf ?? ''),
+      }));
+    } catch {
+      // Sem bloqueio do fluxo em caso de falha no ViaCEP.
+    }
+  };
+
+  const validateCheckoutForWhatsApp = () => {
+    if (!checkout.customerName.trim()) return 'Informe o nome do cliente.';
+    if (normalizeDigits(checkout.phone).length < 10) return 'Informe um telefone válido.';
+    if (normalizeDigits(checkout.cep).length !== 8) return 'Informe um CEP válido com 8 dígitos.';
+    if (!checkout.addressLine.trim()) return 'Informe o endereço.';
+    if (!checkout.addressNumber.trim()) return 'Informe o número do endereço.';
+    if (!checkout.neighborhood.trim()) return 'Informe o bairro.';
+    if (!checkout.city.trim()) return 'Informe a cidade.';
+    if (!checkout.state.trim()) return 'Informe o estado.';
+    if (checkout.paymentMethod === 'dinheiro' && (!checkout.cashAmount.trim() || Number(checkout.cashAmount.replace(',', '.')) <= 0)) {
+      return 'Informe o valor em dinheiro para calcular o troco.';
+    }
+    return null;
   };
 
   const callWaiter = async () => {
@@ -452,10 +614,161 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsMenuOpen(false)}>Fechar</Button>
             <Button
+              variant="secondary"
+              onClick={() => setIsCheckoutOpen(true)}
+              disabled={!allowGuestSelfOrder || cartEntries.length === 0}
+            >
+              Finalizar via WhatsApp
+            </Button>
+            <Button
               onClick={() => void submitGuestOrder()}
               disabled={!allowGuestSelfOrder || cartEntries.length === 0 || isSubmittingCart}
             >
               {isSubmittingCart ? 'Enviando...' : 'Enviar Pedido'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Finalizar Pedido no WhatsApp</DialogTitle>
+            <DialogDescription>
+              Preencha seus dados para enviar o pedido com endereço, pagamento e troco.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <div className="grid gap-2">
+              <Label>Nome</Label>
+              <Input
+                value={checkout.customerName}
+                onChange={(e) => setCheckout((c) => ({ ...c, customerName: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label>Telefone</Label>
+                <Input
+                  value={checkout.phone}
+                  onChange={(e) => setCheckout((c) => ({ ...c, phone: e.target.value }))}
+                  placeholder="(11) 99999-9999"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>CEP</Label>
+                <Input
+                  value={checkout.cep}
+                  onChange={(e) => setCheckout((c) => ({ ...c, cep: e.target.value }))}
+                  onBlur={() => void handleLookupCep()}
+                  placeholder="00000-000"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[1fr_120px] gap-3">
+              <div className="grid gap-2">
+                <Label>Endereço</Label>
+                <Input
+                  value={checkout.addressLine}
+                  onChange={(e) => setCheckout((c) => ({ ...c, addressLine: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Número</Label>
+                <Input
+                  value={checkout.addressNumber}
+                  onChange={(e) => setCheckout((c) => ({ ...c, addressNumber: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-2 col-span-2">
+                <Label>Bairro</Label>
+                <Input
+                  value={checkout.neighborhood}
+                  onChange={(e) => setCheckout((c) => ({ ...c, neighborhood: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>UF</Label>
+                <Input
+                  value={checkout.state}
+                  onChange={(e) => setCheckout((c) => ({ ...c, state: e.target.value.toUpperCase().slice(0, 2) }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Cidade</Label>
+              <Input
+                value={checkout.city}
+                onChange={(e) => setCheckout((c) => ({ ...c, city: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Complemento (opcional)</Label>
+              <Input
+                value={checkout.complement}
+                onChange={(e) => setCheckout((c) => ({ ...c, complement: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label>Forma de Pagamento</Label>
+                <Select
+                  value={checkout.paymentMethod}
+                  onValueChange={(value: CheckoutPaymentMethod) => setCheckout((c) => ({ ...c, paymentMethod: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pix">PIX</SelectItem>
+                    <SelectItem value="debito">Cartão de débito</SelectItem>
+                    <SelectItem value="credito">Cartão de crédito</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {checkout.paymentMethod === 'dinheiro' ? (
+                <div className="grid gap-2">
+                  <Label>Troco para (R$)</Label>
+                  <Input
+                    value={checkout.cashAmount}
+                    onChange={(e) => setCheckout((c) => ({ ...c, cashAmount: e.target.value }))}
+                    placeholder="Ex: 100,00"
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Label>Total</Label>
+                  <Input value={formatCurrency(cartTotal)} readOnly />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCheckoutOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={isSubmittingCart || cartEntries.length === 0}
+              onClick={() => {
+                const validation = validateCheckoutForWhatsApp();
+                if (validation) {
+                  toast({ title: validation, variant: 'destructive' });
+                  return;
+                }
+                void submitGuestOrder({ sendViaWhatsApp: true });
+              }}
+            >
+              {isSubmittingCart ? 'Enviando...' : 'Enviar via WhatsApp'}
             </Button>
           </DialogFooter>
         </DialogContent>
