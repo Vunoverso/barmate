@@ -59,9 +59,11 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
   const [lastOrderName, setLastOrderName] = useState<string>('');
   const receiptRef = useRef<HTMLDivElement>(null);
   const isInitialOpen = useRef(true);
+  const isProcessing = useRef(false);
   const { toast } = useToast();
 
   const resetState = () => {
+    isProcessing.current = false;
     setDiscount('');
     setCashAmount('');
     setDebitAmount('');
@@ -150,6 +152,8 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
 
 
   const handleProcessPayment = () => {
+    // Guard contra double-submit que causa registros financeiros duplicados
+    if (isProcessing.current) return;
     setError('');
     const roundedRemaining = Math.round(remainingToPay * 100) / 100;
 
@@ -188,6 +192,7 @@ export default function PaymentDialog({ isOpen, onOpenChange, totalAmount, curre
         ...saleObject,
     } as Sale);
 
+    isProcessing.current = true;
     onSubmit({ sale: saleObject, leaveChangeAsCredit, isPartial: isPartialNow });
   };
 

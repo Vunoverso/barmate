@@ -44,6 +44,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const bootstrap = async () => {
+      if (status !== 'authenticated') {
+        const details = getCompanyDetails();
+        setBarName(details.barName);
+        return;
+      }
       await loadEssentialDataFromCloud();
       await migrateOldData();
 
@@ -64,10 +69,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       cancelled = true;
       window.removeEventListener('barmate-app-state-changed', handleStateChange);
     };
-  }, []);
+  }, [status]);
 
   useEffect(() => {
-    if (!db) return;
+    if (!db || status !== 'authenticated') return;
 
     const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
@@ -101,7 +106,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       unsubscribeRequests();
       unsubscribeOrders();
     };
-  }, []);
+  }, [status]);
 
   const isAuthenticated = status === 'authenticated';
 

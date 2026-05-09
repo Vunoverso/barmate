@@ -12,15 +12,15 @@ import {
 async function callApi(
   path: string,
   options: RequestInit = {},
-): Promise<{ ok: boolean; data?: unknown }> {
+): Promise<{ ok: boolean; status?: number; data?: unknown }> {
   try {
     const res = await fetch(`/api/db${path}`, {
       ...options,
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
     });
-    if (!res.ok) return { ok: false };
-    return { ok: true, data: await res.json() };
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true, status: res.status, data: await res.json() };
   } catch {
     return { ok: false };
   }
@@ -217,6 +217,11 @@ const applyFilters = (rows: Record<string, unknown>[], filters: WhereClause[]) =
   }));
 };
 
+// Tombstone de IDs deletados localmente para evitar race condition com o polling remoto.
+// Expira após 90 segundos, tempo suficiente para o DELETE chegar ao servidor.
+const recentlyDeletedIds = new Map<string, number>(); // id -> timestamp ms
+const RECENTLY_DELETED_TTL = 90_000;
+
 const rowUpdatedAt = (row: Record<string, unknown> | null | undefined) => {
   if (!row) return '';
   const value = (row as any).updatedAt ?? (row as any).updated_at;
@@ -229,8 +234,16 @@ const mergeRowsPreferringLocal = (
   remoteRows: Record<string, unknown>[],
   localRows: Record<string, unknown>[],
 ) => {
+  // Limpa entradas expiradas do tombstone
+  const now = Date.now();
+  for (const [id, ts] of recentlyDeletedIds) {
+    if (now - ts > RECENTLY_DELETED_TTL) recentlyDeletedIds.delete(id);
+  }
+
   const map = new Map<string, Record<string, unknown>>();
   for (const row of remoteRows) {
+    // Ignora rows que foram deletadas localmente e ainda não chegaram ao servidor
+    if (recentlyDeletedIds.has(String(row.id))) continue;
     map.set(String(row.id), row);
   }
   // Mantem rows locais quando elas sao mais novas que o remoto OU quando
@@ -273,7 +286,10 @@ const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
 
   const result = await callApi(apiPath);
   if (!result.ok) {
-    console.error(`API fetch error for ${tableName}`);
+    // 401 é esperado quando o usuário não está autenticado — não logar como erro
+    if (result.status !== 401) {
+      console.error(`API fetch error for ${tableName}`);
+    }
     return localFiltered;
   }
 
@@ -512,6 +528,9 @@ export const updateDoc = async (reference: DocRef, data: Record<string, unknown>
 };
 
 export const deleteDoc = async (reference: DocRef) => {
+  // Registra o ID no tombstone para evitar race condition com polling remoto
+  recentlyDeletedIds.set(reference.id, Date.now());
+
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
   const nextRows = (localSnapshot?.rows ?? []).filter((row) => String(row.id) !== reference.id);
   await persistTableSnapshot(reference.tableName, nextRows);
