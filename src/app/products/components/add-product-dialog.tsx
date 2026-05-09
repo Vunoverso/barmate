@@ -169,7 +169,7 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="w-[96vw] max-w-4xl max-h-[92vh]">
         <DialogHeader>
           <DialogTitle>{product ? 'Editar Produto' : 'Adicionar Novo Produto'}</DialogTitle>
           <DialogDescription>
@@ -177,7 +177,8 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-col">
+            <div className="space-y-5 overflow-y-auto py-4 pr-1 max-h-[calc(92vh-220px)]">
             <FormField
               control={form.control}
               name="name"
@@ -191,7 +192,7 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <FormField
                 control={form.control}
                 name="price"
@@ -206,73 +207,75 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
                 )}
               />
                <FormField
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <FormField
                 control={form.control}
-                name="stock"
+                name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estoque (Opcional)</FormLabel>
+                    <FormLabel>Descrição do Produto</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
+                      <Textarea
+                        placeholder="Ex: Batata crocante com molho especial da casa."
+                        className="min-h-28"
+                        {...field}
+                        value={field.value ?? ''}
+                      />
                     </FormControl>
+                    <FormDescription>
+                      Essa descrição aparece no cardápio digital para o cliente.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="imageUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Foto do Produto</FormLabel>
+                    <FormControl>
+                      <div className="space-y-3">
+                        <Input
+                          placeholder="Cole a URL da imagem (opcional)"
+                          {...field}
+                          value={field.value ?? ''}
+                        />
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                        />
+                        {field.value ? (
+                          <div className="space-y-2">
+                            <img
+                              src={field.value}
+                              alt="Pré-visualização do produto"
+                              className="h-44 w-full max-w-xs rounded-md object-cover border"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => form.setValue('imageUrl', '', { shouldDirty: true, shouldValidate: true })}
+                            >
+                              Remover foto
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </FormControl>
+                    <FormDescription>
+                      Você pode colar uma URL ou enviar uma foto do dispositivo.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Descrição do Produto</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Ex: Batata crocante com molho especial da casa."
-                      className="min-h-20"
-                      {...field}
-                      value={field.value ?? ''}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Essa descrição aparece no cardápio digital para o cliente.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="imageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Foto do Produto</FormLabel>
-                  <FormControl>
-                    <div className="space-y-3">
-                      <Input
-                        placeholder="Cole a URL da imagem (opcional)"
-                        {...field}
-                        value={field.value ?? ''}
-                      />
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                      />
-                      {field.value ? (
-                        <div className="space-y-2">
-                          <img
-                            src={field.value}
-                            alt="Pré-visualização do produto"
-                            className="h-24 w-24 rounded-md object-cover border"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => form.setValue('imageUrl', '', { shouldDirty: true, shouldValidate: true })}
-                          >
                             Remover foto
                           </Button>
                         </div>
@@ -358,7 +361,9 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
               />
             )}
 
-            <DialogFooter>
+            </div>
+
+            <DialogFooter className="border-t pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
