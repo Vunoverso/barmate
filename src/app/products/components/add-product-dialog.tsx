@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -37,13 +38,14 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Label } from '@/components/ui/label';
 
 const productSchema = z.object({
   name: z.string().min(3, { message: "Nome do produto deve ter pelo menos 3 caracteres." }),
   price: z.coerce.number().positive({ message: "Preço deve ser um número positivo." }),
   categoryId: z.string().min(1, { message: "Selecione uma categoria." }),
   stock: z.coerce.number().int().nonnegative({ message: "Estoque deve ser um número não negativo." }).optional(),
+  description: z.string().trim().max(500, { message: "Descrição deve ter no máximo 500 caracteres." }).optional(),
+  imageUrl: z.string().optional(),
   isCombo: z.boolean().default(false),
   comboItems: z.coerce.number().int().optional(),
 }).refine(data => {
@@ -69,6 +71,33 @@ interface AddProductDialogProps {
 export default function AddProductDialog({ isOpen, onOpenChange, product, onSave }: AddProductDialogProps) {
   const [availableCategories, setAvailableCategories] = useState<ProductCategory[]>([]);
 
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      form.setError('imageUrl', { message: 'Selecione um arquivo de imagem válido.' });
+      return;
+    }
+
+    // Limite simples para evitar imagens gigantes no localStorage/app-state.
+    if (file.size > 2 * 1024 * 1024) {
+      form.setError('imageUrl', { message: 'A imagem deve ter no máximo 2MB.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      form.clearErrors('imageUrl');
+      form.setValue('imageUrl', result, { shouldDirty: true, shouldValidate: true });
+    };
+    reader.onerror = () => {
+      form.setError('imageUrl', { message: 'Não foi possível ler a imagem selecionada.' });
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     if (isOpen) { 
       setAvailableCategories(getProductCategories());
@@ -82,6 +111,8 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
       price: 0,
       categoryId: '',
       stock: 0,
+      description: '',
+      imageUrl: '',
       isCombo: false,
       comboItems: 0,
     },
@@ -95,6 +126,8 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
           price: product.price,
           categoryId: product.categoryId,
           stock: product.stock ?? 0,
+          description: product.description ?? '',
+          imageUrl: product.imageUrl ?? '',
           isCombo: product.isCombo ?? false,
           comboItems: product.comboItems ?? 0,
         });
@@ -104,6 +137,8 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
           price: 0,
           categoryId: availableCategories[0]?.id || '', 
           stock: 0,
+          description: '',
+          imageUrl: '',
           isCombo: false,
           comboItems: 0,
         });
@@ -119,6 +154,8 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
       price: data.price,
       categoryId: data.categoryId,
       stock: data.stock,
+      description: data.description?.trim() ? data.description.trim() : null,
+      imageUrl: data.imageUrl?.trim() ? data.imageUrl.trim() : null,
       isCombo: data.isCombo,
       comboItems: data.isCombo ? data.comboItems : undefined,
     };
@@ -182,6 +219,74 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Descrição do Produto</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Ex: Batata crocante com molho especial da casa."
+                      className="min-h-20"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Essa descrição aparece no cardápio digital para o cliente.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Foto do Produto</FormLabel>
+                  <FormControl>
+                    <div className="space-y-3">
+                      <Input
+                        placeholder="Cole a URL da imagem (opcional)"
+                        {...field}
+                        value={field.value ?? ''}
+                      />
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                      />
+                      {field.value ? (
+                        <div className="space-y-2">
+                          <img
+                            src={field.value}
+                            alt="Pré-visualização do produto"
+                            className="h-24 w-24 rounded-md object-cover border"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => form.setValue('imageUrl', '', { shouldDirty: true, shouldValidate: true })}
+                          >
+                            Remover foto
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Você pode colar uma URL ou enviar uma foto do dispositivo.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="categoryId"

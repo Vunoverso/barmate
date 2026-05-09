@@ -399,9 +399,21 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                             const qty = guestCart[product.id] ?? 0;
                             return (
                               <div key={product.id} className="rounded-md border p-3 flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-semibold truncate">{product.name}</p>
-                                  <p className="text-xs text-muted-foreground">{formatCurrency(product.price)}</p>
+                                <div className="min-w-0 flex items-center gap-3">
+                                  {product.imageUrl ? (
+                                    <img
+                                      src={product.imageUrl}
+                                      alt={product.name}
+                                      className="h-12 w-12 rounded-md object-cover border"
+                                    />
+                                  ) : null}
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold truncate">{product.name}</p>
+                                    {product.description ? (
+                                      <p className="text-xs text-muted-foreground break-words">{product.description}</p>
+                                    ) : null}
+                                    <p className="text-xs text-muted-foreground">{formatCurrency(product.price)}</p>
+                                  </div>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => changeCartQty(product.id, -1)}>

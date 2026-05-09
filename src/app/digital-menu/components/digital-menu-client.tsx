@@ -199,6 +199,13 @@ export default function DigitalMenuClient() {
                             className="overflow-hidden hover:shadow-md transition-shadow"
                           >
                             <CardContent className="p-4">
+                              {product.imageUrl ? (
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="mb-3 h-28 w-full rounded-md object-cover border"
+                                />
+                              ) : null}
                               <div className="flex justify-between items-start gap-2 mb-2">
                                 <div className="min-w-0 flex-1">
                                   <h3 className="font-bold text-sm uppercase leading-tight">
@@ -245,6 +252,13 @@ export default function DigitalMenuClient() {
                           className="overflow-hidden hover:shadow-md transition-shadow"
                         >
                           <CardContent className="p-4">
+                            {product.imageUrl ? (
+                              <img
+                                src={product.imageUrl}
+                                alt={product.name}
+                                className="mb-3 h-28 w-full rounded-md object-cover border"
+                              />
+                            ) : null}
                             <div className="flex justify-between items-start gap-2 mb-2">
                               <div className="min-w-0 flex-1">
                                 <h3 className="font-bold text-sm uppercase leading-tight">
