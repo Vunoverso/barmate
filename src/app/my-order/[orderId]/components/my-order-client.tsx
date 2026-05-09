@@ -91,6 +91,18 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   const prevItemsCount = useRef<number>(0);
   const { toast } = useToast();
 
+  const statusLabelMap: Record<NonNullable<ActiveOrder['customerStatus']>, string> = {
+    enviado: 'Enviado',
+    aceito: 'Aceito',
+    em_producao: 'Em produção',
+    finalizado: 'Finalizado',
+    saiu_entrega: 'Saiu para entrega',
+    entregue: 'Entregue',
+    cancelado: 'Cancelado',
+  };
+
+  const statusFlow: NonNullable<ActiveOrder['customerStatus']>[] = ['enviado', 'aceito', 'em_producao', 'finalizado', 'saiu_entrega', 'entregue'];
+
   const normalizeDigits = (value: string) => value.replace(/\D/g, '');
 
   useEffect(() => {
@@ -187,6 +199,26 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   }, [order]);
 
   const openedAt = order?.createdAt ? new Date(order.createdAt) : null;
+
+  const inferredCustomerStatus = useMemo<NonNullable<ActiveOrder['customerStatus']>>(() => {
+    if (!order) return 'enviado';
+    if (order.customerStatus) return order.customerStatus;
+
+    const items = order.items ?? [];
+    if (items.some(item => item.pendingApproval)) return 'enviado';
+    if (items.some(item => item.isPreparing && !item.isDelivered)) return 'em_producao';
+
+    const hasKitchenItems = items.some(item => ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'].includes(item.categoryId || ''));
+    const allKitchenDelivered = hasKitchenItems && items.filter(item => ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'].includes(item.categoryId || '')).every(item => item.isDelivered);
+    if (allKitchenDelivered) return 'finalizado';
+
+    return 'aceito';
+  }, [order]);
+
+  const currentStatusIndex = useMemo(() => {
+    const index = statusFlow.indexOf(inferredCustomerStatus);
+    return index >= 0 ? index : 0;
+  }, [inferredCustomerStatus, statusFlow]);
 
   const cartEntries = useMemo(() => {
     return Object.entries(guestCart)
@@ -468,10 +500,28 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             {order.tableLabel && <Badge variant="secondary">{order.tableLabel}</Badge>}
             {order.comandaNumber && <Badge variant="secondary">Comanda {order.comandaNumber}</Badge>}
             {order.status === 'paid' && <Badge className="bg-green-600">Comanda paga</Badge>}
+            <Badge className="bg-blue-600">Status: {statusLabelMap[inferredCustomerStatus]}</Badge>
           </div>
         </CardHeader>
 
         <CardContent>
+          <div className="rounded-md border bg-muted/20 p-3 mb-4">
+            <p className="text-xs font-black uppercase tracking-wide mb-2 text-muted-foreground">Acompanhamento do pedido</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {statusFlow.map((step, index) => {
+                const reached = currentStatusIndex >= index;
+                return (
+                  <div
+                    key={step}
+                    className={`text-[11px] rounded px-2 py-1 border font-bold ${reached ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-background border-border text-muted-foreground'}`}
+                  >
+                    {statusLabelMap[step]}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <Table>
             <TableHeader>
               <TableRow>

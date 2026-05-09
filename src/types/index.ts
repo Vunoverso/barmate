@@ -86,6 +86,8 @@ export interface ActiveOrder {
   createdAt: Date;
   items: OrderItem[];
   status?: 'open' | 'paid';
+  /** Status de acompanhamento exibido para o cliente do cardapio digital. */
+  customerStatus?: 'enviado' | 'aceito' | 'em_producao' | 'finalizado' | 'saiu_entrega' | 'entregue' | 'cancelado';
   clientId?: string | null;
   clientName?: string | null;
   user_id?: string;

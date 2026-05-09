@@ -154,6 +154,7 @@ export async function POST(
   const updatedData = {
     ...orderData,
     items: [...currentItems, ...additions],
+    customerStatus: 'enviado',
     lastGuestCheckout: incomingCheckout
       ? {
           ...incomingCheckout,

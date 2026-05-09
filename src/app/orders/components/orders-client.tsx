@@ -48,6 +48,26 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
+const CUSTOMER_STATUS_OPTIONS: Array<{ value: NonNullable<ActiveOrder['customerStatus']>; label: string }> = [
+  { value: 'enviado', label: 'Enviado' },
+  { value: 'aceito', label: 'Aceito' },
+  { value: 'em_producao', label: 'Em Produção' },
+  { value: 'finalizado', label: 'Finalizado' },
+  { value: 'saiu_entrega', label: 'Saiu para entrega' },
+  { value: 'entregue', label: 'Entregue' },
+  { value: 'cancelado', label: 'Cancelado' },
+];
+
+const CUSTOMER_STATUS_LABEL: Record<NonNullable<ActiveOrder['customerStatus']>, string> = {
+  enviado: 'Enviado',
+  aceito: 'Aceito',
+  em_producao: 'Em Produção',
+  finalizado: 'Finalizado',
+  saiu_entrega: 'Saiu para entrega',
+  entregue: 'Entregue',
+  cancelado: 'Cancelado',
+};
+
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
   if (products.length === 0) return <p className="text-muted-foreground text-center py-10 text-xs">Nenhum produto encontrado.</p>;
 
@@ -314,6 +334,14 @@ export default function OrdersClient() {
     toast({ title: "Comanda Cancelada" });
   };
 
+  const handleUpdateCustomerStatus = async (status: NonNullable<ActiveOrder['customerStatus']>) => {
+    if (!currentOrder) return;
+    const updated = { ...currentOrder, customerStatus: status, updatedAt: new Date().toISOString() };
+    await syncOrderToFirestore(updated);
+    setOpenOrders(prev => prev.map(order => order.id === updated.id ? updated : order));
+    toast({ title: `Status atualizado: ${CUSTOMER_STATUS_LABEL[status]}` });
+  };
+
   const handleArchiveOrder = async () => {
     if (!orderToArchive) return;
     saveArchivedOrders([...getArchivedOrders(), orderToArchive]);
@@ -392,6 +420,7 @@ export default function OrdersClient() {
                           <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
                             <div className="min-w-0 flex items-center gap-2">
                               <div className="font-semibold text-xs truncate">{o.name}</div>
+                              {o.customerStatus && <Badge variant="outline" className="text-[9px] h-5">{CUSTOMER_STATUS_LABEL[o.customerStatus]}</Badge>}
                               {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
                               {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
                             </div>
@@ -459,6 +488,16 @@ export default function OrdersClient() {
                         </div>
                     </div>
                     <div className="flex gap-3">
+                        <Select value={currentOrder.customerStatus ?? 'aceito'} onValueChange={(value) => void handleUpdateCustomerStatus(value as NonNullable<ActiveOrder['customerStatus']>)}>
+                          <SelectTrigger className="h-8 min-w-[170px] text-xs font-bold uppercase">
+                            <SelectValue placeholder="Status do cliente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CUSTOMER_STATUS_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Tooltip><TooltipTrigger asChild>{currentOrder.isShared ? <Link2Off className="h-5 w-5 text-destructive cursor-pointer" onClick={() => syncOrderToFirestore({ ...currentOrder, isShared: false })} /> : <LinkIcon className="h-5 w-5 text-primary cursor-pointer" onClick={() => setOrderToShare(currentOrder)} />}</TooltipTrigger><TooltipContent>{currentOrder.isShared ? "Parar Compartilhar" : "Compartilhar"}</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Edit className="h-5 w-5 text-primary cursor-pointer" onClick={() => setIsEditNameDialogOpen(true)} /></TooltipTrigger><TooltipContent>Renomear</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><ListChecks className={cn("h-5 w-5 cursor-pointer", isSelectionMode ? "text-orange-600" : "text-primary")} onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedItems({}); }} /></TooltipTrigger><TooltipContent>Separar Conta</TooltipContent></Tooltip>
