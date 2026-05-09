@@ -132,6 +132,36 @@ export default function PedidosClient() {
         }
     };
 
+    const handleMarkSelectedAsPreparing = async () => {
+        if (selectedOrderIds.length === 0) {
+            toast({ title: "Nenhum pedido selecionado", variant: "destructive" });
+            return;
+        }
+
+        try {
+            const ordersToUpdate = groupedKitchenOrders.filter(o => selectedOrderIds.includes(o.id));
+            
+            for (const group of ordersToUpdate) {
+                const order = orders.find(o => o.id === group.id);
+                if (!order) continue;
+
+                const updatedItems = order.items.map(item => 
+                    isPendingKitchenItem(item) ? { ...item, isPreparing: true } : item
+                );
+
+                await updateDoc(doc(db, 'open_orders', group.id), { 
+                    items: updatedItems,
+                    updatedAt: new Date().toISOString()
+                });
+            }
+
+            toast({ title: `${selectedOrderIds.length} pedido(s) marcado(s) em produção!` });
+            setSelectedOrderIds([]);
+        } catch (err) {
+            toast({ title: "Erro ao atualizar", variant: "destructive" });
+        }
+    };
+
     const handlePrintSelected = () => {
         const ordersToPrintRaw = selectedOrderIds.length > 0 
             ? groupedKitchenOrders.filter(o => selectedOrderIds.includes(o.id))
@@ -215,7 +245,7 @@ export default function PedidosClient() {
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-muted/30 p-4 rounded-xl border border-primary/10">
-                <div className="flex gap-2 w-full sm:w-auto">
+                <div className="flex gap-2 w-full sm:w-auto flex-wrap">
                     <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpenState(true)}>
                         <QrCode className="mr-2 h-4 w-4" /> Monitor de Cozinha
                     </Button>
@@ -226,6 +256,15 @@ export default function PedidosClient() {
                     >
                         {selectedOrderIds.length === groupedKitchenOrders.length ? <CheckSquare className="mr-2 h-4 w-4" /> : <Square className="mr-2 h-4 w-4" />}
                         {selectedOrderIds.length === groupedKitchenOrders.length ? "Desmarcar Todos" : "Selecionar Todos"}
+                    </Button>
+                    <Button 
+                        variant={selectedOrderIds.length > 0 ? "default" : "outline"} 
+                        size="sm" 
+                        onClick={handleMarkSelectedAsPreparing}
+                        disabled={selectedOrderIds.length === 0}
+                        className={selectedOrderIds.length > 0 ? "bg-orange-500 hover:bg-orange-600" : ""}
+                    >
+                        <Play className="mr-2 h-4 w-4" /> Produção
                     </Button>
                 </div>
                 
