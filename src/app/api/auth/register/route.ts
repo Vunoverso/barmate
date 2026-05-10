@@ -38,15 +38,35 @@ export async function POST(request: Request) {
     const uniqueSlug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
 
     const result = await prisma.$transaction(async (tx) => {
-      const organization = await tx.organization.create({
-        data: {
-          legalName: payload.legalName || payload.tradeName,
-          tradeName: payload.tradeName,
-          document: payload.document,
-          slug: uniqueSlug,
-          status: 'TRIAL',
-        },
-      });
+      let organization = null as Awaited<ReturnType<typeof tx.organization.create>> | null;
+      const organizationData = {
+        legalName: payload.legalName || payload.tradeName,
+        tradeName: payload.tradeName,
+        document: payload.document,
+        slug: uniqueSlug,
+      };
+
+      // Compatibilidade com bases antigas que podem restringir valores de status.
+      const statusCandidates = ['TRIAL', 'ACTIVE', 'active'] as const;
+      let lastOrgError: unknown = null;
+
+      for (const status of statusCandidates) {
+        try {
+          organization = await tx.organization.create({
+            data: {
+              ...organizationData,
+              status,
+            },
+          });
+          break;
+        } catch (error) {
+          lastOrgError = error;
+        }
+      }
+
+      if (!organization) {
+        throw lastOrgError ?? new Error('Falha ao criar organizacao.');
+      }
 
       const user = await tx.user.create({
         data: {
