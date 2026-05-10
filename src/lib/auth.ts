@@ -42,12 +42,30 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (!user?.passwordHash) return null;
-        if (user.status !== 'active') return null;
+
+        const normalizedUserStatus = String(user.status ?? '').trim().toLowerCase();
+        if (normalizedUserStatus !== 'active') {
+          console.warn('[auth] Login blocked: inactive user status', {
+            email: normalizedEmail,
+            status: user.status,
+          });
+          return null;
+        }
 
         const isValid = await compare(normalizedPassword, user.passwordHash);
         if (!isValid) return null;
 
-        const primaryMembership = user.memberships[0];
+        const primaryMembership =
+          user.memberships.find((membership) => String(membership.status ?? '').trim().toLowerCase() === 'active')
+          ?? user.memberships[0];
+
+        if (!primaryMembership?.organizationId) {
+          console.warn('[auth] Login blocked: user without active organization membership', {
+            email: normalizedEmail,
+            memberships: user.memberships.length,
+          });
+          return null;
+        }
 
         return {
           id: user.id,
