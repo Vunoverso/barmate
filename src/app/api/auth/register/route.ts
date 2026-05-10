@@ -157,7 +157,6 @@ export async function POST(request: Request) {
         {
           message: 'Falha ao criar conta.',
           reason: 'internal_error',
-          detail: error.message,
         },
         { status: 500 },
       );
