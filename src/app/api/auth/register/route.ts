@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 const registerSchema = z.object({
   name: z.string().min(3),
@@ -128,6 +129,38 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ message: 'Dados invalidos.', issues: error.issues }, { status: 400 });
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return NextResponse.json(
+        {
+          message: 'Falha ao criar conta.',
+          reason: 'database_known_error',
+          code: error.code,
+        },
+        { status: 500 },
+      );
+    }
+
+    if (error instanceof Prisma.PrismaClientValidationError) {
+      return NextResponse.json(
+        {
+          message: 'Falha ao criar conta.',
+          reason: 'database_validation_error',
+        },
+        { status: 500 },
+      );
+    }
+
+    if (error instanceof Error) {
+      return NextResponse.json(
+        {
+          message: 'Falha ao criar conta.',
+          reason: 'internal_error',
+          detail: error.message,
+        },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ message: 'Falha ao criar conta.' }, { status: 500 });
