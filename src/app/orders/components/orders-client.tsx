@@ -437,8 +437,8 @@ export default function OrdersClient() {
 
   return (
     <TooltipProvider>
-      <div className="grid md:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
-        <div className="md:col-span-3 flex flex-col h-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
+        <div className="md:col-span-1 xl:col-span-3 flex flex-col h-full min-w-0">
           <Card className="flex-grow flex flex-col">
             <CardHeader className="space-y-4 pb-2">
               <div className="flex items-center justify-between">
@@ -499,7 +499,7 @@ export default function OrdersClient() {
           </Card>
         </div>
 
-        <div className="md:col-span-5 flex flex-col h-full">
+        <div className="md:col-span-1 xl:col-span-5 flex flex-col h-full min-w-0">
           <Card className="flex-grow flex flex-col">
             <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -527,7 +527,7 @@ export default function OrdersClient() {
           </Card>
         </div>
 
-        <div className="md:col-span-4 flex flex-col h-full">
+        <div className="md:col-span-2 xl:col-span-4 flex flex-col h-full min-w-0">
           <Card className="flex-grow flex flex-col shadow-lg border-2">
             {currentOrder ? (
               <>
