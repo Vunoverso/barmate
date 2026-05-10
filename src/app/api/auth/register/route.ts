@@ -132,13 +132,24 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      const isConnectivityIssue = error.code === 'P1001' || error.code === 'P1002';
       return NextResponse.json(
         {
-          message: 'Falha ao criar conta.',
-          reason: 'database_known_error',
+          message: isConnectivityIssue ? 'Servico temporariamente indisponivel.' : 'Falha ao criar conta.',
+          reason: isConnectivityIssue ? 'database_unavailable' : 'database_known_error',
           code: error.code,
         },
-        { status: 500 },
+        { status: isConnectivityIssue ? 503 : 500 },
+      );
+    }
+
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      return NextResponse.json(
+        {
+          message: 'Servico temporariamente indisponivel.',
+          reason: 'database_unavailable',
+        },
+        { status: 503 },
       );
     }
 

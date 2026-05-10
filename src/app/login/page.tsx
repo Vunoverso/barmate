@@ -33,6 +33,10 @@ function LoginPageContent() {
     setIsLoading(false);
 
     if (response?.error) {
+      if (response.error.includes('DATABASE_UNAVAILABLE')) {
+        setError('Servico temporariamente indisponivel. Tente novamente em alguns minutos.');
+        return;
+      }
       setError('Email ou senha invalidos.');
       return;
     }

@@ -2,6 +2,7 @@ import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { compare } from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 export const authOptions: NextAuthOptions = {
@@ -38,6 +39,12 @@ export const authOptions: NextAuthOptions = {
           });
         } catch (dbErr) {
           console.error('[auth] Prisma error during login:', dbErr);
+          if (dbErr instanceof Prisma.PrismaClientInitializationError) {
+            throw new Error('DATABASE_UNAVAILABLE');
+          }
+          if (dbErr instanceof Prisma.PrismaClientKnownRequestError && (dbErr.code === 'P1001' || dbErr.code === 'P1002')) {
+            throw new Error('DATABASE_UNAVAILABLE');
+          }
           return null;
         }
 
