@@ -68,23 +68,53 @@ export async function POST(request: Request) {
         throw lastOrgError ?? new Error('Falha ao criar organizacao.');
       }
 
-      const user = await tx.user.create({
-        data: {
-          name: payload.name,
-          email,
-          passwordHash,
-          status: 'active',
-        },
-      });
+      let user = null as Awaited<ReturnType<typeof tx.user.create>> | null;
+      const userStatusCandidates = ['active', 'ACTIVE'] as const;
+      let lastUserError: unknown = null;
 
-      const membership = await tx.membership.create({
-        data: {
-          organizationId: organization.id,
-          userId: user.id,
-          role: 'OWNER',
-          status: 'active',
-        },
-      });
+      for (const status of userStatusCandidates) {
+        try {
+          user = await tx.user.create({
+            data: {
+              name: payload.name,
+              email,
+              passwordHash,
+              status,
+            },
+          });
+          break;
+        } catch (error) {
+          lastUserError = error;
+        }
+      }
+
+      if (!user) {
+        throw lastUserError ?? new Error('Falha ao criar usuario.');
+      }
+
+      let membership = null as Awaited<ReturnType<typeof tx.membership.create>> | null;
+      const membershipStatusCandidates = ['active', 'ACTIVE'] as const;
+      let lastMembershipError: unknown = null;
+
+      for (const status of membershipStatusCandidates) {
+        try {
+          membership = await tx.membership.create({
+            data: {
+              organizationId: organization.id,
+              userId: user.id,
+              role: 'OWNER',
+              status,
+            },
+          });
+          break;
+        } catch (error) {
+          lastMembershipError = error;
+        }
+      }
+
+      if (!membership) {
+        throw lastMembershipError ?? new Error('Falha ao criar vinculo do usuario.');
+      }
 
       return { organization, user, membership };
     });
