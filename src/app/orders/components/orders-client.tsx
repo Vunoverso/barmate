@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, History } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, History, Clock3 } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -151,6 +151,7 @@ export default function OrdersClient() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   const inferOrderOrigin = (order: ActiveOrder): NonNullable<ActiveOrder['orderOrigin']> => {
     if (order.orderOrigin) return order.orderOrigin;
@@ -194,24 +195,42 @@ export default function OrdersClient() {
             } as ActiveOrder;
         });
 
-        saveOpenOrders(cloudOrders);
         setOpenOrders([...cloudOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     const fetchPendingRequests = async () => {
       try {
-        const res = await fetch('/api/db/guest-requests');
+        const res = await fetch('/api/db/guest-requests', { credentials: 'include' });
         if (!res.ok) return;
         const data = await res.json() as GuestRequest[];
         setPendingRequests(data.filter(r => r.status === 'pending'));
       } catch {}
+
+      const nextInterval = document.visibilityState === 'visible' ? 15000 : 60000;
+      timer = setTimeout(() => {
+        void fetchPendingRequests();
+      }, nextInterval);
     };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (timer) clearTimeout(timer);
+        void fetchPendingRequests();
+      }
+    };
+
     void fetchPendingRequests();
-    const interval = setInterval(() => void fetchPendingRequests(), 5000);
-    return () => clearInterval(interval);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const fetchData = useCallback(() => {
@@ -251,6 +270,22 @@ export default function OrdersClient() {
         return sum + orderVal;
     }, 0);
   }, [openOrders]);
+
+  const filteredOpenOrders = useMemo(
+    () => openOrders.filter((o) => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())),
+    [openOrders, orderSearchTerm],
+  );
+
+  // Mantem layout expandido para evitar perda de legibilidade na lista lateral.
+  const shouldCompactOrdersList = false;
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30_000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (currentOrderId) {
@@ -407,7 +442,13 @@ export default function OrdersClient() {
           <Card className="flex-grow flex flex-col">
             <CardHeader className="space-y-4 pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle>Comandas</CardTitle>
+                <div className="space-y-1">
+                  <CardTitle>Comandas</CardTitle>
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-muted-foreground">
+                    <Clock3 className="h-3 w-3" />
+                    <span>{format(currentTime, 'HH:mm')}</span>
+                  </div>
+                </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 w-8" title="Histórico de comandas fechadas">
                     <History className="h-4 w-4" />
@@ -426,20 +467,23 @@ export default function OrdersClient() {
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">
-                <div className="space-y-2">
-                    {openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).map(o => {
+                <div className={cn("space-y-2", shouldCompactOrdersList && "space-y-1")}>
+                    {filteredOpenOrders.map(o => {
                         const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
+                        const showCustomerBadge = !shouldCompactOrdersList || currentOrderId === o.id;
                         return (
-                          <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
-                            <div className="min-w-0 flex items-center gap-2">
-                              <div className="font-semibold text-xs truncate">{o.name}</div>
-                              <Badge variant="outline" className="text-[9px] h-5">{ORDER_ORIGIN_LABEL[inferOrderOrigin(o)]}</Badge>
-                              {o.customerStatus && <Badge variant="outline" className="text-[9px] h-5">{CUSTOMER_STATUS_LABEL[o.customerStatus]}</Badge>}
-                              {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
-                              {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
+                          <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto cursor-pointer flex items-start justify-between gap-2", shouldCompactOrdersList ? "py-1.5 px-2.5" : "py-2 px-3", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className={cn("font-semibold truncate", shouldCompactOrdersList ? "text-[11px]" : "text-xs")}>{o.name}</div>
+                              <div className="flex flex-wrap items-center gap-1">
+                                <Badge variant="outline" className={cn("text-[9px]", shouldCompactOrdersList ? "h-4 px-1 text-[8px]" : "h-5")}>{ORDER_ORIGIN_LABEL[inferOrderOrigin(o)]}</Badge>
+                                {o.customerStatus && showCustomerBadge && <Badge variant="outline" className={cn("text-[9px]", shouldCompactOrdersList ? "h-4 px-1 text-[8px]" : "h-5")}>{CUSTOMER_STATUS_LABEL[o.customerStatus]}</Badge>}
+                                {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
+                                {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className={cn("text-right font-black text-xs", balance < 0 && "text-green-600")}>{formatCurrency(balance)}</div>
+                            <div className={cn("flex shrink-0 gap-1", shouldCompactOrdersList ? "flex-col items-end" : "items-center")}>
+                                <div className={cn("text-right font-black text-xs whitespace-nowrap", balance < 0 && "text-green-600")}>{formatCurrency(balance)}</div>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); setOrderToDelete(o); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                             </div>
                           </div>
