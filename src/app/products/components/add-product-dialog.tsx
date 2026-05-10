@@ -179,147 +179,149 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-col">
             <div className="space-y-5 overflow-y-auto py-4 pr-1 max-h-[calc(92vh-220px)]">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome do Produto</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Cerveja Especial" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               <FormField
+              <FormField
                 control={form.control}
-                name="price"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Preço (R$)</FormLabel>
+                    <FormLabel>Nome do Produto</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      <Input placeholder="Ex: Cerveja Especial" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-               <FormField
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Preço (R$)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estoque</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="0" {...field} value={field.value ?? 0} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <FormField
                 control={form.control}
-                name="description"
+                name="categoryId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descrição do Produto</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Ex: Batata crocante com molho especial da casa."
-                        className="min-h-28"
-                        {...field}
-                        value={field.value ?? ''}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Essa descrição aparece no cardápio digital para o cliente.
-                    </FormDescription>
+                    <FormLabel>Categoria</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma categoria" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {availableCategories.map((cat) => {
+                          const IconComponent = LUCIDE_ICON_MAP[cat.iconName] || null;
+                          return (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              <div className="flex items-center gap-2">
+                                {IconComponent && <IconComponent className="h-4 w-4 text-muted-foreground" />}
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="imageUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Foto do Produto</FormLabel>
-                    <FormControl>
-                      <div className="space-y-3">
-                        <Input
-                          placeholder="Cole a URL da imagem (opcional)"
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Descrição do Produto</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Ex: Batata crocante com molho especial da casa."
+                          className="min-h-28"
                           {...field}
                           value={field.value ?? ''}
                         />
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                        />
-                        {field.value ? (
-                          <div className="space-y-2">
-                            <img
-                              src={field.value}
-                              alt="Pré-visualização do produto"
-                              className="h-44 w-full max-w-xs rounded-md object-cover border"
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => form.setValue('imageUrl', '', { shouldDirty: true, shouldValidate: true })}
-                            >
-                              Remover foto
-                            </Button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </FormControl>
-                    <FormDescription>
-                      Você pode colar uma URL ou enviar uma foto do dispositivo.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-                            Remover foto
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    Você pode colar uma URL ou enviar uma foto do dispositivo.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      </FormControl>
+                      <FormDescription>
+                        Essa descrição aparece no cardápio digital para o cliente.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Categoria</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma categoria" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {availableCategories.map(cat => {
-                        const IconComponent = LUCIDE_ICON_MAP[cat.iconName] || null;
-                        return (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            <div className="flex items-center gap-2">
-                              {IconComponent && <IconComponent className="h-4 w-4 text-muted-foreground" />}
-                              {cat.name}
+                <FormField
+                  control={form.control}
+                  name="imageUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Foto do Produto</FormLabel>
+                      <FormControl>
+                        <div className="space-y-3">
+                          <Input
+                            placeholder="Cole a URL da imagem (opcional)"
+                            {...field}
+                            value={field.value ?? ''}
+                          />
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                          />
+                          {field.value ? (
+                            <div className="space-y-2">
+                              <img
+                                src={field.value}
+                                alt="Pré-visualização do produto"
+                                className="h-44 w-full max-w-xs rounded-md object-cover border"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => form.setValue('imageUrl', '', { shouldDirty: true, shouldValidate: true })}
+                              >
+                                Remover foto
+                              </Button>
                             </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                          ) : null}
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Você pode colar uma URL ou enviar uma foto do dispositivo.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             
             <FormField
               control={form.control}
