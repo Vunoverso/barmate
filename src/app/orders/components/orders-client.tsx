@@ -429,16 +429,18 @@ export default function OrdersClient() {
                     {openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).map(o => {
                         const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
                         return (
-                          <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
-                            <div className="min-w-0 flex items-center gap-2">
+                          <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex items-start justify-between gap-2", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
+                            <div className="min-w-0 flex-1 space-y-1">
                               <div className="font-semibold text-xs truncate">{o.name}</div>
-                              <Badge variant="outline" className="text-[9px] h-5">{ORDER_ORIGIN_LABEL[inferOrderOrigin(o)]}</Badge>
-                              {o.customerStatus && <Badge variant="outline" className="text-[9px] h-5">{CUSTOMER_STATUS_LABEL[o.customerStatus]}</Badge>}
-                              {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
-                              {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
+                              <div className="flex flex-wrap items-center gap-1">
+                                <Badge variant="outline" className="text-[9px] h-5">{ORDER_ORIGIN_LABEL[inferOrderOrigin(o)]}</Badge>
+                                {o.customerStatus && <Badge variant="outline" className="text-[9px] h-5">{CUSTOMER_STATUS_LABEL[o.customerStatus]}</Badge>}
+                                {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
+                                {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className={cn("text-right font-black text-xs", balance < 0 && "text-green-600")}>{formatCurrency(balance)}</div>
+                            <div className="flex shrink-0 items-center gap-1">
+                                <div className={cn("text-right font-black text-xs whitespace-nowrap", balance < 0 && "text-green-600")}>{formatCurrency(balance)}</div>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); setOrderToDelete(o); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                             </div>
                           </div>
