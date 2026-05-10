@@ -194,7 +194,6 @@ export default function OrdersClient() {
             } as ActiveOrder;
         });
 
-        saveOpenOrders(cloudOrders);
         setOpenOrders([...cloudOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     });
     return () => unsubscribe();

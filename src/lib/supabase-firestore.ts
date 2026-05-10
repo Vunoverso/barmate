@@ -381,7 +381,6 @@ export function onSnapshot(
 
   if (typeof window !== 'undefined') {
     window.addEventListener('barmate-offline-data-changed', handleDataChange);
-    window.addEventListener('barmate-offline-status-changed', handleDataChange);
   }
 
   return () => {
@@ -389,7 +388,6 @@ export function onSnapshot(
     clearInterval(interval);
     if (typeof window !== 'undefined') {
       window.removeEventListener('barmate-offline-data-changed', handleDataChange);
-      window.removeEventListener('barmate-offline-status-changed', handleDataChange);
     }
   };
 }
