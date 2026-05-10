@@ -38,13 +38,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingKitchenCount, setPendingKitchenCount] = useState(0);
 
+  const publicRoutes = ['/', '/planos', '/login', '/cadastro', '/sobre'];
+  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
+  const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
   const version = "1.3.2";
 
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
-      if (status !== 'authenticated') {
+      if (status !== 'authenticated' || isPublicRoute || isGuestView) {
         const details = getCompanyDetails();
         setBarName(details.barName);
         return;
@@ -69,10 +73,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       cancelled = true;
       window.removeEventListener('barmate-app-state-changed', handleStateChange);
     };
-  }, [status]);
+  }, [status, isPublicRoute, isGuestView]);
 
   useEffect(() => {
-    if (!db || status !== 'authenticated') return;
+    if (!db || status !== 'authenticated' || isPublicRoute || isGuestView) return;
 
     const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
@@ -106,7 +110,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       unsubscribeRequests();
       unsubscribeOrders();
     };
-  }, [status]);
+  }, [status, isPublicRoute, isGuestView]);
 
   const isAuthenticated = status === 'authenticated';
 
@@ -130,10 +134,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   ];
 
   const allNavItems = [...mainNavItems, settingsNavItem];
-  const publicRoutes = ['/', '/planos', '/login', '/cadastro', '/sobre'];
-  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
-  const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
-
   // While checking session
   if (status === 'loading' && !isGuestView && !isPublicRoute) {
       return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
