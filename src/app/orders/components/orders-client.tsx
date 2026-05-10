@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, History } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, History, Clock3 } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -151,6 +151,7 @@ export default function OrdersClient() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   const inferOrderOrigin = (order: ActiveOrder): NonNullable<ActiveOrder['orderOrigin']> => {
     if (order.orderOrigin) return order.orderOrigin;
@@ -200,17 +201,36 @@ export default function OrdersClient() {
   }, []);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     const fetchPendingRequests = async () => {
       try {
-        const res = await fetch('/api/db/guest-requests');
+        const res = await fetch('/api/db/guest-requests', { credentials: 'include' });
         if (!res.ok) return;
         const data = await res.json() as GuestRequest[];
         setPendingRequests(data.filter(r => r.status === 'pending'));
       } catch {}
+
+      const nextInterval = document.visibilityState === 'visible' ? 15000 : 60000;
+      timer = setTimeout(() => {
+        void fetchPendingRequests();
+      }, nextInterval);
     };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (timer) clearTimeout(timer);
+        void fetchPendingRequests();
+      }
+    };
+
     void fetchPendingRequests();
-    const interval = setInterval(() => void fetchPendingRequests(), 5000);
-    return () => clearInterval(interval);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const fetchData = useCallback(() => {
@@ -256,7 +276,16 @@ export default function OrdersClient() {
     [openOrders, orderSearchTerm],
   );
 
-  const shouldCompactOrdersList = filteredOpenOrders.length >= 10;
+  // Mantem layout expandido para evitar perda de legibilidade na lista lateral.
+  const shouldCompactOrdersList = false;
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30_000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (currentOrderId) {
@@ -413,7 +442,13 @@ export default function OrdersClient() {
           <Card className="flex-grow flex flex-col">
             <CardHeader className="space-y-4 pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle>Comandas</CardTitle>
+                <div className="space-y-1">
+                  <CardTitle>Comandas</CardTitle>
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-muted-foreground">
+                    <Clock3 className="h-3 w-3" />
+                    <span>{format(currentTime, 'HH:mm')}</span>
+                  </div>
+                </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 w-8" title="Histórico de comandas fechadas">
                     <History className="h-4 w-4" />
