@@ -124,6 +124,8 @@ export type MenuBranding = {
   enableServiceBell?: boolean;
   /** Checklist de bebidas configurável pelo restaurante (uma opção por item). */
   beverageChecklist?: string[];
+  /** Tempo médio estimado de preparo em minutos (usado para alertas de atraso na cozinha). */
+  estimatedPrepMinutes?: number | null;
 };
 
 export const INITIAL_MENU_BRANDING: MenuBranding = {
@@ -138,6 +140,7 @@ export const INITIAL_MENU_BRANDING: MenuBranding = {
   customerFacingMessage: null,
   enableServiceBell: true,
   beverageChecklist: [],
+  estimatedPrepMinutes: null,
 };
 
 

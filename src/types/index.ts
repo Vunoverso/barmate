@@ -58,6 +58,8 @@ export interface OrderItem extends Product {
   pendingApproval?: boolean;
   /** Observação livre escrita pelo cliente ao pedir (ex: "sem cebola"). */
   guestNote?: string | null;
+  /** ISO string de quando a produção do item foi iniciada (botão relógio na cozinha). */
+  prepStartedAt?: string | null;
 }
 
 export interface OrderChatMessage {

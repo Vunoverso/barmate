@@ -36,6 +36,7 @@ export default function SettingsClient() {
   const [customerFacingMessage, setCustomerFacingMessage] = useState('');
   const [enableServiceBell, setEnableServiceBell] = useState(true);
   const [beverageChecklistText, setBeverageChecklistText] = useState('');
+  const [estimatedPrepMinutes, setEstimatedPrepMinutes] = useState('15');
 
   // Fee states
   const [debitRate, setDebitRate] = useState('0');
@@ -64,6 +65,7 @@ export default function SettingsClient() {
     setCustomerFacingMessage((branding.customerFacingMessage ?? '').trim());
     setEnableServiceBell(branding.enableServiceBell ?? true);
     setBeverageChecklistText(Array.isArray(branding.beverageChecklist) ? branding.beverageChecklist.join('\n') : '');
+    setEstimatedPrepMinutes(branding.estimatedPrepMinutes != null ? String(branding.estimatedPrepMinutes) : '15');
 
     const fees = getTransactionFees();
     setDebitRate(fees.debitRate.toString().replace('.', ','));
@@ -112,6 +114,7 @@ export default function SettingsClient() {
       customerFacingMessage: customerFacingMessage.trim() || null,
       enableServiceBell,
       beverageChecklist,
+      estimatedPrepMinutes: estimatedPrepMinutes.trim() ? Math.max(1, parseInt(estimatedPrepMinutes.trim(), 10) || 15) : null,
     });
     toast({ title: "Identidade Salva!", description: "Os dados do estabelecimento foram atualizados." });
   };
@@ -304,6 +307,19 @@ export default function SettingsClient() {
                 className="h-4 w-4"
               />
               <Label htmlFor="enableServiceBell">Habilitar botão de chamar atendente (sininho)</Label>
+            </div>
+            <div className="space-y-2">
+              <Label>Tempo Médio de Preparo (minutos)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="120"
+                value={estimatedPrepMinutes}
+                onChange={(e) => setEstimatedPrepMinutes(e.target.value)}
+                placeholder="15"
+                className="w-32"
+              />
+              <p className="text-xs text-muted-foreground">Usado na visão da cozinha para alertar pedidos que passaram do tempo estimado.</p>
             </div>
             <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Identidade</Button>
           </CardContent>

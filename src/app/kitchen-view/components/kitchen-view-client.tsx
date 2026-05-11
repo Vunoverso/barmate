@@ -1,20 +1,20 @@
-
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { db, collection, onSnapshot, doc, updateDoc } from '@/lib/supabase-firestore';
 import type { ActiveOrder, OrderItem } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { getMenuBranding } from '@/lib/data-access';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChefHat, CheckCircle2, Clock, BellRing } from 'lucide-react';
-import { formatDistanceToNow, isToday } from 'date-fns';
+import { ChefHat, CheckCircle2, Clock, BellRing, AlertTriangle, MessageSquare } from 'lucide-react';
+import { formatDistanceToNow, isToday, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Separator } from '@/components/ui/separator';
 import { toValidDate } from '@/lib/utils';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
+const DEFAULT_ESTIMATED_PREP_MINUTES = 15;
 
 const playNotificationSound = () => {
     try {
@@ -45,11 +45,44 @@ const countPendingKitchenItems = (orders: ActiveOrder[]) => orders.reduce(
     0
 );
 
+function ItemTimer({ prepStartedAt, estimatedMinutes }: { prepStartedAt?: string | null; estimatedMinutes: number }) {
+    const [elapsed, setElapsed] = useState(0);
+
+    useEffect(() => {
+        if (!prepStartedAt) return;
+        const start = new Date(prepStartedAt).getTime();
+        const update = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+        update();
+        const interval = setInterval(update, 10000);
+        return () => clearInterval(interval);
+    }, [prepStartedAt]);
+
+    if (!prepStartedAt) return null;
+
+    const elapsedMin = Math.floor(elapsed / 60);
+    const elapsedSec = elapsed % 60;
+    const isLate = elapsedMin >= estimatedMinutes;
+
+    return (
+        <div className={`flex items-center gap-1 text-xs font-bold mt-1 ml-10 ${isLate ? 'text-red-400 animate-pulse' : 'text-orange-400'}`}>
+            {isLate ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+            {elapsedMin}:{String(elapsedSec).padStart(2, '0')}
+            {isLate && <span className="ml-1">ATRASADO</span>}
+        </div>
+    );
+}
+
 export default function KitchenViewClient() {
     const [orders, setOrders] = useState<ActiveOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [estimatedPrepMinutes, setEstimatedPrepMinutes] = useState(DEFAULT_ESTIMATED_PREP_MINUTES);
     const ordersRef = useRef<ActiveOrder[]>([]);
     const { toast } = useToast();
+
+    useEffect(() => {
+        const branding = getMenuBranding();
+        setEstimatedPrepMinutes(branding.estimatedPrepMinutes ?? DEFAULT_ESTIMATED_PREP_MINUTES);
+    }, []);
 
     useEffect(() => {
         if (!db) {
@@ -59,10 +92,10 @@ export default function KitchenViewClient() {
 
         let isFirstLoad = true;
         const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
-            const data = snapshot.docs.map((doc) => {
-                const payload = doc.data();
+            const data = snapshot.docs.map((d) => {
+                const payload = d.data();
                 return {
-                    id: doc.id,
+                    id: d.id,
                     ...payload,
                     createdAt: toValidDate(payload.createdAt) ?? new Date(),
                 } as ActiveOrder;
@@ -89,17 +122,16 @@ export default function KitchenViewClient() {
     }, [toast]);
 
     const groupedKitchenOrders = useMemo(() => {
-        const groups: Record<string, { id: string, orderName: string, createdAt: Date, items: OrderItem[] }> = {};
+        const groups: Record<string, { id: string; orderName: string; createdAt: Date; items: OrderItem[] }> = {};
 
         orders.forEach(order => {
             const pendingItems = order.items.filter(isPendingKitchenItem);
-
             if (pendingItems.length > 0) {
                 groups[order.id] = {
                     id: order.id,
                     orderName: order.name,
                     createdAt: order.createdAt,
-                    items: pendingItems
+                    items: pendingItems,
                 };
             }
         });
@@ -107,19 +139,27 @@ export default function KitchenViewClient() {
         return Object.values(groups).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     }, [orders]);
 
-    const handleMarkAsDelivered = async (orderId: string, lineItemId: string) => {
+    const handleMarkAsDelivered = async (orderId: string, lineItemId: string, markAll = false) => {
         if (!db) return;
         const order = orders.find(o => o.id === orderId);
         if (!order) return;
 
-        const updatedItems = order.items.map(item =>
-            item.lineItemId === lineItemId ? { ...item, isDelivered: true, isPreparing: false, forceKitchenVisible: false } : item
-        );
+        const updatedItems = order.items.map(item => {
+            const shouldMark = markAll ? isPendingKitchenItem(item) : item.lineItemId === lineItemId;
+            if (!shouldMark) return item;
+            return { ...item, isDelivered: true, isPreparing: false, forceKitchenVisible: false };
+        });
+
+        const stillPending = updatedItems.filter(isPendingKitchenItem);
+        const newCustomerStatus = stillPending.length === 0 && order.customerStatus !== 'finalizado'
+            ? 'finalizado'
+            : order.customerStatus;
 
         try {
             await updateDoc(doc(db, 'open_orders', orderId), {
                 items: updatedItems,
-                updatedAt: new Date().toISOString()
+                ...(newCustomerStatus !== order.customerStatus ? { customerStatus: newCustomerStatus } : {}),
+                updatedAt: new Date().toISOString(),
             });
         } catch (err) {}
     };
@@ -129,20 +169,34 @@ export default function KitchenViewClient() {
         const order = orders.find(o => o.id === orderId);
         if (!order) return;
 
-        const updatedItems = order.items.map(item =>
-            item.lineItemId === lineItemId ? { ...item, isPreparing: !item.isPreparing } : item
-        );
+        const now = new Date().toISOString();
+        const updatedItems = order.items.map(item => {
+            if (item.lineItemId !== lineItemId) return item;
+            const starting = !item.isPreparing;
+            return {
+                ...item,
+                isPreparing: starting,
+                prepStartedAt: starting ? (item.prepStartedAt ?? now) : item.prepStartedAt,
+            };
+        });
+
+        const newCustomerStatus = order.customerStatus !== 'em_producao' ? 'em_producao' : order.customerStatus;
 
         try {
             await updateDoc(doc(db, 'open_orders', orderId), {
                 items: updatedItems,
-                updatedAt: new Date().toISOString()
+                customerStatus: newCustomerStatus,
+                updatedAt: new Date().toISOString(),
             });
         } catch (err) {}
     };
 
     if (isLoading) {
-        return <div className="flex h-screen items-center justify-center bg-slate-950"><ChefHat className="h-12 w-12 animate-spin text-primary" /></div>;
+        return (
+            <div className="flex h-screen items-center justify-center bg-slate-950">
+                <ChefHat className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        );
     }
 
     return (
@@ -150,11 +204,11 @@ export default function KitchenViewClient() {
             <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
                 <div className="flex items-center gap-3">
                     <ChefHat className="h-8 w-8 text-primary" />
-                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Produção</h1>
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Producao</h1>
                 </div>
                 <div className="flex items-center gap-4">
                     <Badge variant="outline" className="text-white border-white/20 px-4 py-1">
-                        PEDIDOS DE HOJE
+                        ~{estimatedPrepMinutes} min
                     </Badge>
                     <Badge className="text-white bg-primary px-4 py-1">
                         {groupedKitchenOrders.length} COMANDAS
@@ -169,69 +223,76 @@ export default function KitchenViewClient() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {groupedKitchenOrders.map((group) => (
-                        <Card key={group.id} className="bg-slate-900 border-white/10 shadow-2xl flex flex-col">
-                            <CardHeader className="pb-3 border-b border-white/5 bg-white/5">
-                                <div className="flex justify-between items-start">
-                                    <Badge className="text-xl font-black bg-white text-slate-950 px-3 uppercase">{group.orderName}</Badge>
-                                    <div className="flex items-center text-[10px] text-white/40 font-bold uppercase pt-1">
-                                        <Clock className="mr-1 h-3 w-3" />
-                                        {formatDistanceToNow(group.createdAt, { locale: ptBR })}
+                    {groupedKitchenOrders.map((group) => {
+                        const ageMinutes = differenceInMinutes(new Date(), group.createdAt);
+                        const isOrderLate = ageMinutes >= estimatedPrepMinutes;
+                        return (
+                            <Card key={group.id} className={`bg-slate-900 border-white/10 shadow-2xl flex flex-col ${isOrderLate ? 'ring-2 ring-red-500/60' : ''}`}>
+                                <CardHeader className="pb-3 border-b border-white/5 bg-white/5">
+                                    <div className="flex justify-between items-start">
+                                        <Badge className="text-xl font-black bg-white text-slate-950 px-3 uppercase">{group.orderName}</Badge>
+                                        <div className={`flex items-center text-[10px] font-bold uppercase pt-1 ${isOrderLate ? 'text-red-400 animate-pulse' : 'text-white/40'}`}>
+                                            {isOrderLate ? <AlertTriangle className="mr-1 h-3 w-3" /> : <Clock className="mr-1 h-3 w-3" />}
+                                            {formatDistanceToNow(group.createdAt, { locale: ptBR })}
+                                        </div>
                                     </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="flex-grow py-6 space-y-6">
-                                {group.items.map((item) => (
-                                    <div key={item.lineItemId} className="flex flex-col gap-2">
-                                        <div className="flex items-center justify-between gap-4">
-                                            <div className="text-2xl font-black text-white flex items-start gap-3 min-w-0">
-                                                <span className="text-primary">{item.quantity}x</span>
-                                                <div className="min-w-0">
-                                                    <span className="uppercase leading-tight truncate block">{item.name}</span>
-                                                    {item.forceKitchenVisible && (
-                                                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Manual</span>
-                                                    )}
+                                </CardHeader>
+                                <CardContent className="flex-grow py-6 space-y-6">
+                                    {group.items.map((item) => (
+                                        <div key={item.lineItemId} className="flex flex-col gap-2">
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="text-2xl font-black text-white flex items-start gap-3 min-w-0">
+                                                    <span className="text-primary">{item.quantity}x</span>
+                                                    <div className="min-w-0">
+                                                        <span className="uppercase leading-tight truncate block">{item.name}</span>
+                                                        {item.forceKitchenVisible && (
+                                                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Manual</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2 shrink-0">
+                                                    <Button
+                                                        size="icon"
+                                                        className={`h-12 w-12 rounded-xl transition-colors ${item.isPreparing ? 'bg-orange-500 hover:bg-orange-600' : 'bg-white/5 hover:bg-white/20'} text-white`}
+                                                        onClick={() => handleTogglePreparing(group.id, item.lineItemId!)}
+                                                    >
+                                                        <Clock className="h-6 w-6" />
+                                                    </Button>
+                                                    <Button
+                                                        size="icon"
+                                                        className="h-12 w-12 rounded-xl bg-white/10 hover:bg-green-600 text-white transition-colors"
+                                                        onClick={() => handleMarkAsDelivered(group.id, item.lineItemId!)}
+                                                    >
+                                                        <CheckCircle2 className="h-6 w-6" />
+                                                    </Button>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2 shrink-0">
-                                                <Button
-                                                    size="icon"
-                                                    className={`h-12 w-12 rounded-xl transition-colors ${item.isPreparing ? 'bg-orange-500 hover:bg-orange-600' : 'bg-white/5 hover:bg-white/20'} text-white`}
-                                                    onClick={() => handleTogglePreparing(group.id, item.lineItemId!)}
-                                                >
-                                                    <Clock className="h-6 w-6" />
-                                                </Button>
-                                                <Button
-                                                    size="icon"
-                                                    className="h-12 w-12 rounded-xl bg-white/10 hover:bg-green-600 text-white transition-colors"
-                                                    onClick={() => handleMarkAsDelivered(group.id, item.lineItemId!)}
-                                                >
-                                                    <CheckCircle2 className="h-6 w-6" />
-                                                </Button>
-                                            </div>
+                                            {item.isPreparing && (
+                                                <Badge variant="outline" className="w-fit text-[9px] font-black text-orange-500 border-orange-500/30 bg-orange-500/5 uppercase tracking-widest animate-pulse ml-10">
+                                                    Em Producao
+                                                </Badge>
+                                            )}
+                                            <ItemTimer prepStartedAt={item.prepStartedAt} estimatedMinutes={estimatedPrepMinutes} />
+                                            {item.guestNote && (
+                                                <div className="flex items-start gap-1 ml-10 mt-1">
+                                                    <MessageSquare className="h-3 w-3 text-yellow-400 mt-0.5 shrink-0" />
+                                                    <span className="text-xs text-yellow-300 font-medium leading-snug">{item.guestNote}</span>
+                                                </div>
+                                            )}
                                         </div>
-                                        {item.isPreparing && (
-                                            <Badge variant="outline" className="w-fit text-[9px] font-black text-orange-500 border-orange-500/30 bg-orange-500/5 uppercase tracking-widest animate-pulse ml-10">
-                                                Em Produção
-                                            </Badge>
-                                        )}
-                                    </div>
-                                ))}
-                            </CardContent>
-                            <CardFooter className="pt-0 pb-4">
-                                <Button
-                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg h-14 rounded-xl"
-                                    onClick={async () => {
-                                        for(const item of group.items) {
-                                            await handleMarkAsDelivered(group.id, item.lineItemId!);
-                                        }
-                                    }}
-                                >
-                                    <CheckCircle2 className="mr-2 h-6 w-6" /> ENTREGAR TUDO
-                                </Button>
-                            </CardFooter>
-                        </Card>
-                    ))}
+                                    ))}
+                                </CardContent>
+                                <CardFooter className="pt-0 pb-4">
+                                    <Button
+                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black text-lg h-14 rounded-xl"
+                                        onClick={() => handleMarkAsDelivered(group.id, '', true)}
+                                    >
+                                        <CheckCircle2 className="mr-2 h-6 w-6" /> ENTREGAR TUDO
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        );
+                    })}
                 </div>
             )}
         </div>

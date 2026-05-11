@@ -50,7 +50,7 @@ export function ClosedOrdersDialog({ isOpen, onOpenChange }: ClosedOrdersDialogP
       const res = await fetch('/api/db/closed-orders?limit=200');
       if (!res.ok) throw new Error('Falha ao buscar histórico');
       const data = await res.json() as ClosedOrder[];
-      setOrders(data);
+      setOrders(data.sort((a, b) => new Date(b.closedAt ?? b.createdAt).getTime() - new Date(a.closedAt ?? a.createdAt).getTime()));
     } catch {
       toast({ title: 'Erro ao carregar histórico', variant: 'destructive' });
     } finally {
