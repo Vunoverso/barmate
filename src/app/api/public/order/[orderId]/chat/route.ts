@@ -34,7 +34,7 @@ export async function GET(
   }
 
   const data = (row.data ?? {}) as Record<string, unknown>;
-  if (!data.isShared) {
+  if (!data.isShared && !data.is_shared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
 
@@ -75,7 +75,7 @@ export async function POST(
   }
 
   const data = (row.data ?? {}) as Record<string, unknown>;
-  if (!data.isShared) {
+    if (!data.isShared && !data.is_shared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
 

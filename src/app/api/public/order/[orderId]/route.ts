@@ -28,7 +28,9 @@ export async function GET(
   }
 
   const data = (row.data ?? {}) as Record<string, unknown>;
-  if (!data.isShared) {
+  // isShared pode estar em camelCase (isShared) ou snake_case (is_shared) dependendo de como foi salvo
+  const isShared = data.isShared ?? data.is_shared ?? false;
+  if (!isShared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
 

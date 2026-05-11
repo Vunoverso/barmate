@@ -35,7 +35,7 @@ export async function GET(
   }
 
   const orderData = (order.data ?? {}) as Record<string, unknown>;
-  if (!orderData.isShared) {
+  if (!orderData.isShared && !orderData.is_shared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
 

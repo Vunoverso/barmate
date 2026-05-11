@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, Send } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, Send, History } from 'lucide-react';
+import { ClosedOrdersDialog } from './closed-orders-dialog';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -123,6 +124,7 @@ export default function OrdersClient() {
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const [isRequestsDialogOpen, setIsRequestsDialogOpen] = useState(false);
+  const [isClosedOrdersDialogOpen, setIsClosedOrdersDialogOpen] = useState(false);
   const [isEditNameDialogOpen, setIsEditNameDialogOpen] = useState(false);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
   const [newName, setNewName] = useState('');
@@ -459,7 +461,10 @@ export default function OrdersClient() {
             <CardHeader className="space-y-4 pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle>Comandas</CardTitle>
-                <Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button>
+                <div className="flex items-center gap-1">
+                  <Button size="icon" variant="ghost" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 w-8" title="Histórico de comandas fechadas"><History className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button>
+                </div>
               </div>
               {pendingRequests.length > 0 && (
                   <Button variant="destructive" className="w-full animate-pulse flex items-center gap-2 font-black" onClick={() => setIsRequestsDialogOpen(true)}>
@@ -825,6 +830,7 @@ export default function OrdersClient() {
         </DialogContent>
       </Dialog>
 
+      <ClosedOrdersDialog isOpen={isClosedOrdersDialogOpen} onOpenChange={setIsClosedOrdersDialogOpen} />
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
       <MergeOrdersDialog
         isOpen={isMergeDialogOpen}
