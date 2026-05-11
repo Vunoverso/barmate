@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Client, GuestRequest } from '@/types';
+import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Client, GuestRequest, OrderChatMessage } from '@/types';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
 import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, getClients, getArchivedOrders, saveArchivedOrders } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, History } from 'lucide-react';
+import { PlusCircle, MinusCircle, Trash2, Search, Package, Merge, Wallet, Link as LinkIcon, Link2Off, Plus, Wifi, Copy, LayoutGrid, List, Printer, UserPlus, Check, X, Bell, ChefHat, Edit, Archive, MousePointer2, ListChecks, MessageCircle, Send } from 'lucide-react';
 import PaymentDialog from './payment-dialog';
 import CreateOrderDialog from './create-order-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -40,7 +40,6 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { db, doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc } from "@/lib/supabase-firestore";
 import { OrderStatement } from './order-statement';
-import { ClosedOrdersDialog } from './closed-orders-dialog';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -48,30 +47,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
-const CUSTOMER_STATUS_OPTIONS: Array<{ value: NonNullable<ActiveOrder['customerStatus']>; label: string }> = [
-  { value: 'enviado', label: 'Enviado' },
-  { value: 'aceito', label: 'Aceito' },
-  { value: 'em_producao', label: 'Em Produção' },
-  { value: 'finalizado', label: 'Finalizado' },
-  { value: 'saiu_entrega', label: 'Saiu para entrega' },
-  { value: 'entregue', label: 'Entregue' },
-  { value: 'cancelado', label: 'Cancelado' },
-];
+const resolveCustomerStatus = (items: OrderItem[]): ActiveOrder['customerStatus'] => {
+  if (items.some((item) => item.pendingApproval)) return 'enviado';
+  if (items.some((item) => item.isPreparing && !item.isDelivered)) return 'em_producao';
 
-const CUSTOMER_STATUS_LABEL: Record<NonNullable<ActiveOrder['customerStatus']>, string> = {
-  enviado: 'Enviado',
-  aceito: 'Aceito',
-  em_producao: 'Em Produção',
-  finalizado: 'Finalizado',
-  saiu_entrega: 'Saiu para entrega',
-  entregue: 'Entregue',
-  cancelado: 'Cancelado',
-};
+  const kitchenItems = items.filter((item) => KITCHEN_CATEGORIES.includes(item.categoryId || ''));
+  if (kitchenItems.length > 0 && kitchenItems.every((item) => item.isDelivered)) return 'finalizado';
 
-const ORDER_ORIGIN_LABEL: Record<NonNullable<ActiveOrder['orderOrigin']>, string> = {
-  mesa_qr: 'Mesa (QR)',
-  link_enviado: 'Link enviado',
-  interno: 'Interno',
+  return 'aceito';
 };
 
 function ProductDisplay({ products, productCategories, addToOrder, viewMode }: { products: Product[], productCategories: ProductCategory[], addToOrder: (p: Product) => void, viewMode: 'grid' | 'list' }) {
@@ -143,7 +126,7 @@ export default function OrdersClient() {
   const [isEditNameDialogOpen, setIsEditNameDialogOpen] = useState(false);
   const [orderToShare, setOrderToShare] = useState<ActiveOrder | null>(null);
   const [newName, setNewName] = useState('');
-  const [isClosedOrdersDialogOpen, setIsClosedOrdersDialogOpen] = useState(false);
+  const [staffChatInput, setStaffChatInput] = useState('');
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
@@ -151,13 +134,6 @@ export default function OrdersClient() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [activeDisplayCategory, setActiveDisplayCategory] = useState<string>('Todos');
-
-  const inferOrderOrigin = (order: ActiveOrder): NonNullable<ActiveOrder['orderOrigin']> => {
-    if (order.orderOrigin) return order.orderOrigin;
-    if (order.tableId || order.tableLabel || order.comandaNumber) return 'mesa_qr';
-    if (order.isShared) return 'link_enviado';
-    return 'interno';
-  };
 
   const prepareForFirestore = (data: any) => JSON.parse(JSON.stringify(data, (k, v) => v === undefined ? null : v));
 
@@ -183,16 +159,28 @@ export default function OrdersClient() {
   useEffect(() => {
     if (!db) return;
     const unsubscribe = onSnapshot(collection(db, 'open_orders'), (snapshot) => {
-        const cloudOrders = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-                updatedAt: data.updatedAt || new Date().toISOString(),
-                viewerCount: data.viewerCount || 0
-            } as ActiveOrder;
-        });
+        // Deduplica por ID para evitar múltiplas cópias do mesmo documento
+        const seenIds = new Set<string>();
+        const cloudOrders = snapshot.docs
+          .map(doc => {
+              const data = doc.data();
+              return {
+                  id: doc.id,
+                  ...data,
+                  createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+                  updatedAt: data.updatedAt || new Date().toISOString(),
+                  viewerCount: data.viewerCount || 0
+              } as ActiveOrder;
+          })
+          .filter(order => {
+              // Mantém apenas o primeiro documento com cada ID
+              if (seenIds.has(order.id)) {
+                  console.warn(`[onSnapshot] Duplicata detectada: ${order.id}, removendo`);
+                  return false;
+              }
+              seenIds.add(order.id);
+              return true;
+          });
 
         saveOpenOrders(cloudOrders);
         setOpenOrders([...cloudOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -252,11 +240,17 @@ export default function OrdersClient() {
     }, 0);
   }, [openOrders]);
 
+  const pendingApprovalCount = useMemo(() => {
+    if (!currentOrder) return 0;
+    return currentOrder.items.filter((item) => item.pendingApproval).length;
+  }, [currentOrder]);
+
   useEffect(() => {
     if (currentOrderId) {
         setNewName(currentOrder?.name || '');
         setIsSelectionMode(false);
         setSelectedItems({});
+        setStaffChatInput('');
     }
   }, [currentOrderId, currentOrder?.name]);
 
@@ -339,20 +333,52 @@ export default function OrdersClient() {
     toast({ title: "Enviado para cozinha!" });
   };
 
+  const handleApprovePendingItem = (lineItemId: string) => {
+    if (!currentOrder) return;
+    const items = currentOrder.items.map((item) => (
+      item.lineItemId === lineItemId
+        ? { ...item, pendingApproval: false }
+        : item
+    ));
+    const updatedOrder = {
+      ...currentOrder,
+      items,
+      customerStatus: resolveCustomerStatus(items),
+    };
+    updateOrdersAndSync(openOrders.map((order) => order.id === currentOrderId ? updatedOrder : order));
+    toast({ title: 'Item confirmado para produção' });
+  };
+
+  const handleRejectPendingItem = (lineItemId: string) => {
+    if (!currentOrder) return;
+    const items = currentOrder.items.filter((item) => item.lineItemId !== lineItemId);
+    const updatedOrder = {
+      ...currentOrder,
+      items,
+      customerStatus: resolveCustomerStatus(items),
+    };
+    updateOrdersAndSync(openOrders.map((order) => order.id === currentOrderId ? updatedOrder : order));
+    toast({ title: 'Item pendente recusado' });
+  };
+
+  const handleApproveAllPending = () => {
+    if (!currentOrder) return;
+    const items = currentOrder.items.map((item) => item.pendingApproval ? { ...item, pendingApproval: false } : item);
+    const updatedOrder = {
+      ...currentOrder,
+      items,
+      customerStatus: resolveCustomerStatus(items),
+    };
+    updateOrdersAndSync(openOrders.map((order) => order.id === currentOrderId ? updatedOrder : order));
+    toast({ title: 'Todos os itens pendentes foram confirmados' });
+  };
+
   const handleDeleteOrder = async () => {
     if (!orderToDelete) return;
     await deleteOrderFromFirestore(orderToDelete.id);
     if (currentOrderId === orderToDelete.id) setCurrentOrderId(null);
     setOrderToDelete(null);
     toast({ title: "Comanda Cancelada" });
-  };
-
-  const handleUpdateCustomerStatus = async (status: NonNullable<ActiveOrder['customerStatus']>) => {
-    if (!currentOrder) return;
-    const updated = { ...currentOrder, customerStatus: status, updatedAt: new Date().toISOString() };
-    await syncOrderToFirestore(updated);
-    setOpenOrders(prev => prev.map(order => order.id === updated.id ? updated : order));
-    toast({ title: `Status atualizado: ${CUSTOMER_STATUS_LABEL[status]}` });
   };
 
   const handleArchiveOrder = async () => {
@@ -396,26 +422,44 @@ export default function OrdersClient() {
     });
   };
 
+  const appendStaffChatMessage = (text: string, kind: OrderChatMessage['kind'] = 'text') => {
+    if (!currentOrder || !currentOrderId) return;
+    const normalizedText = text.trim();
+    if (!normalizedText) return;
+
+    const message: OrderChatMessage = {
+      id: `msg-s-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      sender: 'staff',
+      text: normalizedText,
+      createdAt: new Date().toISOString(),
+      kind,
+    };
+
+    const items = currentOrder.items;
+    const customerStatus = items.some((item) => item.pendingApproval) ? 'enviado' : (currentOrder.customerStatus ?? 'aceito');
+    const updatedOrder = {
+      ...currentOrder,
+      customerStatus,
+      chatMessages: [...(currentOrder.chatMessages ?? []), message],
+    };
+    updateOrdersAndSync(openOrders.map((order) => order.id === currentOrderId ? updatedOrder : order));
+    setStaffChatInput('');
+    toast({ title: 'Mensagem enviada para o cliente' });
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-full"><p>Carregando comandas...</p></div>;
   }
 
   return (
     <TooltipProvider>
-      <div className="grid md:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
-        <div className="md:col-span-3 flex flex-col h-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
+        <div className="md:col-span-1 xl:col-span-3 flex flex-col h-full min-w-0">
           <Card className="flex-grow flex flex-col">
             <CardHeader className="space-y-4 pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle>Comandas</CardTitle>
-                <div className="flex items-center gap-1">
-                  <Button size="icon" variant="outline" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 w-8" title="Histórico de comandas fechadas">
-                    <History className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button>
               </div>
               {pendingRequests.length > 0 && (
                   <Button variant="destructive" className="w-full animate-pulse flex items-center gap-2 font-black" onClick={() => setIsRequestsDialogOpen(true)}>
@@ -430,15 +474,13 @@ export default function OrdersClient() {
                     {openOrders.filter(o => o.name.toLowerCase().includes(orderSearchTerm.toLowerCase())).map(o => {
                         const balance = o.items.reduce((acc, i) => acc + i.price * i.quantity, 0);
                         return (
-                          <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
+                          <div key={o.id} role="button" onClick={() => setCurrentOrderId(o.id)} className={cn(buttonVariants({ variant: currentOrderId === o.id ? "secondary" : "outline" }), "w-full h-auto py-2 px-3 cursor-pointer flex justify-between items-center gap-2", balance < 0 && "border-yellow-500 bg-yellow-500/10")}>
                             <div className="min-w-0 flex items-center gap-2">
                               <div className="font-semibold text-xs truncate">{o.name}</div>
-                              <Badge variant="outline" className="text-[9px] h-5">{ORDER_ORIGIN_LABEL[inferOrderOrigin(o)]}</Badge>
-                              {o.customerStatus && <Badge variant="outline" className="text-[9px] h-5">{CUSTOMER_STATUS_LABEL[o.customerStatus]}</Badge>}
                               {o.isShared && <LinkIcon className="h-3 w-3 text-blue-500 shrink-0"/>}
                               {(o.viewerCount || 0) > 0 && <Wifi className="h-3 w-3 text-green-500 animate-pulse shrink-0"/>}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                                 <div className={cn("text-right font-black text-xs", balance < 0 && "text-green-600")}>{formatCurrency(balance)}</div>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); setOrderToDelete(o); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                             </div>
@@ -455,7 +497,7 @@ export default function OrdersClient() {
           </Card>
         </div>
 
-        <div className="md:col-span-5 flex flex-col h-full">
+        <div className="md:col-span-1 xl:col-span-5 flex flex-col h-full min-w-0">
           <Card className="flex-grow flex flex-col">
             <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -483,7 +525,7 @@ export default function OrdersClient() {
           </Card>
         </div>
 
-        <div className="md:col-span-4 flex flex-col h-full">
+        <div className="md:col-span-2 xl:col-span-4 flex flex-col h-full min-w-0">
           <Card className="flex-grow flex flex-col shadow-lg border-2">
             {currentOrder ? (
               <>
@@ -502,16 +544,6 @@ export default function OrdersClient() {
                         </div>
                     </div>
                     <div className="flex gap-3">
-                        <Select value={currentOrder.customerStatus ?? 'aceito'} onValueChange={(value) => void handleUpdateCustomerStatus(value as NonNullable<ActiveOrder['customerStatus']>)}>
-                          <SelectTrigger className="h-8 min-w-[170px] text-xs font-bold uppercase">
-                            <SelectValue placeholder="Status do cliente" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CUSTOMER_STATUS_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                         <Tooltip><TooltipTrigger asChild>{currentOrder.isShared ? <Link2Off className="h-5 w-5 text-destructive cursor-pointer" onClick={() => syncOrderToFirestore({ ...currentOrder, isShared: false })} /> : <LinkIcon className="h-5 w-5 text-primary cursor-pointer" onClick={() => setOrderToShare(currentOrder)} />}</TooltipTrigger><TooltipContent>{currentOrder.isShared ? "Parar Compartilhar" : "Compartilhar"}</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Edit className="h-5 w-5 text-primary cursor-pointer" onClick={() => setIsEditNameDialogOpen(true)} /></TooltipTrigger><TooltipContent>Renomear</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><ListChecks className={cn("h-5 w-5 cursor-pointer", isSelectionMode ? "text-orange-600" : "text-primary")} onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedItems({}); }} /></TooltipTrigger><TooltipContent>Separar Conta</TooltipContent></Tooltip>
@@ -519,9 +551,51 @@ export default function OrdersClient() {
                         <Tooltip><TooltipTrigger asChild><Wallet className="h-5 w-5 text-primary cursor-pointer" onClick={() => setIsCreditDialogOpen(true)} /></TooltipTrigger><TooltipContent>Add Crédito</TooltipContent></Tooltip>
                         <Tooltip><TooltipTrigger asChild><Printer className="h-5 w-5 text-primary cursor-pointer" onClick={() => setIsPrintDialogOpen(true)} /></TooltipTrigger><TooltipContent>Imprimir</TooltipContent></Tooltip>
                     </div>
+                    {pendingApprovalCount > 0 && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1">
+                        <span className="text-[10px] font-black uppercase tracking-wide text-amber-700">
+                          {pendingApprovalCount} item(ns) aguardando confirmação
+                        </span>
+                        <Button size="sm" className="h-7 text-[10px] font-black" onClick={handleApproveAllPending}>
+                          Confirmar Todos
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow overflow-hidden p-0">
+                  <div className="p-4 border-b bg-muted/10 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-wide opacity-60">Chat do Pedido</p>
+                      <Badge variant="outline" className="text-[10px]">{currentOrder.chatMessages?.length ?? 0} msgs</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => appendStaffChatMessage('Não temos esse item no momento.', 'quick')}>Sem item</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => appendStaffChatMessage('Posso trocar por outro produto parecido?', 'quick')}>Sugerir troca</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => appendStaffChatMessage('Vai demorar mais alguns minutos, tudo bem?', 'quick')}>Avisar atraso</Button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={staffChatInput}
+                        onChange={(e) => setStaffChatInput(e.target.value)}
+                        maxLength={500}
+                        placeholder="Mensagem para o cliente desta comanda..."
+                      />
+                      <Button onClick={() => appendStaffChatMessage(staffChatInput)} disabled={!staffChatInput.trim()}>
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="max-h-28 overflow-y-auto space-y-1 rounded-md border bg-background p-2">
+                      {(currentOrder.chatMessages ?? []).length === 0 ? (
+                        <p className="text-[10px] text-muted-foreground">Sem mensagens ainda.</p>
+                      ) : [...(currentOrder.chatMessages ?? [])].slice(-5).map((message) => (
+                        <div key={message.id} className="text-[10px] leading-relaxed">
+                          <span className="font-black uppercase mr-1">{message.sender === 'staff' ? 'Equipe:' : 'Cliente:'}</span>
+                          <span>{message.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   <ScrollArea className="h-full p-4">
                     {currentOrder.items.length === 0 ? <p className="text-center py-10 opacity-50">Comanda vazia.</p> : <ul className="space-y-3">
                       {currentOrder.items.map((item, i) => {
@@ -529,7 +603,7 @@ export default function OrdersClient() {
                         const showAsPaidVisual = item.isPaid && !isPendingCombo;
 
                         return (
-                          <li key={item.lineItemId || i} className={cn("flex flex-col gap-1 p-2 transition-all", !showAsPaidVisual ? "border rounded-md shadow-sm bg-card" : "opacity-40", !item.isPaid && item.price < 0 && "bg-green-50 border-green-100")}>
+                          <li key={item.lineItemId || i} className={cn("flex flex-col gap-1 p-2 transition-all", !showAsPaidVisual ? "border rounded-md shadow-sm bg-card" : "opacity-40", !item.isPaid && item.price < 0 && "bg-green-50 border-green-100", item.pendingApproval && "border-amber-300 bg-amber-50")}>
                             <div className="flex justify-between items-start">
                               <div className="flex items-center gap-2 min-w-0">
                                 {isSelectionMode && !item.isPaid && item.price > 0 && (
@@ -554,7 +628,25 @@ export default function OrdersClient() {
                               </div>
                               <span className={cn("text-xs font-black", item.price < 0 ? "text-green-600" : "text-primary", showAsPaidVisual && "line-through")}>{formatCurrency(item.price * item.quantity)}</span>
                             </div>
-                            {!item.isPaid && (
+                            {item.guestNote && (
+                              <p className="text-[10px] text-muted-foreground">Obs. cliente: {item.guestNote}</p>
+                            )}
+                            {item.pendingApproval && (
+                              <div className="text-[10px] font-black uppercase tracking-wide text-amber-700">
+                                Item enviado pelo cliente. Aguardando confirmação.
+                              </div>
+                            )}
+                            {item.pendingApproval ? (
+                              <div className="flex justify-end items-center gap-2 mt-1">
+                                <Button size="sm" variant="outline" className="h-7 text-[10px] font-black" onClick={() => handleRejectPendingItem(item.lineItemId!)}>
+                                  <X className="h-3 w-3 mr-1" /> Recusar
+                                </Button>
+                                <Button size="sm" className="h-7 text-[10px] font-black" onClick={() => handleApprovePendingItem(item.lineItemId!)}>
+                                  <Check className="h-3 w-3 mr-1" /> Confirmar
+                                </Button>
+                              </div>
+                            ) : null}
+                            {!item.isPaid && !item.pendingApproval && (
                               <div className="flex justify-between items-center mt-1">
                                 <div className="text-[10px] text-muted-foreground">{formatCurrency(item.price)} un. {item.quantity > 1 && `(${item.quantity}x)`}</div>
                                 <div className="flex items-center gap-1">
@@ -600,7 +692,7 @@ export default function OrdersClient() {
 
       <CreateOrderDialog isOpen={isCreateOrderDialogOpen} onOpenChange={setIsCreateOrderDialogOpen} onSubmit={async (d: any) => {
           const id = `ord-${Date.now()}`;
-          await syncOrderToFirestore({ id, ...d, items: [], orderOrigin: 'interno', createdAt: new Date(), updatedAt: new Date().toISOString() });
+          await syncOrderToFirestore({ id, ...d, items: [], createdAt: new Date(), updatedAt: new Date().toISOString() });
           setCurrentOrderId(id);
       }} clients={clients} />
 
@@ -733,7 +825,6 @@ export default function OrdersClient() {
         </DialogContent>
       </Dialog>
 
-      <ClosedOrdersDialog isOpen={isClosedOrdersDialogOpen} onOpenChange={setIsClosedOrdersDialogOpen} />
       <ShareOrderDialog isOpen={!!orderToShare} onOpenChange={(open) => !open && setOrderToShare(null)} order={orderToShare} />
       <MergeOrdersDialog
         isOpen={isMergeDialogOpen}
@@ -763,58 +854,7 @@ export default function OrdersClient() {
         </DialogContent>
       </Dialog>
 
-      <GuestRequestsDialog
-        isOpen={isRequestsDialogOpen}
-        onOpenChange={setIsRequestsDialogOpen}
-        requests={pendingRequests}
-        openOrders={openOrders}
-        onApprove={async (r, oid) => {
-          const o = openOrders.find(x => x.id === oid);
-          if (o) {
-            const inferred: NonNullable<ActiveOrder['orderOrigin']> = (r.tableId || r.tableLabel || r.comandaNumber) ? 'mesa_qr' : inferOrderOrigin(o);
-            await syncOrderToFirestore({ ...o, isShared: true, orderOrigin: inferred });
-          }
-          await fetch('/api/db/guest-requests', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: oid }),
-          });
-          toast({ title: "Aprovado!" });
-        }}
-        onReject={async (reqId) => {
-          const req = pendingRequests.find(r => r.id === reqId);
-          if (req) {
-            await fetch('/api/db/guest-requests', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...req, status: 'rejected' }),
-            });
-          }
-        }}
-        onCreateFromRequest={async (r) => {
-          const id = `ord-${Date.now()}`;
-          const origin: NonNullable<ActiveOrder['orderOrigin']> = (r.tableId || r.tableLabel || r.comandaNumber) ? 'mesa_qr' : 'link_enviado';
-          await syncOrderToFirestore({
-            id,
-            name: r.name,
-            items: [],
-            createdAt: new Date(),
-            isShared: true,
-            orderOrigin: origin,
-            tableId: r.tableId ?? null,
-            tableLabel: r.tableLabel ?? null,
-            comandaNumber: r.comandaNumber ?? null,
-            updatedAt: new Date().toISOString(),
-          });
-          await fetch('/api/db/guest-requests', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: id }),
-          });
-          setCurrentOrderId(id);
-          setIsRequestsDialogOpen(false);
-        }}
-      />
+      <GuestRequestsDialog isOpen={isRequestsDialogOpen} onOpenChange={setIsRequestsDialogOpen} requests={pendingRequests} openOrders={openOrders} onApprove={async (r, oid) => { const o = openOrders.find(x => x.id === oid); if(o && !o.isShared) await syncOrderToFirestore({...o, isShared: true}); await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: oid }) }); toast({title: "Aprovado!"}); }} onReject={async (reqId) => { const req = pendingRequests.find(r => r.id === reqId); if(req) await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...req, status: 'rejected' }) }); }} onCreateFromRequest={async (r) => { const id = `ord-${Date.now()}`; await syncOrderToFirestore({ id, name: r.name, items: [], createdAt: new Date(), isShared: true, updatedAt: new Date().toISOString() }); await fetch('/api/db/guest-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...r, status: 'approved', associatedOrderId: id }) }); setCurrentOrderId(id); setIsRequestsDialogOpen(false); }} />
 
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
         <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Imprimir Extrato</DialogTitle></DialogHeader>

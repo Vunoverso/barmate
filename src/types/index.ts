@@ -27,6 +27,8 @@ export interface Product {
   stock?: number | null;
   isCombo?: boolean | null;
   comboItems?: number | null;
+  /** IDs de produtos permitidos para montar o combo. */
+  comboComponentIds?: string[];
   /** Optional description shown in digital menu. */
   description?: string | null;
   /** Optional product image URL (Supabase Storage or external). */
@@ -56,6 +58,14 @@ export interface OrderItem extends Product {
   pendingApproval?: boolean;
   /** Observação livre escrita pelo cliente ao pedir (ex: "sem cebola"). */
   guestNote?: string | null;
+}
+
+export interface OrderChatMessage {
+  id: string;
+  sender: 'guest' | 'staff';
+  text: string;
+  createdAt: string;
+  kind?: 'quick' | 'text';
 }
 
 export type PaymentMethod = 'cash' | 'credit' | 'debit' | 'pix';
@@ -101,6 +111,8 @@ export interface ActiveOrder {
   tableLabel?: string | null;
   /** Numero da comanda (display) opcionalmente fornecido pelo cliente ao escanear. */
   comandaNumber?: string | null;
+  /** Chat operacional entre cliente e equipe da comanda. */
+  chatMessages?: OrderChatMessage[];
 }
 
 export interface CashAdjustment {

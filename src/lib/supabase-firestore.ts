@@ -12,15 +12,15 @@ import {
 async function callApi(
   path: string,
   options: RequestInit = {},
-): Promise<{ ok: boolean; status?: number; data?: unknown }> {
+): Promise<{ ok: boolean; data?: unknown }> {
   try {
     const res = await fetch(`/api/db${path}`, {
       ...options,
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
     });
-    if (!res.ok) return { ok: false, status: res.status };
-    return { ok: true, status: res.status, data: await res.json() };
+    if (!res.ok) return { ok: false };
+    return { ok: true, data: await res.json() };
   } catch {
     return { ok: false };
   }
@@ -83,6 +83,9 @@ const mapRowFromDb = (tableName: string, row: Record<string, unknown>) => {
       tableId: row.table_id ?? row.tableId ?? null,
       tableLabel: row.table_label ?? row.tableLabel ?? null,
       comandaNumber: row.comanda_number ?? row.comandaNumber ?? null,
+      customerStatus: row.customer_status ?? row.customerStatus ?? null,
+      orderOrigin: row.order_origin ?? row.orderOrigin ?? null,
+      chatMessages: row.chat_messages ?? row.chatMessages ?? [],
       organizationId: row.organization_id ?? row.organizationId ?? null,
       deletedAt: row.deleted_at ?? row.deletedAt ?? null,
     };
@@ -119,6 +122,9 @@ const mapRowToDb = (tableName: string, row: Record<string, unknown>) => {
       table_id: row.tableId ?? row.table_id ?? null,
       table_label: row.tableLabel ?? row.table_label ?? null,
       comanda_number: row.comandaNumber ?? row.comanda_number ?? null,
+      customer_status: row.customerStatus ?? row.customer_status ?? null,
+      order_origin: row.orderOrigin ?? row.order_origin ?? null,
+      chat_messages: row.chatMessages ?? row.chat_messages ?? [],
       user_id: row.userId ?? row.user_id ?? null,
       is_shared: Boolean(row.isShared ?? row.is_shared ?? false),
       viewer_count: Number(row.viewerCount ?? row.viewer_count ?? 0),
@@ -217,11 +223,6 @@ const applyFilters = (rows: Record<string, unknown>[], filters: WhereClause[]) =
   }));
 };
 
-// Tombstone de IDs deletados localmente para evitar race condition com o polling remoto.
-// Expira após 90 segundos, tempo suficiente para o DELETE chegar ao servidor.
-const recentlyDeletedIds = new Map<string, number>(); // id -> timestamp ms
-const RECENTLY_DELETED_TTL = 90_000;
-
 const rowUpdatedAt = (row: Record<string, unknown> | null | undefined) => {
   if (!row) return '';
   const value = (row as any).updatedAt ?? (row as any).updated_at;
@@ -234,16 +235,8 @@ const mergeRowsPreferringLocal = (
   remoteRows: Record<string, unknown>[],
   localRows: Record<string, unknown>[],
 ) => {
-  // Limpa entradas expiradas do tombstone
-  const now = Date.now();
-  for (const [id, ts] of recentlyDeletedIds) {
-    if (now - ts > RECENTLY_DELETED_TTL) recentlyDeletedIds.delete(id);
-  }
-
   const map = new Map<string, Record<string, unknown>>();
   for (const row of remoteRows) {
-    // Ignora rows que foram deletadas localmente e ainda não chegaram ao servidor
-    if (recentlyDeletedIds.has(String(row.id))) continue;
     map.set(String(row.id), row);
   }
   // Mantem rows locais quando elas sao mais novas que o remoto OU quando
@@ -252,6 +245,15 @@ const mergeRowsPreferringLocal = (
   for (const local of localRows) {
     const id = String(local.id);
     const remote = map.get(id);
+    
+    // CRÍTICO: Não ressuscita rows deletadas (soft delete com deletedAt)
+    const isLocalDeleted = (local as any).deletedAt ?? (local as any).deleted_at;
+    if (isLocalDeleted) {
+      // Se foi deletado localmente, remove do mapa (mesmo que exista remoto)
+      map.delete(id);
+      continue;
+    }
+    
     if (!remote) {
       // Linha so existe localmente: pode ser write otimista ainda nao replicado.
       // Mantem se ha pending ou se e recente (< 60s).
@@ -274,6 +276,10 @@ const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
   const localFiltered = applyFilters(localAll, filters);
 
   if (!currentOnlineState()) {
+    // Filtra deletadas localmente também
+    if (tableName === 'open_orders') {
+      return localFiltered.filter(row => !(row as any).deletedAt && !(row as any).deleted_at);
+    }
     return localFiltered;
   }
 
@@ -282,21 +288,35 @@ const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
     : tableName === 'guest_requests' ? '/guest-requests'
     : null;
 
-  if (!apiPath) return localFiltered;
+  if (!apiPath) {
+    // Filtra deletadas mesmo quando offline
+    if (tableName === 'open_orders') {
+      return localFiltered.filter(row => !(row as any).deletedAt && !(row as any).deleted_at);
+    }
+    return localFiltered;
+  }
 
   const result = await callApi(apiPath);
   if (!result.ok) {
-    // 401 é esperado quando o usuário não está autenticado — não logar como erro
-    if (result.status !== 401) {
-      console.error(`API fetch error for ${tableName}`);
+    console.error(`API fetch error for ${tableName}`);
+    // Filtra deletadas em caso de erro de conexão
+    if (tableName === 'open_orders') {
+      return localFiltered.filter(row => !(row as any).deletedAt && !(row as any).deleted_at);
     }
     return localFiltered;
   }
 
   const remoteRows = ((result.data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
   const merged = mergeRowsPreferringLocal(tableName, remoteRows, localAll);
-  await persistTableSnapshot(tableName, merged, { silent: true });
-  return applyFilters(merged, filters);
+  
+  // Filtra deletadas após merge
+  let finalRows = merged;
+  if (tableName === 'open_orders') {
+    finalRows = merged.filter(row => !(row as any).deletedAt && !(row as any).deleted_at);
+  }
+  
+  await persistTableSnapshot(tableName, finalRows, { silent: true });
+  return applyFilters(finalRows, filters);
 };
 
 const readLocalRows = async (tableName: string, filters: WhereClause[] = []) => {
@@ -528,9 +548,6 @@ export const updateDoc = async (reference: DocRef, data: Record<string, unknown>
 };
 
 export const deleteDoc = async (reference: DocRef) => {
-  // Registra o ID no tombstone para evitar race condition com polling remoto
-  recentlyDeletedIds.set(reference.id, Date.now());
-
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
   const nextRows = (localSnapshot?.rows ?? []).filter((row) => String(row.id) !== reference.id);
   await persistTableSnapshot(reference.tableName, nextRows);

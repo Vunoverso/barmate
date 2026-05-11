@@ -32,6 +32,10 @@ export default function SettingsClient() {
   const [barLogo, setBarLogo] = useState('');
   const [barLogoScale, setBarLogoScale] = useState(1);
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [operationMode, setOperationMode] = useState<'counter_only' | 'table_only' | 'table_delivery'>('table_only');
+  const [customerFacingMessage, setCustomerFacingMessage] = useState('');
+  const [enableServiceBell, setEnableServiceBell] = useState(true);
+  const [beverageChecklistText, setBeverageChecklistText] = useState('');
 
   // Fee states
   const [debitRate, setDebitRate] = useState('0');
@@ -56,6 +60,10 @@ export default function SettingsClient() {
 
     const branding = getMenuBranding();
     setWhatsappNumber((branding.whatsappNumber ?? '').trim());
+    setOperationMode(branding.operationMode ?? 'table_only');
+    setCustomerFacingMessage((branding.customerFacingMessage ?? '').trim());
+    setEnableServiceBell(branding.enableServiceBell ?? true);
+    setBeverageChecklistText(Array.isArray(branding.beverageChecklist) ? branding.beverageChecklist.join('\n') : '');
 
     const fees = getTransactionFees();
     setDebitRate(fees.debitRate.toString().replace('.', ','));
@@ -93,9 +101,17 @@ export default function SettingsClient() {
       barLogoScale,
     });
     const currentBranding = getMenuBranding();
+    const beverageChecklist = beverageChecklistText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
     await saveMenuBranding({
       ...currentBranding,
       whatsappNumber: whatsappNumber.trim() || null,
+      operationMode,
+      customerFacingMessage: customerFacingMessage.trim() || null,
+      enableServiceBell,
+      beverageChecklist,
     });
     toast({ title: "Identidade Salva!", description: "Os dados do estabelecimento foram atualizados." });
   };
@@ -248,6 +264,46 @@ export default function SettingsClient() {
                 placeholder="Ex: 5511999998888"
               />
               <p className="text-xs text-muted-foreground">Use somente números, incluindo DDI e DDD. Exemplo: 55 + 11 + número.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Modo Operacional do Cardápio</Label>
+              <select
+                value={operationMode}
+                onChange={(e) => setOperationMode(e.target.value as 'counter_only' | 'table_only' | 'table_delivery')}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="counter_only">Somente Balcão</option>
+                <option value="table_only">Somente Mesa</option>
+                <option value="table_delivery">Mesa + Delivery</option>
+              </select>
+              <p className="text-xs text-muted-foreground">Adapta textos e comportamento do menu para o tipo de operação do restaurante.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Mensagem do Cliente no Cardápio</Label>
+              <Textarea
+                value={customerFacingMessage}
+                onChange={(e) => setCustomerFacingMessage(e.target.value)}
+                placeholder="Ex: Faça seu pedido que será entregue na mesa."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Checklist de Bebidas (uma opção por linha)</Label>
+              <Textarea
+                value={beverageChecklistText}
+                onChange={(e) => setBeverageChecklistText(e.target.value)}
+                placeholder={'Copo\nCanudo\nGelo\nLimão\nLaranja'}
+              />
+              <p className="text-xs text-muted-foreground">Esses itens aparecem no personalizador de bebidas para o cliente marcar quantidade ou todos.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="enableServiceBell"
+                type="checkbox"
+                checked={enableServiceBell}
+                onChange={(e) => setEnableServiceBell(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="enableServiceBell">Habilitar botão de chamar atendente (sininho)</Label>
             </div>
             <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Identidade</Button>
           </CardContent>

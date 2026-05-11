@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ActiveOrder, Product, ProductCategory } from '@/types';
+import type { ActiveOrder, OrderChatMessage, Product, ProductCategory } from '@/types';
 import { getArchivedOrders, removeCounterSaleDraft } from '@/lib/data-access';
 import { formatCurrency } from '@/lib/constants';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Bell, BellRing, FileX, Loader2, Minus, Plus, ShoppingCart, UtensilsCrossed } from 'lucide-react';
+import { Bell, BellRing, FileX, Loader2, MessageCircle, Minus, Plus, Send, ShoppingCart, UtensilsCrossed } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
@@ -32,7 +32,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const ORDER_POLL_INTERVAL_MS = 5000;
+const ORDER_POLL_INTERVAL_VISIBLE_MS = 10000;
+const ORDER_POLL_INTERVAL_HIDDEN_MS = 30000;
+const MENU_REQUEST_TIMEOUT_MS = 12000;
+const MENU_CACHE_FRESH_MS = 120000;
+const ORDER_INITIAL_RETRY_WINDOW_MS = 15000;
+const ORDER_INITIAL_RETRY_DELAY_MS = 1200;
 
 type MenuPayload = {
   products: Product[];
@@ -41,6 +46,10 @@ type MenuPayload = {
     allowGuestSelfOrder?: boolean;
     requireWaiterApproval?: boolean;
     whatsappNumber?: string | null;
+    operationMode?: 'counter_only' | 'table_only' | 'table_delivery';
+    customerFacingMessage?: string | null;
+    enableServiceBell?: boolean;
+    beverageChecklist?: string[];
   };
 };
 
@@ -67,6 +76,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuProducts, setMenuProducts] = useState<Product[]>([]);
   const [menuCategories, setMenuCategories] = useState<ProductCategory[]>([]);
+  const [menuLastLoadedAt, setMenuLastLoadedAt] = useState<number | null>(null);
   const [allowGuestSelfOrder, setAllowGuestSelfOrder] = useState(true);
   const [requireWaiterApproval, setRequireWaiterApproval] = useState(true);
   const [isLoadingMenu, setIsLoadingMenu] = useState(false);
@@ -74,7 +84,21 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   const [isCallingWaiter, setIsCallingWaiter] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [operationMode, setOperationMode] = useState<'counter_only' | 'table_only' | 'table_delivery'>('table_only');
+  const [customerFacingMessage, setCustomerFacingMessage] = useState('');
+  const [enableServiceBell, setEnableServiceBell] = useState(true);
+  const [beverageChecklist, setBeverageChecklist] = useState<string[]>([]);
   const [guestCart, setGuestCart] = useState<Record<string, number>>({});
+  const [guestComboComponents, setGuestComboComponents] = useState<Record<string, string[]>>({});
+  const [guestItemNotes, setGuestItemNotes] = useState<Record<string, string>>({});
+  const [chatInput, setChatInput] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [isComboPickerOpen, setIsComboPickerOpen] = useState(false);
+  const [comboPickerProductId, setComboPickerProductId] = useState<string | null>(null);
+  const [comboPickerSelection, setComboPickerSelection] = useState<string[]>([]);
+  const [isBeverageCustomizerOpen, setIsBeverageCustomizerOpen] = useState(false);
+  const [beverageCustomizerProductId, setBeverageCustomizerProductId] = useState<string | null>(null);
+  const [beverageOptionValues, setBeverageOptionValues] = useState<Record<string, { selected: boolean; quantity: number; applyAll: boolean }>>({});
   const [checkout, setCheckout] = useState<CheckoutData>({
     customerName: '',
     phone: '',
@@ -110,6 +134,41 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   };
 
   const normalizeDigits = (value: string) => value.replace(/\D/g, '');
+  const menuCacheKey = order?.id ? `barmate_guest_menu_cache_${order.id}` : null;
+  const operationModeLabelMap: Record<'counter_only' | 'table_only' | 'table_delivery', string> = {
+    counter_only: 'Balcão',
+    table_only: 'Mesa',
+    table_delivery: 'Mesa + Delivery',
+  };
+
+  useEffect(() => {
+    if (!menuCacheKey) return;
+    try {
+      const raw = localStorage.getItem(menuCacheKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        products?: Product[];
+        categories?: ProductCategory[];
+        branding?: MenuPayload['branding'];
+        loadedAt?: number;
+      };
+      const cachedProducts = parsed.products ?? [];
+      const cachedCategories = parsed.categories ?? [];
+      if (cachedProducts.length === 0 && cachedCategories.length === 0) return;
+      setMenuProducts(cachedProducts);
+      setMenuCategories(cachedCategories);
+      setAllowGuestSelfOrder(parsed.branding?.allowGuestSelfOrder ?? true);
+      setRequireWaiterApproval(parsed.branding?.requireWaiterApproval ?? true);
+      setWhatsappNumber(normalizeDigits(parsed.branding?.whatsappNumber ?? ''));
+      setOperationMode(parsed.branding?.operationMode ?? 'table_only');
+      setCustomerFacingMessage((parsed.branding?.customerFacingMessage ?? '').trim());
+      setEnableServiceBell(parsed.branding?.enableServiceBell ?? true);
+      setBeverageChecklist(Array.isArray(parsed.branding?.beverageChecklist) ? parsed.branding?.beverageChecklist : []);
+      setMenuLastLoadedAt(typeof parsed.loadedAt === 'number' ? parsed.loadedAt : null);
+    } catch {
+      // Ignora cache inválido e segue fluxo normal.
+    }
+  }, [menuCacheKey]);
 
   useEffect(() => {
     if (!order?.name) return;
@@ -146,14 +205,30 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
     }
 
     let active = true;
+    const firstLoadStartedAt = Date.now();
 
-    const loadOrder = async () => {
+    const loadOrder = async (isFirstLoad = false) => {
       try {
         const response = await fetch(`/api/public/order/${encodeURIComponent(orderId)}`, {
           cache: 'no-store',
         });
 
         if (!response.ok) {
+          const shouldRetryForProvisioning =
+            isFirstLoad &&
+            (response.status === 403 || response.status === 404) &&
+            (Date.now() - firstLoadStartedAt < ORDER_INITIAL_RETRY_WINDOW_MS);
+
+          if (shouldRetryForProvisioning) {
+            setIsLoading(true);
+            setError('Preparando sua comanda, aguarde alguns segundos...');
+            setTimeout(() => {
+              if (!active) return;
+              void loadOrder(true);
+            }, ORDER_INITIAL_RETRY_DELAY_MS);
+            return;
+          }
+
           const archivedOrders = getArchivedOrders();
           const foundArchived = archivedOrders.find((item) => item.id === orderId) ?? null;
 
@@ -188,14 +263,37 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       }
     };
 
-    void loadOrder();
-    const interval = setInterval(() => {
-      void loadOrder();
-    }, ORDER_POLL_INTERVAL_MS);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNextPoll = () => {
+      if (!active) return;
+      if (timer) clearTimeout(timer);
+      const delay = document.visibilityState === 'visible'
+        ? ORDER_POLL_INTERVAL_VISIBLE_MS
+        : ORDER_POLL_INTERVAL_HIDDEN_MS;
+      timer = setTimeout(() => {
+        void loadOrder().finally(() => {
+          scheduleNextPoll();
+        });
+      }, delay);
+    };
+
+    const handleVisibilityChange = () => {
+      if (!active) return;
+      if (document.visibilityState === 'visible') {
+        void loadOrder();
+      }
+      scheduleNextPoll();
+    };
+
+    void loadOrder(true);
+    scheduleNextPoll();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       active = false;
-      clearInterval(interval);
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [orderId, toast]);
 
@@ -239,22 +337,147 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       .map(([productId, quantity]) => {
         const product = menuProducts.find((item) => item.id === productId);
         if (!product) return null;
-        return { product, quantity };
+        return {
+          product,
+          quantity,
+          selectedComboComponentIds: guestComboComponents[productId] ?? [],
+          note: guestItemNotes[productId] ?? '',
+        };
       })
-      .filter((entry): entry is { product: Product; quantity: number } => Boolean(entry && entry.quantity > 0));
-  }, [guestCart, menuProducts]);
+      .filter((entry): entry is { product: Product; quantity: number; selectedComboComponentIds: string[]; note: string } => Boolean(entry && entry.quantity > 0));
+  }, [guestCart, menuProducts, guestComboComponents, guestItemNotes]);
 
   const cartTotal = useMemo(() => {
     return cartEntries.reduce((sum, entry) => sum + entry.product.price * entry.quantity, 0);
   }, [cartEntries]);
 
+  const chatMessages = useMemo(() => {
+    return [...(order?.chatMessages ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [order?.chatMessages]);
+
+  const comboPickerProduct = useMemo(() => {
+    return menuProducts.find((product) => product.id === comboPickerProductId) ?? null;
+  }, [comboPickerProductId, menuProducts]);
+
+  const getComboComponentIds = (product: Product): string[] => {
+    const raw = (product as Product & { comboComponentIds?: string[] }).comboComponentIds;
+    return Array.isArray(raw) ? raw : [];
+  };
+
+  const comboPickerOptions = useMemo(() => {
+    if (!comboPickerProduct) return [];
+    const componentIds = getComboComponentIds(comboPickerProduct);
+    return componentIds
+      .map((id) => menuProducts.find((product) => product.id === id))
+      .filter((product): product is Product => Boolean(product));
+  }, [comboPickerProduct, menuProducts]);
+
+  const beverageCustomizerProduct = useMemo(() => {
+    return menuProducts.find((product) => product.id === beverageCustomizerProductId) ?? null;
+  }, [beverageCustomizerProductId, menuProducts]);
+
+  const isDrinkProduct = (product: Product) => {
+    const category = menuCategories.find((item) => item.id === product.categoryId);
+    const categoryName = (category?.name ?? '').toLowerCase();
+    return /(bebida|cerveja|drink|suco|refrigerante|água|agua|coquetel|vinho)/i.test(categoryName);
+  };
+
+  const canCustomizeBeverage = (product: Product) => {
+    return beverageChecklist.length > 0 && isDrinkProduct(product);
+  };
+
+  const openComboPicker = (product: Product) => {
+    const comboIds = getComboComponentIds(product);
+    if (!product.isCombo || !comboIds.length) {
+      changeCartQty(product.id, 1);
+      return;
+    }
+
+    const selected = guestComboComponents[product.id] ?? [...comboIds];
+    setComboPickerProductId(product.id);
+    setComboPickerSelection(selected);
+    setIsComboPickerOpen(true);
+  };
+
+  const toggleComboPickerItem = (productId: string) => {
+    setComboPickerSelection((current) => (
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId]
+    ));
+  };
+
+  const confirmComboPicker = () => {
+    if (!comboPickerProduct) return;
+    const fallback = getComboComponentIds(comboPickerProduct);
+    const selection = comboPickerSelection.length > 0 ? comboPickerSelection : fallback;
+    setGuestComboComponents((current) => ({ ...current, [comboPickerProduct.id]: selection }));
+    changeCartQty(comboPickerProduct.id, 1);
+    setIsComboPickerOpen(false);
+    setComboPickerProductId(null);
+    setComboPickerSelection([]);
+  };
+
+  const openBeverageCustomizer = (product: Product) => {
+    if (!canCustomizeBeverage(product)) return;
+    const currentNote = guestItemNotes[product.id] ?? '';
+    const nextValues: Record<string, { selected: boolean; quantity: number; applyAll: boolean }> = {};
+    for (const option of beverageChecklist) {
+      const escaped = option.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const quantityMatch = currentNote.match(new RegExp(`${escaped}:\\s*(\\d+)x`, 'i'));
+      const allMatch = currentNote.match(new RegExp(`${escaped}:\\s*todos`, 'i'));
+      nextValues[option] = {
+        selected: Boolean(quantityMatch || allMatch),
+        quantity: Number(quantityMatch?.[1] ?? 1),
+        applyAll: Boolean(allMatch),
+      };
+    }
+    setBeverageOptionValues(nextValues);
+    setBeverageCustomizerProductId(product.id);
+    setIsBeverageCustomizerOpen(true);
+  };
+
+  const saveBeverageCustomization = () => {
+    const productId = beverageCustomizerProductId;
+    if (!productId) return;
+    const selectedLines = Object.entries(beverageOptionValues)
+      .filter(([, value]) => value.selected)
+      .map(([label, value]) => `${label}: ${value.applyAll ? 'todos' : `${Math.max(1, value.quantity)}x`}`);
+    const note = selectedLines.length > 0 ? `Opções da bebida: ${selectedLines.join(' | ')}` : '';
+
+    setGuestItemNotes((current) => {
+      const next = { ...current };
+      if (note) {
+        next[productId] = note;
+      } else {
+        delete next[productId];
+      }
+      return next;
+    });
+
+    setIsBeverageCustomizerOpen(false);
+    setBeverageCustomizerProductId(null);
+    setBeverageOptionValues({});
+  };
+
   const loadMenu = async () => {
     if (!order) return;
 
+    const hasMenuInMemory = menuProducts.length > 0 && menuCategories.length > 0;
+    if (hasMenuInMemory) {
+      setIsMenuOpen(true);
+      const isFresh = Boolean(menuLastLoadedAt && (Date.now() - menuLastLoadedAt < MENU_CACHE_FRESH_MS));
+      if (isFresh) return;
+    }
+
     setIsLoadingMenu(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), MENU_REQUEST_TIMEOUT_MS);
+
     try {
       const response = await fetch(`/api/public/order/${encodeURIComponent(order.id)}/menu`, {
         cache: 'no-store',
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -268,10 +491,44 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       setAllowGuestSelfOrder(data.branding?.allowGuestSelfOrder ?? true);
       setRequireWaiterApproval(data.branding?.requireWaiterApproval ?? true);
       setWhatsappNumber(normalizeDigits(data.branding?.whatsappNumber ?? ''));
+      setOperationMode(data.branding?.operationMode ?? 'table_only');
+      setCustomerFacingMessage((data.branding?.customerFacingMessage ?? '').trim());
+      setEnableServiceBell(data.branding?.enableServiceBell ?? true);
+      setBeverageChecklist(Array.isArray(data.branding?.beverageChecklist) ? data.branding?.beverageChecklist : []);
+      const loadedAt = Date.now();
+      setMenuLastLoadedAt(loadedAt);
+      if (menuCacheKey) {
+        try {
+          localStorage.setItem(menuCacheKey, JSON.stringify({
+            products: data.products ?? [],
+            categories: data.categories ?? [],
+            branding: data.branding ?? {},
+            loadedAt,
+          }));
+        } catch {
+          // Falha de quota no storage não pode bloquear o pedido.
+        }
+      }
       setIsMenuOpen(true);
-    } catch {
-      toast({ title: 'Erro ao carregar cardápio', variant: 'destructive' });
+    } catch (error) {
+      const hasCachedMenu = menuProducts.length > 0 && menuCategories.length > 0;
+      const isAbortError = error instanceof DOMException && error.name === 'AbortError';
+      if (hasCachedMenu) {
+        setIsMenuOpen(true);
+        toast({
+          title: isAbortError ? 'Conexão lenta no momento' : 'Abrimos o último cardápio salvo',
+          description: isAbortError
+            ? 'Mostramos o menu em cache para não travar no carregamento.'
+            : 'Os dados serão atualizados na próxima tentativa.',
+        });
+      } else {
+        toast({
+          title: isAbortError ? 'Conexão lenta para abrir o cardápio' : 'Erro ao carregar cardápio',
+          variant: 'destructive',
+        });
+      }
     } finally {
+      clearTimeout(timeoutId);
       setIsLoadingMenu(false);
     }
   };
@@ -282,6 +539,18 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       const next = { ...current };
       if (nextQty === 0) {
         delete next[productId];
+        setGuestComboComponents((comboCurrent) => {
+          if (!(productId in comboCurrent)) return comboCurrent;
+          const comboNext = { ...comboCurrent };
+          delete comboNext[productId];
+          return comboNext;
+        });
+        setGuestItemNotes((noteCurrent) => {
+          if (!(productId in noteCurrent)) return noteCurrent;
+          const noteNext = { ...noteCurrent };
+          delete noteNext[productId];
+          return noteNext;
+        });
       } else {
         next[productId] = nextQty;
       }
@@ -301,6 +570,8 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
           items: cartEntries.map((entry) => ({
             productId: entry.product.id,
             quantity: entry.quantity,
+            comboComponentIds: entry.selectedComboComponentIds,
+            note: entry.note || null,
           })),
           checkout: {
             customerName: checkout.customerName.trim(),
@@ -324,6 +595,7 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       }
 
       setGuestCart({});
+      setGuestItemNotes({});
       setIsCheckoutOpen(false);
       setIsMenuOpen(false);
       toast({
@@ -362,7 +634,14 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
               : 'Cartão de crédito';
 
         const itemsText = cartEntries
-          .map((entry) => `- ${entry.quantity}x ${entry.product.name} (${formatCurrency(entry.product.price * entry.quantity)})`)
+          .map((entry) => {
+            const components = entry.selectedComboComponentIds
+              .map((id) => menuProducts.find((product) => product.id === id)?.name)
+              .filter((name): name is string => Boolean(name));
+            const comboLine = components.length > 0 ? `\n  composição: ${components.join(' + ')}` : '';
+            const noteLine = entry.note ? `\n  observações: ${entry.note}` : '';
+            return `- ${entry.quantity}x ${entry.product.name} (${formatCurrency(entry.product.price * entry.quantity)})${comboLine}${noteLine}`;
+          })
           .join('\n');
 
         const message = [
@@ -459,6 +738,50 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
     }
   };
 
+  const submitChatMessage = async (text: string, kind: OrderChatMessage['kind'] = 'text') => {
+    if (!order) return;
+    const normalizedText = text.trim();
+    if (!normalizedText) return;
+
+    setIsSendingChat(true);
+    try {
+      const response = await fetch(`/api/public/order/${encodeURIComponent(order.id)}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: normalizedText, kind }),
+      });
+
+      if (!response.ok) {
+        toast({ title: 'Não foi possível enviar mensagem', variant: 'destructive' });
+        return;
+      }
+
+      const payload = await response.json() as { message?: OrderChatMessage };
+      if (payload.message) {
+        const message = payload.message;
+        setOrder((current) => (
+          current
+            ? { ...current, chatMessages: [...(current.chatMessages ?? []), message] }
+            : current
+        ));
+      }
+      setChatInput('');
+    } catch {
+      toast({ title: 'Erro ao enviar mensagem', variant: 'destructive' });
+    } finally {
+      setIsSendingChat(false);
+    }
+  };
+
+  const canCallWaiter = enableServiceBell && operationMode !== 'counter_only';
+  const customerFacingHint = customerFacingMessage || (
+    operationMode === 'counter_only'
+      ? 'Retire seu pedido no balcão quando for chamado.'
+      : operationMode === 'table_delivery'
+        ? 'Você pode pedir para mesa ou informar entrega no WhatsApp.'
+        : 'Faça seu pedido e aguarde a confirmação do atendimento.'
+  );
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
@@ -537,6 +860,51 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             </div>
           </div>
 
+          <div className="rounded-md border bg-background p-3 mb-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                <MessageCircle className="h-3.5 w-3.5" />
+                Chat com Atendimento
+              </p>
+              <Badge variant="outline" className="text-[10px]">{chatMessages.length} mensagens</Badge>
+            </div>
+
+            <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
+              {chatMessages.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem mensagens ainda. Use os atalhos abaixo para responder rápido ao atendimento.</p>
+              ) : chatMessages.map((message) => {
+                const isGuest = message.sender === 'guest';
+                return (
+                  <div key={message.id} className={`rounded-md px-3 py-2 text-xs ${isGuest ? 'bg-primary/10 border border-primary/30 ml-6' : 'bg-muted border mr-6'}`}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-black uppercase tracking-wide text-[10px]">{isGuest ? 'Você' : 'Atendimento'}</span>
+                      <span className="text-[10px] text-muted-foreground">{format(new Date(message.createdAt), 'HH:mm', { locale: ptBR })}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" className="text-[10px] h-7" onClick={() => void submitChatMessage('Pode trocar.', 'quick')} disabled={isSendingChat}>Pode trocar</Button>
+              <Button size="sm" variant="outline" className="text-[10px] h-7" onClick={() => void submitChatMessage('Retira item, por favor.', 'quick')} disabled={isSendingChat}>Retira item</Button>
+              <Button size="sm" variant="outline" className="text-[10px] h-7" onClick={() => void submitChatMessage('Cancelar item, por favor.', 'quick')} disabled={isSendingChat}>Cancelar item</Button>
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Escreva uma mensagem para o atendimento..."
+                maxLength={500}
+              />
+              <Button onClick={() => void submitChatMessage(chatInput)} disabled={isSendingChat || !chatInput.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
           <Table>
             <TableHeader>
               <TableRow>
@@ -585,16 +953,22 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
               <UtensilsCrossed className="mr-2 h-4 w-4" />
               {isLoadingMenu ? 'Carregando...' : 'Abrir Cardápio'}
             </Button>
-            <Button variant="outline" onClick={() => void callWaiter()} disabled={isCallingWaiter}>
-              <Bell className="mr-2 h-4 w-4" />
-              {isCallingWaiter ? 'Chamando...' : 'Chamar Atendente'}
-            </Button>
+            {canCallWaiter ? (
+              <Button variant="outline" onClick={() => void callWaiter()} disabled={isCallingWaiter}>
+                <Bell className="mr-2 h-4 w-4" />
+                {isCallingWaiter ? 'Chamando...' : 'Chamar Atendente'}
+              </Button>
+            ) : (
+              <Button variant="outline" disabled>
+                Atendimento no balcão
+              </Button>
+            )}
           </div>
         </CardFooter>
       </Card>
 
       <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center max-w-md mt-1 font-bold">
-        Página atualizada automaticamente. Para fechar a conta, chame um atendente.
+        Modo: {operationModeLabelMap[operationMode]}. {customerFacingHint}
       </p>
 
       <Dialog open={isMenuOpen} onOpenChange={setIsMenuOpen}>
@@ -636,18 +1010,34 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
                                   ) : null}
                                   <div className="min-w-0">
                                     <p className="text-sm font-semibold truncate">{product.name}</p>
+                                    {product.isCombo && getComboComponentIds(product).length > 0 ? (
+                                      <p className="text-[11px] text-muted-foreground">Combo montável</p>
+                                    ) : null}
                                     {product.description ? (
                                       <p className="text-xs text-muted-foreground break-words">{product.description}</p>
+                                    ) : null}
+                                    {guestItemNotes[product.id] ? (
+                                      <p className="text-[11px] text-emerald-700 break-words">{guestItemNotes[product.id]}</p>
                                     ) : null}
                                     <p className="text-xs text-muted-foreground">{formatCurrency(product.price)}</p>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                  {canCustomizeBeverage(product) ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 px-2 text-[11px]"
+                                      onClick={() => openBeverageCustomizer(product)}
+                                    >
+                                      Personalizar
+                                    </Button>
+                                  ) : null}
                                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => changeCartQty(product.id, -1)}>
                                     <Minus className="h-4 w-4" />
                                   </Button>
                                   <span className="w-6 text-center text-sm font-bold">{qty}</span>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => changeCartQty(product.id, 1)}>
+                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openComboPicker(product)}>
                                     <Plus className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -835,6 +1225,123 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             >
               {isSubmittingCart ? 'Enviando...' : 'Enviar via WhatsApp'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isComboPickerOpen} onOpenChange={setIsComboPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Montar combo</DialogTitle>
+            <DialogDescription>
+              Selecione os itens do combo antes de adicionar ao pedido.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 max-h-[45vh] overflow-y-auto">
+            {comboPickerOptions.map((option) => {
+              const selected = comboPickerSelection.includes(option.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => toggleComboPickerItem(option.id)}
+                  className={`w-full text-left border rounded-md px-3 py-2 transition ${selected ? 'border-primary bg-primary/10' : 'hover:bg-muted/40'}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold truncate">{option.name}</span>
+                    <span className="text-xs text-muted-foreground">{formatCurrency(option.price)}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsComboPickerOpen(false)}>Cancelar</Button>
+            <Button onClick={confirmComboPicker}>Adicionar Combo</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBeverageCustomizerOpen} onOpenChange={setIsBeverageCustomizerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Personalizar bebida</DialogTitle>
+            <DialogDescription>
+              Marque os complementos para {beverageCustomizerProduct?.name ?? 'a bebida'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+            {beverageChecklist.map((option) => {
+              const value = beverageOptionValues[option] ?? { selected: false, quantity: 1, applyAll: false };
+              return (
+                <div key={option} className="rounded-md border p-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={value.selected}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setBeverageOptionValues((current) => ({
+                          ...current,
+                          [option]: {
+                            ...value,
+                            selected: checked,
+                          },
+                        }));
+                      }}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm font-semibold">{option}</span>
+                  </div>
+                  {value.selected ? (
+                    <div className="grid grid-cols-[110px_1fr] gap-2 items-center">
+                      <Button
+                        variant={value.applyAll ? 'default' : 'outline'}
+                        type="button"
+                        className="h-8"
+                        onClick={() => {
+                          setBeverageOptionValues((current) => ({
+                            ...current,
+                            [option]: {
+                              ...value,
+                              applyAll: !value.applyAll,
+                            },
+                          }));
+                        }}
+                      >
+                        Todos
+                      </Button>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        disabled={value.applyAll}
+                        value={value.quantity}
+                        onChange={(e) => {
+                          const parsed = Number(e.target.value);
+                          setBeverageOptionValues((current) => ({
+                            ...current,
+                            [option]: {
+                              ...value,
+                              quantity: Number.isFinite(parsed) ? Math.max(1, Math.min(20, parsed)) : 1,
+                            },
+                          }));
+                        }}
+                        placeholder="Qtd"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBeverageCustomizerOpen(false)}>Cancelar</Button>
+            <Button onClick={saveBeverageCustomization}>Salvar opções</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -116,6 +116,14 @@ export type MenuBranding = {
   askComandaNumber?: boolean;
   /** Telefone WhatsApp do estabelecimento (somente números com DDI+DDD). */
   whatsappNumber?: string | null;
+  /** Modo operacional do pedido digital. */
+  operationMode?: 'counter_only' | 'table_only' | 'table_delivery';
+  /** Texto curto exibido para o cliente no cardápio da comanda. */
+  customerFacingMessage?: string | null;
+  /** Exibe botão de sininho/chamar atendente no cliente. */
+  enableServiceBell?: boolean;
+  /** Checklist de bebidas configurável pelo restaurante (uma opção por item). */
+  beverageChecklist?: string[];
 };
 
 export const INITIAL_MENU_BRANDING: MenuBranding = {
@@ -126,6 +134,10 @@ export const INITIAL_MENU_BRANDING: MenuBranding = {
   allowGuestSelfOrder: true,
   askComandaNumber: false,
   whatsappNumber: null,
+  operationMode: 'table_only',
+  customerFacingMessage: null,
+  enableServiceBell: true,
+  beverageChecklist: [],
 };
 
 

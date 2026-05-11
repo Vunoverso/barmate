@@ -78,6 +78,10 @@ export async function GET(
       allowGuestSelfOrder: branding.allowGuestSelfOrder ?? true,
       askComandaNumber: branding.askComandaNumber ?? false,
       whatsappNumber: branding.whatsappNumber ?? null,
+      operationMode: branding.operationMode ?? 'table_only',
+      customerFacingMessage: branding.customerFacingMessage ?? null,
+      enableServiceBell: branding.enableServiceBell ?? true,
+      beverageChecklist: Array.isArray(branding.beverageChecklist) ? branding.beverageChecklist : [],
     },
   });
 }

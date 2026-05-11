@@ -35,8 +35,9 @@ const isPendingKitchenItem = (item: OrderItem) => {
     const addedAt = toValidDate(item.addedAt);
     const isKitchen = KITCHEN_CATEGORIES.includes(item.categoryId || '');
     const isNotDelivered = !item.isDelivered;
+    const isApproved = !item.pendingApproval;
     const isNewOrForced = (addedAt ? isToday(addedAt) : false) || item.forceKitchenVisible === true;
-    return isKitchen && isNotDelivered && isNewOrForced;
+    return isKitchen && isNotDelivered && isApproved && isNewOrForced;
 };
 
 const countPendingKitchenItems = (orders: ActiveOrder[]) => orders.reduce(
