@@ -462,7 +462,7 @@ export default function OrdersClient() {
               <div className="flex items-center justify-between">
                 <CardTitle>Comandas</CardTitle>
                 <div className="flex items-center gap-1">
-                  <Button size="icon" variant="ghost" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 w-8" title="Histórico de comandas fechadas"><History className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="outline" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 w-8" title="Histórico de comandas fechadas"><History className="h-4 w-4" /></Button>
                   <Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button>
                 </div>
               </div>
