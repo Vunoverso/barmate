@@ -205,9 +205,11 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
     }
 
     let active = true;
+    let permanentError = false;
     const firstLoadStartedAt = Date.now();
 
     const loadOrder = async (isFirstLoad = false) => {
+      if (permanentError) return;
       try {
         const response = await fetch(`/api/public/order/${encodeURIComponent(orderId)}`, {
           cache: 'no-store',
@@ -228,6 +230,9 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
             }, ORDER_INITIAL_RETRY_DELAY_MS);
             return;
           }
+
+          // Erro definitivo — para o polling para não fazer requisições infinitas.
+          permanentError = true;
 
           const archivedOrders = getArchivedOrders();
           const foundArchived = archivedOrders.find((item) => item.id === orderId) ?? null;
