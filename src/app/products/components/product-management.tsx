@@ -75,26 +75,26 @@ export default function ProductManagement() {
     };
   }, [fetchData]);
 
-  const handleAddProduct = useCallback((product: Omit<Product, 'id'>) => {
+  const handleAddProduct = useCallback(async (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: `prod-${Date.now()}` };
     const updatedProducts = [...products, newProduct];
-    saveProducts(updatedProducts);
+    await saveProducts(updatedProducts);
     toast({ title: "Produto Adicionado", description: `${product.name} foi adicionado com sucesso.` });
   }, [products, toast]);
 
-  const handleEditProduct = useCallback((updatedProduct: Product) => {
+  const handleEditProduct = useCallback(async (updatedProduct: Product) => {
     const updatedProducts = products.map(p => p.id === updatedProduct.id ? updatedProduct : p);
-    saveProducts(updatedProducts);
+    await saveProducts(updatedProducts);
     toast({ title: "Produto Atualizado", description: `${updatedProduct.name} foi atualizado com sucesso.` });
   }, [products, toast]);
 
-  const handleSaveProduct = useCallback((product: Omit<Product, 'id'> | Product) => {
+  const handleSaveProduct = useCallback(async (product: Omit<Product, 'id'> | Product) => {
     if ('id' in product) {
-      handleEditProduct(product);
+      await handleEditProduct(product);
       return;
     }
 
-    handleAddProduct(product);
+    await handleAddProduct(product);
   }, [handleAddProduct, handleEditProduct]);
 
   const openEditDialog = useCallback((product: Product) => {
@@ -107,10 +107,10 @@ export default function ProductManagement() {
     setIsDialogOpen(true);
   }, []);
   
-  const handleDeleteProduct = useCallback((productId: string) => {
+  const handleDeleteProduct = useCallback(async (productId: string) => {
     const productName = products.find(p => p.id === productId)?.name;
     const updatedProducts = products.filter(p => p.id !== productId);
-    saveProducts(updatedProducts);
+    await saveProducts(updatedProducts);
     setProductToDelete(null);
     if (productName) {
       toast({ title: "Produto Removido", description: `${productName} foi removido.`, variant: "destructive" });
@@ -159,7 +159,7 @@ export default function ProductManagement() {
               throw new Error("Arquivo de produtos inválido ou formato incorreto.");
             }
             
-            saveProducts(data as Product[]);
+            void saveProducts(data as Product[]);
             
             toast({ title: "Importação Concluída!", description: "Sua lista de produtos foi substituída com sucesso." });
         } catch (innerError: any) {

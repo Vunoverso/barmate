@@ -8,6 +8,8 @@ import {
 } from '@/lib/constants';
 import type { Product, ProductCategory } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 const arrayValue = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
 // GET /api/public/order/:orderId/menu
@@ -82,6 +84,11 @@ export async function GET(
       customerFacingMessage: branding.customerFacingMessage ?? null,
       enableServiceBell: branding.enableServiceBell ?? true,
       beverageChecklist: Array.isArray(branding.beverageChecklist) ? branding.beverageChecklist : [],
+    },
+  }, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      Pragma: 'no-cache',
     },
   });
 }

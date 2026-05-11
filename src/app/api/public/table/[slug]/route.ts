@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/public/table/:slug
 // Busca a comanda ativa e compartilhada de uma mesa pelo seu label (slug).
 // Utilizado pelo QR code de mesa para redirecionar diretamente sem pedir permissão.
@@ -22,7 +24,7 @@ export async function GET(
     SELECT id
     FROM open_orders
     WHERE deleted_at IS NULL
-      AND (data->>'isShared')::boolean = true
+      AND COALESCE((data->>'isShared')::boolean, (data->>'is_shared')::boolean, false) = true
       AND data->>'tableLabel' = ${tableLabel}
     ORDER BY created_at DESC
     LIMIT 1
