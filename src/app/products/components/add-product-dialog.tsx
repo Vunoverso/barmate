@@ -193,7 +193,7 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
               )}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               <FormField
+              <FormField
                 control={form.control}
                 name="price"
                 render={({ field }) => (
@@ -206,7 +206,20 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
                   </FormItem>
                 )}
               />
-               <FormField
+              <FormField
+                control={form.control}
+                name="stock"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estoque</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <FormField
@@ -276,19 +289,6 @@ export default function AddProductDialog({ isOpen, onOpenChange, product, onSave
                 )}
               />
             </div>
-                            Remover foto
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    Você pode colar uma URL ou enviar uma foto do dispositivo.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}
