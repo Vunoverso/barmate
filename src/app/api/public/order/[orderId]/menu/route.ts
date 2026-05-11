@@ -62,10 +62,16 @@ export async function GET(
   const visibleCategories = categories
     .filter((category) => category.isVisibleInMenu !== false)
     .sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+  const allCategoryIds = new Set(categories.map((category) => category.id));
   const visibleCategoryIds = new Set(visibleCategories.map((category) => category.id));
 
   const visibleProducts = products.filter((product) => {
     if (product.isVisibleInMenu === false) return false;
+
+    // Fail-open: se a categoria ainda nao sincronizou no app_state,
+    // mantemos o produto visivel para evitar "sumico" no cardapio.
+    if (!allCategoryIds.has(product.categoryId)) return true;
+
     return visibleCategoryIds.has(product.categoryId);
   });
 

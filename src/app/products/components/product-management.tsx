@@ -150,7 +150,7 @@ export default function ProductManagement() {
     toast({ title: "Importando produtos...", description: "Isso pode levar alguns instantes." });
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const text = e.target?.result as string;
             const data = JSON.parse(text);
@@ -159,7 +159,7 @@ export default function ProductManagement() {
               throw new Error("Arquivo de produtos inválido ou formato incorreto.");
             }
             
-            void saveProducts(data as Product[]);
+            await saveProducts(data as Product[]);
             
             toast({ title: "Importação Concluída!", description: "Sua lista de produtos foi substituída com sucesso." });
         } catch (innerError: any) {
