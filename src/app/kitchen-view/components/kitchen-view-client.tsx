@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { db, collection, onSnapshot, doc, updateDoc } from '@/lib/supabase-firestore';
+import { db, collection, onSnapshot, doc, updateDoc } from '@/lib/db-sync-client';
 import type { ActiveOrder, OrderItem } from '@/types';
 import { getMenuBranding } from '@/lib/data-access';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';

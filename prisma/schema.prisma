@@ -49,7 +49,7 @@ model Membership {
   @@unique([organizationId, userId])
 }
 
-// ---------- Dados Operacionais (substitui Supabase) ----------
+// ---------- Dados Operacionais (Postgres/Vultr) ----------
 
 /// Armazena todos os estados operacionais como JSON (produtos, vendas, etc.)
 model AppState {

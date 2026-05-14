@@ -1,7 +1,7 @@
 
 import type { Product, Sale, PaymentMethod, ProductCategory, FinancialEntry, SecondaryCashBox, BankAccount, CashRegisterStatus, Payment, TransactionFees, ActiveOrder, Client, CashAdjustment, GuestRequest, Table } from '@/types';
 import { getAppState, setAppState, hydrateAppState, hasAppStateKey } from './app-state';
-import { db, collection, getDocs, doc, setDoc } from './supabase-firestore';
+import { db, collection, getDocs, doc, setDoc } from './db-sync-client';
 import {
     DATA_KEYS,
     INITIAL_PRODUCT_CATEGORIES,
@@ -82,7 +82,7 @@ const parseLegacyValue = (key: string, rawValue: string) => {
   }
 };
 
-const importLegacyOrdersToSupabase = async (rawValue: string) => {
+const importLegacyOrdersToVultr = async (rawValue: string) => {
   if (!db) return false;
 
   const existingOrders = await getDocs(collection(db, 'open_orders'));
@@ -123,7 +123,7 @@ export async function migrateOldData() {
 
   for (const [key, rawValue] of legacyEntries) {
     if (key === KEY_OPEN_ORDERS) {
-      const importedOrders = await importLegacyOrdersToSupabase(rawValue);
+      const importedOrders = await importLegacyOrdersToVultr(rawValue);
       if (importedOrders && !hasAppStateKey(KEY_OPEN_ORDERS)) {
         await setAppState(KEY_OPEN_ORDERS, parseLegacyValue(key, rawValue));
       }

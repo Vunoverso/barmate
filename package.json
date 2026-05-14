@@ -11,8 +11,7 @@
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "seed:users": "node scripts/seed-users.mjs",
-    "import:products": "node scripts/import-products-to-supabase.mjs"
+    "seed:users": "node scripts/seed-users.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -38,7 +37,6 @@
     "@radix-ui/react-tabs": "^1.1.3",
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
-    "@supabase/supabase-js": "^2.104.1",
     "@tanstack/react-query": "^5.66.0",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",

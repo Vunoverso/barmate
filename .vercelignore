@@ -22,7 +22,7 @@ backups
 *.csv
 *.png
 barmate_app_state_partial.json
-scripts/supabase-*.json
+scripts/*-app-state-export.json
 
 # Segredos locais
 .env

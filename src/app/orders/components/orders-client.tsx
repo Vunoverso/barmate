@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { db, doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc, query, where } from "@/lib/supabase-firestore";
+import { db, doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc, query, where } from "@/lib/db-sync-client";
 import { OrderStatement } from './order-statement';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -256,7 +256,7 @@ export default function OrdersClient() {
       const targetOrder = updatedOrders.find(o => o.id === currentOrderId);
       if (targetOrder) {
           const updatedTarget = { ...targetOrder, updatedAt: now };
-          // Atualizacao otimista local: UI responde instantaneamente, sync com Supabase em background.
+          // Atualizacao otimista local: UI responde instantaneamente, sync com Vultr em background.
           setOpenOrders(prev => prev.map(o => o.id === updatedTarget.id ? updatedTarget : o));
           void syncOrderToFirestore(updatedTarget);
       }

@@ -37,8 +37,8 @@ pnpm-debug.log*
 *.docx
 *.db
 
-# supabase/data exports (contain sensitive customer data)
-scripts/supabase-*.json
+# local data exports (contain sensitive customer data)
+scripts/*-app-state-export.json
 scripts/import-*.mjs
 barmate_app_state_partial.json
 *.csv

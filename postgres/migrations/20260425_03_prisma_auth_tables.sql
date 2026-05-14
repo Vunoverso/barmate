@@ -1,5 +1,5 @@
 -- Prisma/NextAuth tables for the server-side credentials auth flow.
--- These tables are intentionally separate from the transitional Supabase app_state/open_orders tables.
+-- These tables are intentionally separate from the operational app_state/open_orders tables.
 
 create table if not exists public."User" (
   id text primary key,

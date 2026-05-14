@@ -2,7 +2,7 @@
 "use client";
 
 import { clearFinancialData, getTransactionFees, saveTransactionFees, getCompanyDetails, saveCompanyDetails, getOpenOrders, getProducts, getProductCategories, getClients, getSales, getFinancialEntries, getCashRegisterStatus, getClosedSessions, getMenuBranding, saveMenuBranding } from '@/lib/data-access';
-import { collection, db, getDocs } from '@/lib/supabase-firestore';
+import { collection, db, getDocs } from '@/lib/db-sync-client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';

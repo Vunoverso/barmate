@@ -31,7 +31,7 @@ export interface Product {
   comboComponentIds?: string[];
   /** Optional description shown in digital menu. */
   description?: string | null;
-  /** Optional product image URL (Supabase Storage or external). */
+  /** Optional product image URL (Vultr/object storage or external). */
   imageUrl?: string | null;
   /** Hide single product from public digital menu. */
   isVisibleInMenu?: boolean;

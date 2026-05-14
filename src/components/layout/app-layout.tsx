@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
 import { migrateOldData, loadEssentialDataFromCloud, getCompanyDetails } from '@/lib/data-access';
-import { db, collection, onSnapshot, query, where } from '@/lib/supabase-firestore';
+import { db, collection, onSnapshot, query, where } from '@/lib/db-sync-client';
 import { isToday } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSession, signOut } from 'next-auth/react';

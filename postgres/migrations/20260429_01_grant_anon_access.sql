@@ -1,11 +1,11 @@
 -- Correcao critica: tabelas criadas via migration nao receberam GRANT
--- automatico para os roles anon/authenticated do Supabase, gerando
+-- automatico para roles anon/authenticated do antigo ambiente Postgres gerenciado, gerando
 -- "42501 permission denied for table" mesmo com RLS policies using(true).
 --
 -- Sintoma observado em producao (2026-04-29):
 --   - 401 em todas as queries para app_state, open_orders, guest_requests
 --   - 140+ pendencias offline acumuladas porque a fila nunca consegue sincronizar
---   - Comandas/caixa "voltam de 3 dias atras" pois nada e persistido no Supabase
+--   - Comandas/caixa "voltam de 3 dias atras" pois nada e persistido no backend remoto
 --
 -- Esta migration concede os GRANTs necessarios e e idempotente (pode ser
 -- re-executada sem efeitos colaterais).

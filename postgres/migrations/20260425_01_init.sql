@@ -1,4 +1,4 @@
--- BarMate Supabase foundation
+-- BarMate Postgres/Vultr foundation
 -- Base multi-tenant schema and app-state storage.
 -- Shared-database safe: only manage BarMate operational state tables here.
 
@@ -72,7 +72,7 @@ alter table public.open_orders enable row level security;
 alter table public.guest_requests enable row level security;
 
 -- Transitional policies:
--- The app is still using browser-side Supabase access while Supabase Auth/BFF is being wired.
+-- Transitional policies from the original hosted Postgres setup.
 -- These policies keep the app working during the migration, but they should be replaced by
 -- organization-aware policies once session context is available.
 
