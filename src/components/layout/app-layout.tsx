@@ -32,19 +32,23 @@ const serverOfflineStatusSnapshot = getOfflineStatus();
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '/';
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const offlineStatus = useSyncExternalStore(subscribeOfflineStatus, getOfflineStatus, () => serverOfflineStatusSnapshot);
   const [barName, setBarName] = useState('BarMate');
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingKitchenCount, setPendingKitchenCount] = useState(0);
 
   const version = "1.3.2";
+  const publicRoutes = ['/', '/planos', '/login', '/cadastro', '/sobre'];
+  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
+  const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  const hasOperationalSession = status === 'authenticated' && Boolean(session?.user?.organizationId);
 
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
-      if (status !== 'authenticated') {
+      if (!hasOperationalSession || isPublicRoute || isGuestView) {
         const details = getCompanyDetails();
         setBarName(details.barName);
         return;
@@ -69,10 +73,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       cancelled = true;
       window.removeEventListener('barmate-app-state-changed', handleStateChange);
     };
-  }, [status]);
+  }, [hasOperationalSession, isGuestView, isPublicRoute]);
 
   useEffect(() => {
-    if (!db || status !== 'authenticated') return;
+    if (!db || !hasOperationalSession || isPublicRoute || isGuestView) return;
 
     const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
@@ -106,9 +110,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       unsubscribeRequests();
       unsubscribeOrders();
     };
-  }, [status]);
+  }, [hasOperationalSession, isGuestView, isPublicRoute]);
 
-  const isAuthenticated = status === 'authenticated';
+  const isAuthenticated = hasOperationalSession;
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: '/login' });
@@ -130,9 +134,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   ];
 
   const allNavItems = [...mainNavItems, settingsNavItem];
-  const publicRoutes = ['/', '/planos', '/login', '/cadastro', '/sobre'];
-  const isGuestView = pathname.startsWith('/my-order') || pathname.startsWith('/guest/register') || pathname.startsWith('/kitchen-view');
-  const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
   // While checking session
   if (status === 'loading' && !isGuestView && !isPublicRoute) {

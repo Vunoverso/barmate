@@ -47,7 +47,17 @@ export const authOptions: NextAuthOptions = {
         const isValid = await compare(normalizedPassword, user.passwordHash);
         if (!isValid) return null;
 
-        const primaryMembership = user.memberships[0];
+          const primaryMembership =
+            user.memberships.find((membership) => String(membership.status ?? '').trim().toLowerCase() === 'active')
+            ?? user.memberships[0];
+
+          if (!primaryMembership?.organizationId) {
+            console.warn('[auth] Login blocked: user without active organization membership', {
+              email: normalizedEmail,
+              memberships: user.memberships.length,
+            });
+            return null;
+          }
 
         return {
           id: user.id,
