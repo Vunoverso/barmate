@@ -47,6 +47,7 @@ import { ptBR } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
+const ORDERS_UI_VERSION = 'orders-ui-2026-05-10-1';
 
 const resolveCustomerStatus = (items: OrderItem[]): ActiveOrder['customerStatus'] => {
   if (items.some((item) => item.pendingApproval)) return 'enviado';
@@ -462,7 +463,10 @@ export default function OrdersClient() {
               <div className="flex items-center justify-between">
                 <CardTitle>Comandas</CardTitle>
                 <div className="flex items-center gap-1">
-                  <Button size="icon" variant="outline" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 w-8" title="Histórico de comandas fechadas"><History className="h-4 w-4" /></Button>
+                  <Button variant="outline" onClick={() => setIsClosedOrdersDialogOpen(true)} className="h-8 px-2 gap-1" title="Histórico de comandas fechadas">
+                    <History className="h-4 w-4" />
+                    <span className="text-xs font-semibold">Histórico</span>
+                  </Button>
                   <Button size="icon" variant="outline" onClick={() => setIsCreateOrderDialogOpen(true)} className="h-8 w-8"><Plus className="h-4 w-4" /></Button>
                 </div>
               </div>
@@ -472,6 +476,7 @@ export default function OrdersClient() {
                   </Button>
               )}
               <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar mesa..." value={orderSearchTerm} onChange={e => setOrderSearchTerm(e.target.value)} className="pl-8" /></div>
+              <p className="text-[10px] text-muted-foreground">{ORDERS_UI_VERSION}</p>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden p-0">
               <ScrollArea className="h-full p-2">

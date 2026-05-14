@@ -1,0 +1,30 @@
+# Dependencias e artefatos locais
+node_modules
+.next
+out
+coverage
+build
+
+# Configuracoes locais / cache
+.agents
+.idx
+.playwright-mcp
+.worktrees
+.vercel
+.modified
+
+# Dados locais e exports
+backups
+*.zip
+*.exe
+*.docx
+*.db
+*.csv
+*.png
+barmate_app_state_partial.json
+scripts/supabase-*.json
+
+# Segredos locais
+.env
+.env*.local
+*.env.local
