@@ -41,11 +41,22 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        if (!user?.passwordHash) return null;
-        if (user.status !== 'active') return null;
+        if (!user?.passwordHash) {
+          console.warn('[auth] Login blocked: no passwordHash', { email: normalizedEmail });
+          return null;
+        }
+
+        const userStatus = String(user.status ?? '').trim().toLowerCase();
+        if (userStatus !== 'active') {
+          console.warn('[auth] Login blocked: user.status is not active', { email: normalizedEmail, status: user.status });
+          return null;
+        }
 
         const isValid = await compare(normalizedPassword, user.passwordHash);
-        if (!isValid) return null;
+        if (!isValid) {
+          console.warn('[auth] Login blocked: password mismatch', { email: normalizedEmail });
+          return null;
+        }
 
           const primaryMembership =
             user.memberships.find((membership) => String(membership.status ?? '').trim().toLowerCase() === 'active')
