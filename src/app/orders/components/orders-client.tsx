@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { db, doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc } from "@/lib/supabase-firestore";
+import { db, doc, setDoc, deleteDoc, collection, onSnapshot, updateDoc, query, where } from "@/lib/supabase-firestore";
 import { OrderStatement } from './order-statement';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -191,17 +191,12 @@ export default function OrdersClient() {
   }, []);
 
   useEffect(() => {
-    const fetchPendingRequests = async () => {
-      try {
-        const res = await fetch('/api/db/guest-requests');
-        if (!res.ok) return;
-        const data = await res.json() as GuestRequest[];
-        setPendingRequests(data.filter(r => r.status === 'pending'));
-      } catch {}
-    };
-    void fetchPendingRequests();
-    const interval = setInterval(() => void fetchPendingRequests(), 5000);
-    return () => clearInterval(interval);
+    if (!db) return;
+    const qRequests = query(collection(db, 'guest_requests'), where('status', '==', 'pending'));
+    const unsubscribe = onSnapshot(qRequests, (snapshot) => {
+      setPendingRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestRequest)));
+    });
+    return () => unsubscribe();
   }, []);
 
   const fetchData = useCallback(() => {

@@ -18,21 +18,26 @@ export async function GET(req: NextRequest) {
   }
   const orgId = session.user.organizationId;
 
-  const rows = await prisma.openOrder.findMany({
-    where: { organizationId: orgId, deletedAt: null },
-    orderBy: { createdAt: 'asc' },
-  });
+  try {
+    const rows = await prisma.openOrder.findMany({
+      where: { organizationId: orgId, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
 
-  // Retorna a estrutura completa mesclando metadados + data
-  const result = rows.map((row) => ({
-    ...(row.data as Record<string, unknown>),
-    id: row.id,
-    organizationId: row.organizationId,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }));
+    // Retorna a estrutura completa mesclando metadados + data
+    const result = rows.map((row) => ({
+      ...(row.data as Record<string, unknown>),
+      id: row.id,
+      organizationId: row.organizationId,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
 
-  return NextResponse.json(result, { headers: NO_STORE_HEADERS });
+    return NextResponse.json(result, { headers: NO_STORE_HEADERS });
+  } catch (error) {
+    console.error('[api/db/open-orders] GET failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 }
 
 // POST /api/db/open-orders — upsert de uma comanda
@@ -50,19 +55,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  await prisma.openOrder.upsert({
-    where: { id },
-    update: {
-      data: body as never,
-      updatedAt: new Date(),
-      deletedAt: body.deletedAt ? new Date(String(body.deletedAt)) : null,
-    },
-    create: {
-      id,
-      organizationId: orgId,
-      data: body as never,
-    },
-  });
+  try {
+    await prisma.openOrder.upsert({
+      where: { id },
+      update: {
+        data: body as never,
+        updatedAt: new Date(),
+        deletedAt: body.deletedAt ? new Date(String(body.deletedAt)) : null,
+      },
+      create: {
+        id,
+        organizationId: orgId,
+        data: body as never,
+      },
+    });
+  } catch (error) {
+    console.error('[api/db/open-orders] POST failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -80,10 +90,15 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  await prisma.openOrder.updateMany({
-    where: { id, organizationId: orgId },
-    data: { deletedAt: new Date() },
-  });
+  try {
+    await prisma.openOrder.updateMany({
+      where: { id, organizationId: orgId },
+      data: { deletedAt: new Date() },
+    });
+  } catch (error) {
+    console.error('[api/db/open-orders] DELETE failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true });
 }

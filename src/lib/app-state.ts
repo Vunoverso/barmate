@@ -23,8 +23,15 @@ let hydrationPromise: Promise<void> | null = null;
 let remoteRefreshPromise: Promise<void> | null = null;
 let hydrated = false;
 let refreshListenersStarted = false;
+let remoteFailureCount = 0;
+let remotePausedUntil = 0;
+let remoteLastLogAt = 0;
 
 const APP_STATE_EVENT = 'barmate-app-state-changed';
+const REMOTE_FAILURES_BEFORE_PAUSE = 3;
+const REMOTE_FAILURE_BASE_COOLDOWN_MS = 5 * 60_000;
+const REMOTE_FAILURE_MAX_COOLDOWN_MS = 30 * 60_000;
+const REMOTE_FAILURE_LOG_INTERVAL_MS = 60_000;
 
 const notifyStateChange = (key: string) => {
   if (typeof window === 'undefined') return;
@@ -33,17 +40,55 @@ const notifyStateChange = (key: string) => {
 
 export const getAppStateEventName = () => APP_STATE_EVENT;
 
+const recordRemoteFailure = (status?: number) => {
+  const now = Date.now();
+  remoteFailureCount += 1;
+
+  if (remoteFailureCount >= REMOTE_FAILURES_BEFORE_PAUSE) {
+    const pauseLevel = remoteFailureCount - REMOTE_FAILURES_BEFORE_PAUSE;
+    const cooldownMs = Math.min(
+      REMOTE_FAILURE_BASE_COOLDOWN_MS * (2 ** pauseLevel),
+      REMOTE_FAILURE_MAX_COOLDOWN_MS,
+    );
+    remotePausedUntil = now + cooldownMs;
+  }
+
+  if (now - remoteLastLogAt >= REMOTE_FAILURE_LOG_INTERVAL_MS) {
+    const pausedForSeconds = Math.max(0, Math.ceil((remotePausedUntil - now) / 1000));
+    console.error(
+      `API fetch error for app_state${status ? ` (HTTP ${status})` : ''}${pausedForSeconds ? `; retry paused for ${pausedForSeconds}s` : ''}`,
+    );
+    remoteLastLogAt = now;
+  }
+};
+
+const recordRemoteSuccess = () => {
+  remoteFailureCount = 0;
+  remotePausedUntil = 0;
+  remoteLastLogAt = 0;
+};
+
 /** Busca app_state da nossa própria API (PostgreSQL Vultr) */
 async function fetchRemoteAppState(): Promise<AppStateRow[] | null> {
+  if (Date.now() < remotePausedUntil) {
+    return null;
+  }
+
   try {
     const res = await fetch('/api/db/app-state', {
       credentials: 'include',
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
     });
-    if (!res.ok) return null;
-    return (await res.json()) as AppStateRow[];
+    if (!res.ok) {
+      recordRemoteFailure(res.status);
+      return null;
+    }
+    const rows = (await res.json()) as AppStateRow[];
+    recordRemoteSuccess();
+    return rows;
   } catch {
+    recordRemoteFailure();
     return null;
   }
 }

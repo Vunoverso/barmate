@@ -223,6 +223,56 @@ const currentOnlineState = () => {
 const REMOTE_REFRESH_VISIBLE_MS = 30_000;
 const REMOTE_REFRESH_HIDDEN_MS = 90_000;
 const RECENT_LOCAL_WRITE_TTL_MS = 15_000;
+const REMOTE_FAILURES_BEFORE_PAUSE = 3;
+const REMOTE_FAILURE_BASE_COOLDOWN_MS = 5 * 60_000;
+const REMOTE_FAILURE_MAX_COOLDOWN_MS = 30 * 60_000;
+const REMOTE_FAILURE_LOG_INTERVAL_MS = 60_000;
+
+type RemoteFailureState = {
+  consecutiveFailures: number;
+  pausedUntil: number;
+  lastLogAt: number;
+};
+
+const remoteFailureState = new Map<string, RemoteFailureState>();
+
+const getRemoteFailureState = (tableName: string) => {
+  const existing = remoteFailureState.get(tableName);
+  if (existing) return existing;
+
+  const next = { consecutiveFailures: 0, pausedUntil: 0, lastLogAt: 0 };
+  remoteFailureState.set(tableName, next);
+  return next;
+};
+
+const isRemoteFetchPaused = (tableName: string) => Date.now() < getRemoteFailureState(tableName).pausedUntil;
+
+const recordRemoteFetchSuccess = (tableName: string) => {
+  remoteFailureState.delete(tableName);
+};
+
+const recordRemoteFetchFailure = (tableName: string, status?: number) => {
+  const now = Date.now();
+  const state = getRemoteFailureState(tableName);
+  state.consecutiveFailures += 1;
+
+  if (state.consecutiveFailures >= REMOTE_FAILURES_BEFORE_PAUSE) {
+    const pauseLevel = state.consecutiveFailures - REMOTE_FAILURES_BEFORE_PAUSE;
+    const cooldownMs = Math.min(
+      REMOTE_FAILURE_BASE_COOLDOWN_MS * (2 ** pauseLevel),
+      REMOTE_FAILURE_MAX_COOLDOWN_MS,
+    );
+    state.pausedUntil = now + cooldownMs;
+  }
+
+  if (now - state.lastLogAt >= REMOTE_FAILURE_LOG_INTERVAL_MS) {
+    const pausedForSeconds = Math.max(0, Math.ceil((state.pausedUntil - now) / 1000));
+    console.error(
+      `API fetch error for ${tableName}${status ? ` (HTTP ${status})` : ''}${pausedForSeconds ? `; retry paused for ${pausedForSeconds}s` : ''}`,
+    );
+    state.lastLogAt = now;
+  }
+};
 
 const getRemoteRefreshDelay = () => {
   if (typeof document === 'undefined') {
@@ -302,6 +352,10 @@ const fetchServerRows = async (tableName: string) => {
     return null;
   }
 
+  if (isRemoteFetchPaused(tableName)) {
+    return null;
+  }
+
   const result = await callApi(apiPath, {
     cache: 'no-store',
     headers: { 'Cache-Control': 'no-cache' },
@@ -310,9 +364,11 @@ const fetchServerRows = async (tableName: string) => {
     if (result.status === 401 || result.status === 403) {
       throw new AuthRequiredForSyncError(tableName);
     }
-    console.error(`API fetch error for ${tableName}`);
+    recordRemoteFetchFailure(tableName, result.status);
     return null;
   }
+
+  recordRemoteFetchSuccess(tableName);
 
   return ((result.data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
 };

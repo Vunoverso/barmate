@@ -18,24 +18,29 @@ export async function GET(req: NextRequest) {
   }
   const orgId = session.user.organizationId;
 
-  const rows = await prisma.guestRequest.findMany({
-    where: { organizationId: orgId },
-    orderBy: { requestedAt: 'asc' },
-  });
+  try {
+    const rows = await prisma.guestRequest.findMany({
+      where: { organizationId: orgId },
+      orderBy: { requestedAt: 'asc' },
+    });
 
-  const result = rows.map((row) => {
-    const data = row.data as Record<string, unknown>;
-    return {
-      ...data,
-      id: row.id,
-      organizationId: row.organizationId,
-      associatedOrderId: row.associatedOrderId ?? data.associatedOrderId ?? null,
-      requestedAt: row.requestedAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
-  });
+    const result = rows.map((row) => {
+      const data = row.data as Record<string, unknown>;
+      return {
+        ...data,
+        id: row.id,
+        organizationId: row.organizationId,
+        associatedOrderId: row.associatedOrderId ?? data.associatedOrderId ?? null,
+        requestedAt: row.requestedAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      };
+    });
 
-  return NextResponse.json(result, { headers: NO_STORE_HEADERS });
+    return NextResponse.json(result, { headers: NO_STORE_HEADERS });
+  } catch (error) {
+    console.error('[api/db/guest-requests] GET failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 }
 
 // POST /api/db/guest-requests — upsert de um pedido
@@ -53,20 +58,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  await prisma.guestRequest.upsert({
-    where: { id },
-    update: {
-      data: body as never,
-      updatedAt: new Date(),
-      associatedOrderId: body.associatedOrderId ? String(body.associatedOrderId) : null,
-    },
-    create: {
-      id,
-      organizationId: orgId,
-      associatedOrderId: body.associatedOrderId ? String(body.associatedOrderId) : null,
-      data: body as never,
-    },
-  });
+  try {
+    await prisma.guestRequest.upsert({
+      where: { id },
+      update: {
+        data: body as never,
+        updatedAt: new Date(),
+        associatedOrderId: body.associatedOrderId ? String(body.associatedOrderId) : null,
+      },
+      create: {
+        id,
+        organizationId: orgId,
+        associatedOrderId: body.associatedOrderId ? String(body.associatedOrderId) : null,
+        data: body as never,
+      },
+    });
+  } catch (error) {
+    console.error('[api/db/guest-requests] POST failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -84,7 +94,12 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  await prisma.guestRequest.deleteMany({ where: { id, organizationId: orgId } });
+  try {
+    await prisma.guestRequest.deleteMany({ where: { id, organizationId: orgId } });
+  } catch (error) {
+    console.error('[api/db/guest-requests] DELETE failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true });
 }

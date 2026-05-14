@@ -18,12 +18,17 @@ export async function GET() {
   }
   const orgId = session.user.organizationId;
 
-  const rows = await prisma.appState.findMany({
-    where: { organizationId: orgId },
-    select: { key: true, value: true, updatedAt: true },
-  });
+  try {
+    const rows = await prisma.appState.findMany({
+      where: { organizationId: orgId },
+      select: { key: true, value: true, updatedAt: true },
+    });
 
-  return NextResponse.json(rows, { headers: NO_STORE_HEADERS });
+    return NextResponse.json(rows, { headers: NO_STORE_HEADERS });
+  } catch (error) {
+    console.error('[api/db/app-state] GET failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 }
 
 // POST /api/db/app-state — upsert de um registro
@@ -41,11 +46,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'key and value are required' }, { status: 400 });
   }
 
-  await prisma.appState.upsert({
-    where: { organizationId_key: { organizationId: orgId, key } },
-    update: { value: value as never, updatedAt: new Date() },
-    create: { key, organizationId: orgId, value: value as never },
-  });
+  try {
+    await prisma.appState.upsert({
+      where: { organizationId_key: { organizationId: orgId, key } },
+      update: { value: value as never, updatedAt: new Date() },
+      create: { key, organizationId: orgId, value: value as never },
+    });
+  } catch (error) {
+    console.error('[api/db/app-state] POST failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -63,9 +73,14 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'key is required' }, { status: 400 });
   }
 
-  await prisma.appState.deleteMany({
-    where: { key, organizationId: orgId },
-  });
+  try {
+    await prisma.appState.deleteMany({
+      where: { key, organizationId: orgId },
+    });
+  } catch (error) {
+    console.error('[api/db/app-state] DELETE failed:', error);
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true });
 }
