@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
 import { Eye, EyeOff } from 'lucide-react';
 
 function LoginPageContent() {
@@ -25,21 +24,24 @@ function LoginPageContent() {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedPassword = password;
 
-    const response = await signIn('credentials', {
-      email: normalizedEmail,
-      password: normalizedPassword,
-      redirect: false,
-      callbackUrl,
+    const response = await fetch('/api/auth/direct-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: normalizedEmail,
+        password: normalizedPassword,
+      }),
     });
 
     setIsLoading(false);
 
-    if (response?.error) {
+    if (!response.ok) {
       setError('Email ou senha invalidos.');
       return;
     }
 
     router.push(callbackUrl);
+    router.refresh();
   };
 
   return (
