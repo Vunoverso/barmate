@@ -37,7 +37,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Email ou senha invalidos.' }, { status: 401 });
     }
 
-    const passwordMatches = await compare(payload.password, user.passwordHash);
+    const passwordMatches = await compare(payload.password, user.passwordHash).catch((error) => {
+      console.error('[direct-login] password compare failed:', error);
+      return false;
+    });
     if (!passwordMatches) {
       return NextResponse.json({ message: 'Email ou senha invalidos.' }, { status: 401 });
     }
@@ -82,6 +85,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Dados invalidos.' }, { status: 400 });
     }
 
+    console.error('[direct-login] authentication failed:', error);
     return NextResponse.json({ message: 'Falha ao autenticar.' }, { status: 500 });
   }
 }
