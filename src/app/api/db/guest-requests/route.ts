@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+};
+
 // GET /api/db/guest-requests — retorna pedidos de convidados
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -28,7 +35,7 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json(result, { headers: NO_STORE_HEADERS });
 }
 
 // POST /api/db/guest-requests — upsert de um pedido

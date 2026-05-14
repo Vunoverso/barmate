@@ -26,6 +26,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const KITCHEN_CATEGORIES = ['cat_lanches', 'cat_porcoes', 'cat_sobremesas'];
 
+const isPendingKitchenItem = (item: OrderItem) => {
+    const isKitchenCategory = KITCHEN_CATEGORIES.includes(item.categoryId || '');
+    const isNotDelivered = !item.isDelivered;
+    const isApproved = !item.pendingApproval;
+    const isNewOrForced = (item.addedAt ? isToday(new Date(item.addedAt)) : false) || item.forceKitchenVisible === true;
+
+    return isKitchenCategory && isNotDelivered && isApproved && isNewOrForced;
+};
+
 export default function PedidosClient() {
     const [orders, setOrders] = useState<ActiveOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -56,13 +65,7 @@ export default function PedidosClient() {
         const groups: Record<string, { id: string, orderName: string, createdAt: Date, items: OrderItem[] }> = {};
         
         orders.forEach(order => {
-            const pendingItems = order.items.filter(item => {
-                const isKitchenCategory = KITCHEN_CATEGORIES.includes(item.categoryId || '');
-                const isNotDelivered = !item.isDelivered;
-                const isNewOrForced = isDateToday(item.addedAt) || item.forceKitchenVisible === true;
-                
-                return isKitchenCategory && isNotDelivered && isNewOrForced;
-            });
+            const pendingItems = order.items.filter(isPendingKitchenItem);
             
             if (pendingItems.length > 0) {
                 groups[order.id] = {

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MenuSquare, QrCode as QrCodeIcon, Package, Link as LinkIcon } from 'lucide-react';
 import Link from 'next/link';
-import { getCompanyDetails } from '@/lib/data-access';
 import QRCodeDisplay from '@/app/qrcode/components/qrcode-display';
 import {
   Dialog,
@@ -19,31 +18,39 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { formatCurrency } from '@/lib/constants';
+import { getCompanyDetails, getProductCategories, getProducts, loadEssentialDataFromCloud } from '@/lib/data-access';
 
 export default function DigitalMenuClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [isQrDialogOpen, setIsQrDialogOpen] = useState(false);
-  const companyDetails = getCompanyDetails();
+  const [companyDetails, setCompanyDetails] = useState(() => getCompanyDetails());
 
   useEffect(() => {
-    // Carrega dados do localStorage (app-state)
-    try {
-      const productsJson = localStorage.getItem('barmate_products_v2');
-      const categoriesJson = localStorage.getItem('barmate_productCategories_v2');
+    let cancelled = false;
 
-      if (productsJson) {
-        const parsed = JSON.parse(productsJson);
-        setProducts(Array.isArray(parsed) ? parsed : []);
-      }
+    const syncFromCloud = async () => {
+      await loadEssentialDataFromCloud();
+      if (cancelled) return;
 
-      if (categoriesJson) {
-        const parsed = JSON.parse(categoriesJson);
-        setCategories(Array.isArray(parsed) ? parsed : []);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar cardápio do localStorage:', error);
-    }
+      setProducts(getProducts());
+      setCategories(getProductCategories());
+      setCompanyDetails(getCompanyDetails());
+    };
+
+    const handleStateChange = () => {
+      setProducts(getProducts());
+      setCategories(getProductCategories());
+      setCompanyDetails(getCompanyDetails());
+    };
+
+    void syncFromCloud();
+    window.addEventListener('barmate-app-state-changed', handleStateChange);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('barmate-app-state-changed', handleStateChange);
+    };
   }, []);
 
   const productsByCategory = useMemo(() => {
@@ -212,7 +219,7 @@ export default function DigitalMenuClient() {
                                     {product.name}
                                   </h3>
                                 </div>
-                                {product.available === false && (
+                                {product.stock != null && product.stock <= 0 && (
                                   <Badge variant="destructive" className="text-xs whitespace-nowrap">
                                     Indisponível
                                   </Badge>
@@ -229,11 +236,6 @@ export default function DigitalMenuClient() {
                                 <span className="text-sm font-black text-primary">
                                   {formatCurrency(product.price)}
                                 </span>
-                                {product.preparationTime && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {product.preparationTime} min
-                                  </Badge>
-                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -265,7 +267,7 @@ export default function DigitalMenuClient() {
                                   {product.name}
                                 </h3>
                               </div>
-                              {product.available === false && (
+                              {product.stock != null && product.stock <= 0 && (
                                 <Badge variant="destructive" className="text-xs whitespace-nowrap">
                                   Indisponível
                                 </Badge>
@@ -282,11 +284,6 @@ export default function DigitalMenuClient() {
                               <span className="text-sm font-black text-primary">
                                 {formatCurrency(product.price)}
                               </span>
-                              {product.preparationTime && (
-                                <Badge variant="outline" className="text-xs">
-                                  {product.preparationTime} min
-                                </Badge>
-                              )}
                             </div>
                           </CardContent>
                         </Card>

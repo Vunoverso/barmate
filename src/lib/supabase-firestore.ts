@@ -1,8 +1,6 @@
 import {
-  enqueueMutation,
   getLocalTableSnapshot,
   getOfflineStatus,
-  hasPendingMutationsForTable,
   initializeOfflineSync,
   persistTableSnapshot,
   emitOfflineDataChange,
@@ -16,8 +14,9 @@ async function callApi(
   try {
     const res = await fetch(`/api/db${path}`, {
       ...options,
+      cache: 'no-store',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+      headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'application/json', ...(options.headers ?? {}) },
     });
     if (!res.ok) return { ok: false };
     return { ok: true, data: await res.json() };
@@ -214,6 +213,26 @@ const currentOnlineState = () => {
   return navigator.onLine && getOfflineStatus().isOnline;
 };
 
+const REMOTE_REFRESH_VISIBLE_MS = 4_000;
+const REMOTE_REFRESH_HIDDEN_MS = 20_000;
+const RECENT_LOCAL_WRITE_TTL_MS = 15_000;
+
+const getRemoteRefreshDelay = () => {
+  if (typeof document === 'undefined') {
+    return REMOTE_REFRESH_VISIBLE_MS;
+  }
+
+  return document.visibilityState === 'hidden'
+    ? REMOTE_REFRESH_HIDDEN_MS
+    : REMOTE_REFRESH_VISIBLE_MS;
+};
+
+const getApiPath = (tableName: string) => (
+  tableName === 'open_orders' ? '/open-orders'
+    : tableName === 'guest_requests' ? '/guest-requests'
+    : null
+);
+
 const applyFilters = (rows: Record<string, unknown>[], filters: WhereClause[]) => {
   return rows.filter((row) => filters.every((filter) => {
     const current = row[filter.field];
@@ -239,12 +258,13 @@ const mergeRowsPreferringLocal = (
   for (const row of remoteRows) {
     map.set(String(row.id), row);
   }
-  // Mantem rows locais quando elas sao mais novas que o remoto OU quando
-  // ainda existem mutacoes pendentes para a tabela (write em transito).
-  const hasPending = hasPendingMutationsForTable(tableName);
   for (const local of localRows) {
     const id = String(local.id);
     const remote = map.get(id);
+    const localStamp = rowUpdatedAt(local);
+    const isRecentLocalWrite = Boolean(
+      localStamp && Date.now() - new Date(localStamp).getTime() < RECENT_LOCAL_WRITE_TTL_MS,
+    );
     
     // CRÍTICO: Não ressuscita rows deletadas (soft delete com deletedAt)
     const isLocalDeleted = (local as any).deletedAt ?? (local as any).deleted_at;
@@ -255,19 +275,51 @@ const mergeRowsPreferringLocal = (
     }
     
     if (!remote) {
-      // Linha so existe localmente: pode ser write otimista ainda nao replicado.
-      // Mantem se ha pending ou se e recente (< 60s).
-      const localStamp = rowUpdatedAt(local);
-      if (hasPending || (localStamp && Date.now() - new Date(localStamp).getTime() < 60_000)) {
+      // Linha so existe localmente: mantem somente enquanto o write otimista ainda e recente.
+      if (isRecentLocalWrite) {
         map.set(id, local);
       }
       continue;
     }
-    if (rowUpdatedAt(local) > rowUpdatedAt(remote)) {
+
+    if (isRecentLocalWrite && rowUpdatedAt(local) > rowUpdatedAt(remote)) {
       map.set(id, local);
     }
   }
   return Array.from(map.values());
+};
+
+const fetchServerRows = async (tableName: string) => {
+  const apiPath = getApiPath(tableName);
+  if (!apiPath) {
+    return null;
+  }
+
+  const result = await callApi(apiPath, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  if (!result.ok) {
+    console.error(`API fetch error for ${tableName}`);
+    return null;
+  }
+
+  return ((result.data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
+};
+
+const replaceSnapshotWithServerRows = async (tableName: string) => {
+  const remoteRows = await fetchServerRows(tableName);
+  if (!remoteRows) {
+    return false;
+  }
+
+  const finalRows = tableName === 'open_orders'
+    ? remoteRows.filter((row) => !(row as any).deletedAt && !(row as any).deleted_at)
+    : remoteRows;
+
+  await persistTableSnapshot(tableName, finalRows, { silent: true });
+  emitOfflineDataChange(tableName);
+  return true;
 };
 
 const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
@@ -283,30 +335,14 @@ const fetchRows = async (tableName: string, filters: WhereClause[] = []) => {
     return localFiltered;
   }
 
-  // Mapeia table name para o path da API
-  const apiPath = tableName === 'open_orders' ? '/open-orders'
-    : tableName === 'guest_requests' ? '/guest-requests'
-    : null;
-
-  if (!apiPath) {
+  const remoteRows = await fetchServerRows(tableName);
+  if (!remoteRows) {
     // Filtra deletadas mesmo quando offline
     if (tableName === 'open_orders') {
       return localFiltered.filter(row => !(row as any).deletedAt && !(row as any).deleted_at);
     }
     return localFiltered;
   }
-
-  const result = await callApi(apiPath);
-  if (!result.ok) {
-    console.error(`API fetch error for ${tableName}`);
-    // Filtra deletadas em caso de erro de conexão
-    if (tableName === 'open_orders') {
-      return localFiltered.filter(row => !(row as any).deletedAt && !(row as any).deleted_at);
-    }
-    return localFiltered;
-  }
-
-  const remoteRows = ((result.data ?? []) as Record<string, unknown>[]).map((row) => mapRowFromDb(tableName, row));
   const merged = mergeRowsPreferringLocal(tableName, remoteRows, localAll);
   
   // Filtra deletadas após merge
@@ -356,6 +392,7 @@ export function onSnapshot(
   onError?: (error: unknown) => void,
 ): () => void {
   let active = true;
+  let interval: number | null = null;
   void initializeOfflineSync();
 
   const resolved = resolveTarget(target);
@@ -383,13 +420,29 @@ export function onSnapshot(
     }
   };
 
-  // Primeira leitura remota.
-  void refresh(false);
+  const scheduleRemoteRefresh = () => {
+    if (!active || typeof window === 'undefined') {
+      return;
+    }
 
-  // Polling a cada 15s para sincronizar dados entre dispositivos
-  const interval = setInterval(() => {
-    void refresh(false);
-  }, 15000);
+    if (interval != null) {
+      window.clearTimeout(interval);
+    }
+
+    interval = window.setTimeout(async () => {
+      await refresh(false);
+      scheduleRemoteRefresh();
+    }, getRemoteRefreshDelay());
+  };
+
+  const triggerRemoteRefresh = () => {
+    void refresh(false).finally(() => {
+      scheduleRemoteRefresh();
+    });
+  };
+
+  // Primeira leitura remota.
+  triggerRemoteRefresh();
 
   const handleDataChange = (event: Event) => {
     const customEvent = event as CustomEvent<{ tableName?: string }>;
@@ -399,62 +452,79 @@ export function onSnapshot(
     }
   };
 
+  const handleVisibilityChange = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      triggerRemoteRefresh();
+      return;
+    }
+
+    scheduleRemoteRefresh();
+  };
+
   if (typeof window !== 'undefined') {
     window.addEventListener('barmate-offline-data-changed', handleDataChange);
     window.addEventListener('barmate-offline-status-changed', handleDataChange);
+    window.addEventListener('focus', triggerRemoteRefresh);
+    window.addEventListener('online', triggerRemoteRefresh);
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   }
 
   return () => {
     active = false;
-    clearInterval(interval);
+    if (interval != null && typeof window !== 'undefined') {
+      window.clearTimeout(interval);
+    }
     if (typeof window !== 'undefined') {
       window.removeEventListener('barmate-offline-data-changed', handleDataChange);
       window.removeEventListener('barmate-offline-status-changed', handleDataChange);
+      window.removeEventListener('focus', triggerRemoteRefresh);
+      window.removeEventListener('online', triggerRemoteRefresh);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
   };
 }
 
 export const addDoc = async (reference: CollectionRef, data: Record<string, unknown>) => {
+  if (!currentOnlineState()) {
+    console.error(`Sem conexão com a Vultr para criar ${reference.tableName}.`);
+    return { id: '' };
+  }
+
   const id = generateId();
   const payload = { id, ...data };
   const dbPayload = mapRowToDb(reference.tableName, payload);
   const localRow = mapRowFromDb(reference.tableName, dbPayload) as Record<string, unknown>;
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
-  const nextRows = [...(localSnapshot?.rows ?? []).filter((row) => String(row.id) !== id), localRow];
+  const previousRows = [...(localSnapshot?.rows ?? [])] as Record<string, unknown>[];
+  const nextRows = [...previousRows.filter((row) => String(row.id) !== id), localRow];
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
-  const apiPath = reference.tableName === 'open_orders' ? '/open-orders'
-    : reference.tableName === 'guest_requests' ? '/guest-requests'
-    : `/${reference.tableName}`;
-  const updatedAt = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
+  const apiPath = getApiPath(reference.tableName) ?? `/${reference.tableName}`;
+  const result = await callApi(apiPath, { method: 'POST', body: JSON.stringify(dbPayload) });
 
-  if (!currentOnlineState()) {
-    await enqueueMutation({
-      tableName: reference.tableName,
-      operation: 'upsert',
-      key: id,
-      payload: dbPayload,
-      updatedAt,
-    });
+  if (!result.ok) {
+    console.error(`Falha ao salvar ${reference.tableName} na Vultr.`);
+    await persistTableSnapshot(reference.tableName, previousRows, { silent: true });
+    emitOfflineDataChange(reference.tableName);
     return { id };
   }
 
-  void callApi(apiPath, { method: 'POST', body: JSON.stringify(dbPayload) }).then((result) => {
-    if (!result.ok) {
-      void enqueueMutation({
-        tableName: reference.tableName,
-        operation: 'upsert',
-        key: id,
-        payload: dbPayload,
-        updatedAt,
-      });
-    }
-  });
+  await replaceSnapshotWithServerRows(reference.tableName);
   return { id };
 };
 
 export const setDoc = async (reference: DocRef, data: Record<string, unknown>, options?: { merge?: boolean }) => {
+  if (!currentOnlineState()) {
+    console.error(`Sem conexão com a Vultr para salvar ${reference.tableName}.`);
+    return;
+  }
+
   let payload = { id: reference.id, ...data };
   if (options?.merge) {
     const localSnapshot = await getLocalTableSnapshot(reference.tableName);
@@ -465,41 +535,31 @@ export const setDoc = async (reference: DocRef, data: Record<string, unknown>, o
   const dbPayload = mapRowToDb(reference.tableName, payload);
   const localRow = mapRowFromDb(reference.tableName, dbPayload) as Record<string, unknown>;
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
-  const nextRows = [...(localSnapshot?.rows ?? []).filter((row) => String(row.id) !== reference.id), localRow];
+  const previousRows = [...(localSnapshot?.rows ?? [])] as Record<string, unknown>[];
+  const nextRows = [...previousRows.filter((row) => String(row.id) !== reference.id), localRow];
   await persistTableSnapshot(reference.tableName, nextRows);
   // Notifica listeners locais imediatamente (UI otimista).
   emitOfflineDataChange(reference.tableName);
 
-  const apiPath = reference.tableName === 'open_orders' ? '/open-orders'
-    : reference.tableName === 'guest_requests' ? '/guest-requests'
-    : `/${reference.tableName}`;
-  const updatedAt = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
+  const apiPath = getApiPath(reference.tableName) ?? `/${reference.tableName}`;
+  const result = await callApi(apiPath, { method: 'POST', body: JSON.stringify(dbPayload) });
 
-  if (!currentOnlineState()) {
-    await enqueueMutation({
-      tableName: reference.tableName,
-      operation: 'upsert',
-      key: reference.id,
-      payload: dbPayload,
-      updatedAt,
-    });
+  if (!result.ok) {
+    console.error(`Falha ao atualizar ${reference.tableName} na Vultr.`);
+    await persistTableSnapshot(reference.tableName, previousRows, { silent: true });
+    emitOfflineDataChange(reference.tableName);
     return;
   }
 
-  void callApi(apiPath, { method: 'POST', body: JSON.stringify(dbPayload) }).then((result) => {
-    if (!result.ok) {
-      void enqueueMutation({
-        tableName: reference.tableName,
-        operation: 'upsert',
-        key: reference.id,
-        payload: dbPayload,
-        updatedAt,
-      });
-    }
-  });
+  await replaceSnapshotWithServerRows(reference.tableName);
 };
 
 export const updateDoc = async (reference: DocRef, data: Record<string, unknown>) => {
+  if (!currentOnlineState()) {
+    console.error(`Sem conexão com a Vultr para atualizar ${reference.tableName}.`);
+    return;
+  }
+
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
   const existing = localSnapshot?.rows.find((row) => String(row.id) === reference.id) ?? {};
   const nextData = { ...existing, ...data } as Record<string, unknown>;
@@ -514,42 +574,33 @@ export const updateDoc = async (reference: DocRef, data: Record<string, unknown>
 
   const dbPayload = mapRowToDb(reference.tableName, nextData);
   const localRow = mapRowFromDb(reference.tableName, dbPayload) as Record<string, unknown>;
-  const nextRows = [...(localSnapshot?.rows ?? []).filter((row) => String(row.id) !== reference.id), localRow];
+  const previousRows = [...(localSnapshot?.rows ?? [])] as Record<string, unknown>[];
+  const nextRows = [...previousRows.filter((row) => String(row.id) !== reference.id), localRow];
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
-  const apiPathUpd = reference.tableName === 'open_orders' ? '/open-orders'
-    : reference.tableName === 'guest_requests' ? '/guest-requests'
-    : `/${reference.tableName}`;
-  const updatedAtUpd = String(dbPayload.updated_at ?? dbPayload.updatedAt ?? new Date().toISOString());
+  const apiPath = getApiPath(reference.tableName) ?? `/${reference.tableName}`;
+  const result = await callApi(apiPath, { method: 'POST', body: JSON.stringify(dbPayload) });
 
-  if (!currentOnlineState()) {
-    await enqueueMutation({
-      tableName: reference.tableName,
-      operation: 'upsert',
-      key: reference.id,
-      payload: dbPayload,
-      updatedAt: updatedAtUpd,
-    });
+  if (!result.ok) {
+    console.error(`Falha ao sincronizar ${reference.tableName} na Vultr.`);
+    await persistTableSnapshot(reference.tableName, previousRows, { silent: true });
+    emitOfflineDataChange(reference.tableName);
     return;
   }
 
-  void callApi(apiPathUpd, { method: 'POST', body: JSON.stringify(dbPayload) }).then((result) => {
-    if (!result.ok) {
-      void enqueueMutation({
-        tableName: reference.tableName,
-        operation: 'upsert',
-        key: reference.id,
-        payload: dbPayload,
-        updatedAt: updatedAtUpd,
-      });
-    }
-  });
+  await replaceSnapshotWithServerRows(reference.tableName);
 };
 
 export const deleteDoc = async (reference: DocRef) => {
+  if (!currentOnlineState()) {
+    console.error(`Sem conexão com a Vultr para excluir ${reference.tableName}.`);
+    return;
+  }
+
   const localSnapshot = await getLocalTableSnapshot(reference.tableName);
-  const nextRows = (localSnapshot?.rows ?? []).filter((row) => String(row.id) !== reference.id);
+  const previousRows = [...(localSnapshot?.rows ?? [])] as Record<string, unknown>[];
+  const nextRows = previousRows.filter((row) => String(row.id) !== reference.id);
   await persistTableSnapshot(reference.tableName, nextRows);
   emitOfflineDataChange(reference.tableName);
 
@@ -558,28 +609,16 @@ export const deleteDoc = async (reference: DocRef) => {
     : reference.tableName === 'guest_requests'
     ? `/guest-requests?id=${encodeURIComponent(reference.id)}`
     : `/${reference.tableName}?id=${encodeURIComponent(reference.id)}`;
-  const updatedAtDel = new Date().toISOString();
+  const result = await callApi(apiPathDel, { method: 'DELETE' });
 
-  if (!currentOnlineState()) {
-    await enqueueMutation({
-      tableName: reference.tableName,
-      operation: 'delete',
-      key: reference.id,
-      updatedAt: updatedAtDel,
-    });
+  if (!result.ok) {
+    console.error(`Falha ao excluir ${reference.tableName} na Vultr.`);
+    await persistTableSnapshot(reference.tableName, previousRows, { silent: true });
+    emitOfflineDataChange(reference.tableName);
     return;
   }
 
-  void callApi(apiPathDel, { method: 'DELETE' }).then((result) => {
-    if (!result.ok) {
-      void enqueueMutation({
-        tableName: reference.tableName,
-        operation: 'delete',
-        key: reference.id,
-        updatedAt: updatedAtDel,
-      });
-    }
-  });
+  await replaceSnapshotWithServerRows(reference.tableName);
 };
 
 export const getDoc = async (reference: DocRef) => {

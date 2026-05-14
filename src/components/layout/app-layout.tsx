@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { ThemeToggleButton } from '@/components/theme-toggle-button';
-import { migrateOldData, loadEssentialDataFromCloud, getCompanyDetails, saveCompanyDetails } from '@/lib/data-access';
+import { migrateOldData, loadEssentialDataFromCloud, getCompanyDetails } from '@/lib/data-access';
 import { db, collection, onSnapshot, query, where } from '@/lib/supabase-firestore';
 import { isToday } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -237,14 +237,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               className={`hidden md:inline-flex border px-3 py-1 text-xs font-semibold ${offlineStatus.isOnline ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600' : 'border-amber-500/40 bg-amber-500/10 text-amber-600'}`}
             >
               {offlineStatus.isHydrating
-                ? 'Carregando dados...'
-                : offlineStatus.isSyncing
-                  ? `Sincronizando ${offlineStatus.pendingMutations}`
-                  : offlineStatus.isOnline
-                    ? offlineStatus.pendingMutations > 0
-                      ? `Online · ${offlineStatus.pendingMutations} pendências`
-                      : 'Online'
-                    : `Offline · ${offlineStatus.pendingMutations} pendências`}
+                ? 'Sincronizando Vultr...'
+                : offlineStatus.isOnline
+                  ? 'Vultr online'
+                  : 'Sem conexão com Vultr'}
             </Badge>
             <ThemeToggleButton />
             <DropdownMenu>

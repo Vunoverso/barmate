@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+};
+
 // GET /api/db/app-state — retorna todos os registros da org
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -16,7 +23,7 @@ export async function GET() {
     select: { key: true, value: true, updatedAt: true },
   });
 
-  return NextResponse.json(rows);
+  return NextResponse.json(rows, { headers: NO_STORE_HEADERS });
 }
 
 // POST /api/db/app-state — upsert de um registro

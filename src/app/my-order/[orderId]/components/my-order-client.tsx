@@ -134,41 +134,11 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
   };
 
   const normalizeDigits = (value: string) => value.replace(/\D/g, '');
-  const menuCacheKey = order?.id ? `barmate_guest_menu_cache_${order.id}` : null;
   const operationModeLabelMap: Record<'counter_only' | 'table_only' | 'table_delivery', string> = {
     counter_only: 'Balcão',
     table_only: 'Mesa',
     table_delivery: 'Mesa + Delivery',
   };
-
-  useEffect(() => {
-    if (!menuCacheKey) return;
-    try {
-      const raw = localStorage.getItem(menuCacheKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        products?: Product[];
-        categories?: ProductCategory[];
-        branding?: MenuPayload['branding'];
-        loadedAt?: number;
-      };
-      const cachedProducts = parsed.products ?? [];
-      const cachedCategories = parsed.categories ?? [];
-      if (cachedProducts.length === 0 && cachedCategories.length === 0) return;
-      setMenuProducts(cachedProducts);
-      setMenuCategories(cachedCategories);
-      setAllowGuestSelfOrder(parsed.branding?.allowGuestSelfOrder ?? true);
-      setRequireWaiterApproval(parsed.branding?.requireWaiterApproval ?? true);
-      setWhatsappNumber(normalizeDigits(parsed.branding?.whatsappNumber ?? ''));
-      setOperationMode(parsed.branding?.operationMode ?? 'table_only');
-      setCustomerFacingMessage((parsed.branding?.customerFacingMessage ?? '').trim());
-      setEnableServiceBell(parsed.branding?.enableServiceBell ?? true);
-      setBeverageChecklist(Array.isArray(parsed.branding?.beverageChecklist) ? parsed.branding?.beverageChecklist : []);
-      setMenuLastLoadedAt(typeof parsed.loadedAt === 'number' ? parsed.loadedAt : null);
-    } catch {
-      // Ignora cache inválido e segue fluxo normal.
-    }
-  }, [menuCacheKey]);
 
   useEffect(() => {
     if (!order?.name) return;
@@ -502,18 +472,6 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       setBeverageChecklist(Array.isArray(data.branding?.beverageChecklist) ? data.branding?.beverageChecklist : []);
       const loadedAt = Date.now();
       setMenuLastLoadedAt(loadedAt);
-      if (menuCacheKey) {
-        try {
-          localStorage.setItem(menuCacheKey, JSON.stringify({
-            products: data.products ?? [],
-            categories: data.categories ?? [],
-            branding: data.branding ?? {},
-            loadedAt,
-          }));
-        } catch {
-          // Falha de quota no storage não pode bloquear o pedido.
-        }
-      }
       setIsMenuOpen(true);
     } catch (error) {
       const hasCachedMenu = menuProducts.length > 0 && menuCategories.length > 0;
@@ -521,9 +479,9 @@ export default function MyOrderClient({ orderId }: { orderId: string }) {
       if (hasCachedMenu) {
         setIsMenuOpen(true);
         toast({
-          title: isAbortError ? 'Conexão lenta no momento' : 'Abrimos o último cardápio salvo',
+          title: isAbortError ? 'Conexão lenta no momento' : 'Mantivemos o cardápio já carregado',
           description: isAbortError
-            ? 'Mostramos o menu em cache para não travar no carregamento.'
+            ? 'Mantivemos os dados já abertos nesta sessão para não travar o carregamento.'
             : 'Os dados serão atualizados na próxima tentativa.',
         });
       } else {

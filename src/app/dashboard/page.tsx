@@ -30,7 +30,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const all = getSales();
-    const today = all.filter(s => s.closedAt && isToday(new Date(s.closedAt)));
+    const today = all.filter((sale) => sale.timestamp && isToday(new Date(sale.timestamp)));
     setSalesToday(today.length);
     const total = today.reduce((acc, s) => {
       const paid = (s.payments ?? []).reduce((sum: number, p: { amount?: number }) => sum + (p.amount ?? 0), 0);

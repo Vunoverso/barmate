@@ -1,9 +1,6 @@
 import {
-  enqueueMutation,
-  getLocalAppStateRecord,
   initializeOfflineSync,
   persistAppStateRecord,
-  readAppStateRecordsFromLocal,
   removeAppStateRecord,
   setHydrationStatus,
 } from './offline-sync';
@@ -23,9 +20,14 @@ type CachedAppStateRecord = {
 
 const appStateCache = new Map<string, CachedAppStateRecord>();
 let hydrationPromise: Promise<void> | null = null;
+let remoteRefreshPromise: Promise<void> | null = null;
+let remoteRefreshTimer: number | null = null;
 let hydrated = false;
+let pollingStarted = false;
 
 const APP_STATE_EVENT = 'barmate-app-state-changed';
+const REMOTE_REFRESH_VISIBLE_MS = 4_000;
+const REMOTE_REFRESH_HIDDEN_MS = 20_000;
 
 const notifyStateChange = (key: string) => {
   if (typeof window === 'undefined') return;
@@ -34,16 +36,155 @@ const notifyStateChange = (key: string) => {
 
 export const getAppStateEventName = () => APP_STATE_EVENT;
 
+const getRemoteRefreshDelay = () => {
+  if (typeof document === 'undefined') {
+    return REMOTE_REFRESH_VISIBLE_MS;
+  }
+
+  return document.visibilityState === 'hidden'
+    ? REMOTE_REFRESH_HIDDEN_MS
+    : REMOTE_REFRESH_VISIBLE_MS;
+};
+
+const clearRemoteRefreshTimer = () => {
+  if (remoteRefreshTimer != null && typeof window !== 'undefined') {
+    window.clearTimeout(remoteRefreshTimer);
+    remoteRefreshTimer = null;
+  }
+};
+
 /** Busca app_state da nossa própria API (PostgreSQL Vultr) */
-async function fetchRemoteAppState(): Promise<AppStateRow[]> {
+async function fetchRemoteAppState(): Promise<AppStateRow[] | null> {
   try {
-    const res = await fetch('/api/db/app-state', { credentials: 'include' });
-    if (!res.ok) return [];
+    const res = await fetch('/api/db/app-state', {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return null;
     return (await res.json()) as AppStateRow[];
   } catch {
-    return [];
+    return null;
   }
 }
+
+const applyRemoteRows = async (
+  rows: AppStateRow[],
+  options?: { emitChanges?: boolean },
+) => {
+  const changedKeys = new Set<string>();
+  const remoteKeys = new Set<string>();
+
+  for (const row of rows) {
+    remoteKeys.add(row.key);
+
+    const remoteUpdatedAt = row.updatedAt ?? row.updated_at ?? new Date().toISOString();
+    const existing = appStateCache.get(row.key);
+
+    if (existing?.pending && existing.updatedAt >= remoteUpdatedAt) {
+      continue;
+    }
+
+    const shouldUseRemote = !existing || existing.pending || remoteUpdatedAt > existing.updatedAt;
+    if (!shouldUseRemote) {
+      continue;
+    }
+
+    appStateCache.set(row.key, {
+      value: row.value,
+      updatedAt: remoteUpdatedAt,
+      pending: false,
+    });
+    await persistAppStateRecord({
+      key: row.key,
+      value: row.value,
+      updatedAt: remoteUpdatedAt,
+      pending: false,
+    });
+    changedKeys.add(row.key);
+  }
+
+  for (const [key, existing] of Array.from(appStateCache.entries())) {
+    if (existing.pending || remoteKeys.has(key)) {
+      continue;
+    }
+
+    appStateCache.delete(key);
+    await removeAppStateRecord(key);
+    changedKeys.add(key);
+  }
+
+  if (options?.emitChanges) {
+    changedKeys.forEach((key) => notifyStateChange(key));
+  }
+};
+
+const refreshRemoteAppState = async (
+  options?: { emitChanges?: boolean; force?: boolean },
+) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return;
+  }
+
+  if (remoteRefreshPromise && !options?.force) {
+    return remoteRefreshPromise;
+  }
+
+  remoteRefreshPromise = (async () => {
+    const rows = await fetchRemoteAppState();
+    if (rows) {
+      await applyRemoteRows(rows, { emitChanges: options?.emitChanges });
+    }
+  })();
+
+  try {
+    await remoteRefreshPromise;
+  } finally {
+    remoteRefreshPromise = null;
+  }
+};
+
+const scheduleRemoteRefresh = () => {
+  if (!pollingStarted || typeof window === 'undefined') {
+    return;
+  }
+
+  clearRemoteRefreshTimer();
+  remoteRefreshTimer = window.setTimeout(async () => {
+    await refreshRemoteAppState({ emitChanges: true });
+    scheduleRemoteRefresh();
+  }, getRemoteRefreshDelay());
+};
+
+const startRemoteRefreshLoop = () => {
+  if (pollingStarted || typeof window === 'undefined') {
+    return;
+  }
+
+  pollingStarted = true;
+
+  const triggerRefresh = () => {
+    void refreshRemoteAppState({ emitChanges: true, force: true }).finally(() => {
+      scheduleRemoteRefresh();
+    });
+  };
+
+  window.addEventListener('focus', triggerRefresh);
+  window.addEventListener('online', triggerRefresh);
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        triggerRefresh();
+        return;
+      }
+
+      scheduleRemoteRefresh();
+    });
+  }
+
+  scheduleRemoteRefresh();
+};
 
 export async function hydrateAppState() {
   if (hydrated || hydrationPromise) {
@@ -54,49 +195,12 @@ export async function hydrateAppState() {
     await initializeOfflineSync();
     setHydrationStatus(true);
 
-    const localRecords = await readAppStateRecordsFromLocal();
-    localRecords.forEach((record) => {
-      appStateCache.set(record.key, {
-        value: record.value,
-        updatedAt: record.updatedAt,
-        pending: record.pending,
-      });
-    });
-
-    if (typeof navigator !== 'undefined' && navigator.onLine) {
-      const rows = await fetchRemoteAppState();
-      for (const row of rows) {
-        const existing = appStateCache.get(row.key);
-        const remoteUpdatedAt = row.updatedAt ?? row.updated_at ?? new Date().toISOString();
-        const shouldUseRemote =
-          !existing || (!existing.pending && remoteUpdatedAt > existing.updatedAt);
-        if (shouldUseRemote) {
-          appStateCache.set(row.key, {
-            value: row.value,
-            updatedAt: remoteUpdatedAt,
-            pending: false,
-          });
-          await persistAppStateRecord({
-            key: row.key,
-            value: row.value,
-            updatedAt: remoteUpdatedAt,
-            pending: false,
-          });
-        }
-      }
-    }
-
-    if (appStateCache.size === 0) {
-      const local = await getLocalAppStateRecord('barName');
-      if (local) {
-        appStateCache.set(local.key, local);
-      }
-    }
+    await refreshRemoteAppState({ emitChanges: false, force: true });
 
     hydrated = true;
     setHydrationStatus(false);
+    startRemoteRefreshLoop();
 
-    // Notifica todos os componentes que o estado foi hidratado
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(APP_STATE_EVENT, { detail: { key: '__hydrated__' } }));
     }
@@ -117,74 +221,82 @@ export function hasAppStateKey(key: string) {
   return appStateCache.has(key);
 }
 
-async function syncAppStateToRemote(key: string, value: unknown, updatedAt: string) {
-  if (typeof navigator !== 'undefined' && navigator.onLine) {
-    try {
-      const res = await fetch('/api/db/app-state', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const cached = appStateCache.get(key);
-      if (cached && cached.updatedAt === updatedAt) {
-        appStateCache.set(key, { value, updatedAt, pending: false });
-        await persistAppStateRecord({ key, value, updatedAt, pending: false });
-      }
-    } catch (err) {
-      console.error(`Erro ao salvar app_state[${key}]:`, err);
-      await enqueueMutation({
-        tableName: 'app_state',
-        operation: 'upsert',
-        key,
-        payload: { key, value, updated_at: updatedAt },
-        updatedAt,
-      });
-    }
-  } else {
-    await enqueueMutation({
-      tableName: 'app_state',
-      operation: 'upsert',
-      key,
-      payload: { key, value, updated_at: updatedAt },
-      updatedAt,
-    });
-  }
-}
-
 export async function setAppState<T>(key: string, value: T) {
+  const previous = appStateCache.get(key);
   const updatedAt = new Date().toISOString();
+
   appStateCache.set(key, { value, updatedAt, pending: true });
   await persistAppStateRecord({ key, value, updatedAt, pending: true });
   notifyStateChange(key);
-  void syncAppStateToRemote(key, value, updatedAt);
+
+  try {
+    const res = await fetch('/api/db/app-state', {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    appStateCache.set(key, { value, updatedAt, pending: false });
+    await persistAppStateRecord({ key, value, updatedAt, pending: false });
+    await refreshRemoteAppState({ emitChanges: true, force: true });
+  } catch (error) {
+    console.error(`Erro ao salvar app_state[${key}] na Vultr:`, error);
+
+    if (previous) {
+      appStateCache.set(key, previous);
+      await persistAppStateRecord({
+        key,
+        value: previous.value,
+        updatedAt: previous.updatedAt,
+        pending: previous.pending,
+      });
+    } else {
+      appStateCache.delete(key);
+      await removeAppStateRecord(key);
+    }
+
+    notifyStateChange(key);
+  }
 }
 
 export async function removeAppState(key: string) {
+  const previous = appStateCache.get(key);
   appStateCache.delete(key);
   await removeAppStateRecord(key);
-
-  const updatedAt = new Date().toISOString();
-
-  if (typeof navigator !== 'undefined' && navigator.onLine) {
-    try {
-      const res = await fetch(`/api/db/app-state?key=${encodeURIComponent(key)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch (err) {
-      console.error(`Erro ao remover app_state[${key}]:`, err);
-      await enqueueMutation({ tableName: 'app_state', operation: 'delete', key, updatedAt });
-    }
-  } else {
-    await enqueueMutation({ tableName: 'app_state', operation: 'delete', key, updatedAt });
-  }
-
   notifyStateChange(key);
+
+  try {
+    const res = await fetch(`/api/db/app-state?key=${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    await refreshRemoteAppState({ emitChanges: true, force: true });
+  } catch (error) {
+    console.error(`Erro ao remover app_state[${key}] da Vultr:`, error);
+
+    if (previous) {
+      appStateCache.set(key, previous);
+      await persistAppStateRecord({
+        key,
+        value: previous.value,
+        updatedAt: previous.updatedAt,
+        pending: previous.pending,
+      });
+      notifyStateChange(key);
+    }
+  }
 }
 
 export function getCachedAppStateKeys() {
