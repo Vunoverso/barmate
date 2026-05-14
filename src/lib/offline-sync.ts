@@ -82,6 +82,8 @@ let databasePromise: Promise<IDBDatabase | null> | null = null;
 let initialized = false;
 let syncScheduled = false;
 const statusListeners = new Set<() => void>();
+const mutationFailureCounts = new Map<string, number>();
+const MAX_MUTATION_RETRIES = 3;
 
 const generateId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -244,7 +246,7 @@ export const initializeOfflineSync = async () => {
 
   const cachedRecords = await readAppStateRecordsFromLocal();
   await syncAppStateToMemory(cachedRecords);
-  const cachedMutations = await readPendingMutationsFromLocal();
+  const cachedMutations = await compactPendingMutationsInLocal();
   memoryMutations = cachedMutations;
   updateStatus({ pendingMutations: memoryMutations.length, isHydrating: false });
 
@@ -361,6 +363,23 @@ const writeMutationToLocal = async (mutation: PendingMutation) => {
   updateStatus({ pendingMutations: memoryMutations.length });
 };
 
+const compactMutationQueue = (mutations: PendingMutation[]) => {
+  if (mutations.length <= 1) return mutations;
+
+  const seen = new Set<string>();
+  const compactedReversed: PendingMutation[] = [];
+
+  for (let index = mutations.length - 1; index >= 0; index -= 1) {
+    const mutation = mutations[index];
+    const key = `${mutation.tableName}:${mutation.key}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compactedReversed.push(mutation);
+  }
+
+  return compactedReversed.reverse();
+};
+
 export const enqueueMutation = async (mutation: Omit<PendingMutation, 'id'>) => {
   await writeMutationToLocal({ ...mutation, id: generateId() });
 };
@@ -371,6 +390,30 @@ const readPendingMutationsFromLocal = async () => {
 
   const records = await withStores('readonly', async ({ mutations }) => idbGetAll<PendingMutation>(mutations));
   return records ?? [];
+};
+
+const compactPendingMutationsInLocal = async () => {
+  const raw = await readPendingMutationsFromLocal();
+  const compacted = compactMutationQueue(raw);
+
+  if (compacted.length === raw.length) {
+    return compacted;
+  }
+
+  const database = await openDatabase();
+  if (!database) {
+    memoryMutations = compacted;
+    return compacted;
+  }
+
+  await withStores('readwrite', async ({ mutations }) => {
+    await idbClear(mutations);
+    for (const mutation of compacted) {
+      await idbPut(mutations, mutation);
+    }
+  });
+
+  return compacted;
 };
 
 const removeMutation = async (mutationId: string) => {
@@ -445,21 +488,40 @@ export const flushPendingMutations = async () => {
 
   updateStatus({ isSyncing: true, lastError: null });
 
-  const mutations = await readPendingMutationsFromLocal();
+  const mutations = await compactPendingMutationsInLocal();
   memoryMutations = mutations;
   updateStatus({ pendingMutations: memoryMutations.length });
 
-  try {
-    for (const mutation of mutations) {
-      await updateRemoteAndLocal(mutation);
-      await removeMutation(mutation.id);
-    }
+  let hadAnyFailure = false;
+  let lastFailureMessage: string | null = null;
 
-    updateStatus({ isSyncing: false, lastSyncAt: new Date().toISOString() });
-  } catch (error) {
-    console.error('Falha ao sincronizar alterações pendentes:', error);
-    updateStatus({ isSyncing: false, lastError: error instanceof Error ? error.message : 'Falha de sincronização' });
+  for (const mutation of mutations) {
+    try {
+      await updateRemoteAndLocal(mutation);
+      mutationFailureCounts.delete(mutation.id);
+      await removeMutation(mutation.id);
+    } catch (error) {
+      hadAnyFailure = true;
+      lastFailureMessage = error instanceof Error ? error.message : 'Falha de sincronização';
+      console.error('Falha ao sincronizar mutação pendente:', mutation, error);
+
+      const failures = (mutationFailureCounts.get(mutation.id) ?? 0) + 1;
+      mutationFailureCounts.set(mutation.id, failures);
+
+      if (failures >= MAX_MUTATION_RETRIES) {
+        // Evita que uma mutação inválida bloqueie toda a fila para sempre.
+        await removeMutation(mutation.id);
+        mutationFailureCounts.delete(mutation.id);
+        updateStatus({ conflicts: status.conflicts + 1 });
+      }
+    }
   }
+
+  updateStatus({
+    isSyncing: false,
+    lastSyncAt: hadAnyFailure ? status.lastSyncAt : new Date().toISOString(),
+    lastError: hadAnyFailure ? lastFailureMessage : null,
+  });
 };
 
 export const markLocalMutationApplied = async () => {
