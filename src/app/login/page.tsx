@@ -5,6 +5,7 @@ import { FormEvent, useState } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import { Eye, EyeOff } from 'lucide-react';
 
 function LoginPageContent() {
   const router = useRouter();
@@ -12,6 +13,7 @@ function LoginPageContent() {
   const callbackUrl = searchParams.get('next') || '/dashboard';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,14 +57,24 @@ function LoginPageContent() {
             onChange={(event) => setEmail(event.target.value)}
             required
           />
-          <input
-            className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 outline-none"
-            placeholder="Sua senha"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
+          <div className="relative">
+            <input
+              className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 pr-12 outline-none"
+              placeholder="Sua senha"
+              type={isPasswordVisible ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setIsPasswordVisible((current) => !current)}
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-white/55 transition hover:text-white"
+              aria-label={isPasswordVisible ? 'Ocultar senha' : 'Exibir senha'}
+            >
+              {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           {error ? <p className="text-sm text-red-400">{error}</p> : null}
           <button type="submit" disabled={isLoading} className="w-full rounded-lg bg-[#22d3c5] px-4 py-3 font-bold text-[#062621] disabled:opacity-60">
             {isLoading ? 'Entrando...' : 'Entrar no sistema'}
