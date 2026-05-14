@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { createGuestRequest, getOpenOrderById } from '@/lib/operational-db';
 
 const asTrimmed = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
@@ -11,21 +11,13 @@ export async function POST(
   const { orderId } = await params;
   const body = await req.json().catch(() => ({} as Record<string, unknown>)) as Record<string, unknown>;
 
-  const order = await prisma.openOrder.findUnique({
-    where: { id: orderId },
-    select: {
-      id: true,
-      organizationId: true,
-      deletedAt: true,
-      data: true,
-    },
-  });
+  const order = await getOpenOrderById(orderId);
 
   if (!order || order.deletedAt) {
     return NextResponse.json({ error: 'order not found' }, { status: 404 });
   }
 
-  const orderData = (order.data ?? {}) as Record<string, unknown>;
+  const orderData = order as Record<string, unknown>;
   if (!orderData.isShared && !orderData.is_shared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
@@ -40,22 +32,22 @@ export async function POST(
     ? `${guestName} - ${tableLabel}`
     : guestName;
 
-  await prisma.guestRequest.create({
-    data: {
-      organizationId: order.organizationId,
-      associatedOrderId: order.id,
-      data: {
-        name: displayName,
-        status: 'pending',
-        intent: 'view',
-        requestType: 'service_call',
-        reason,
-        message,
-        tableLabel,
-        comandaNumber,
-        requestedAt: new Date().toISOString(),
-      } as never,
-    },
+  const organizationId = typeof order.organizationId === 'string' ? order.organizationId : '';
+  if (!organizationId) {
+    return NextResponse.json({ error: 'organization not found' }, { status: 404 });
+  }
+
+  await createGuestRequest(organizationId, {
+    associatedOrderId: order.id,
+    name: displayName,
+    status: 'pending',
+    intent: 'view',
+    requestType: 'service_call',
+    reason,
+    message,
+    tableLabel,
+    comandaNumber,
+    requestedAt: new Date().toISOString(),
   });
 
   return NextResponse.json({ ok: true });

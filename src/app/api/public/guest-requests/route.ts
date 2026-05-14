@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createGuestRequest } from '@/lib/operational-db';
 
 type GuestIntent = 'create' | 'view';
 
@@ -53,14 +54,10 @@ export async function POST(req: NextRequest) {
     requestedAt: new Date().toISOString(),
   };
 
-  const created = await prisma.guestRequest.create({
-    data: {
-      organizationId,
-      associatedOrderId: null,
-      data: requestData as never,
-    },
-    select: { id: true },
+  const id = await createGuestRequest(organizationId, {
+    ...requestData,
+    associatedOrderId: null,
   });
 
-  return NextResponse.json({ id: created.id, status: 'pending' });
+  return NextResponse.json({ id, status: 'pending' });
 }

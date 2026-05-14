@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { findSharedOpenOrderIdByTableLabel } from '@/lib/operational-db';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,20 +19,11 @@ export async function GET(
   // O label da mesa é armazenado como "Mesa X" (e.g., "Mesa 4", "Mesa A1").
   const tableLabel = `Mesa ${slug.toUpperCase()}`;
 
-  // Busca via $queryRaw pois o campo tableLabel está dentro de um JSON (data).
-  const rows = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id
-    FROM open_orders
-    WHERE deleted_at IS NULL
-      AND COALESCE((data->>'isShared')::boolean, (data->>'is_shared')::boolean, false) = true
-      AND data->>'tableLabel' = ${tableLabel}
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
+  const orderId = await findSharedOpenOrderIdByTableLabel(tableLabel);
 
-  if (!rows || rows.length === 0) {
+  if (!orderId) {
     return NextResponse.json({ orderId: null }, { status: 200 });
   }
 
-  return NextResponse.json({ orderId: rows[0].id }, { status: 200 });
+  return NextResponse.json({ orderId }, { status: 200 });
 }

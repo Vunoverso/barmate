@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getOpenOrderById, listAppState } from '@/lib/operational-db';
 import {
   KEY_MENU_BRANDING,
   KEY_PRODUCT_CATEGORIES,
@@ -23,36 +23,24 @@ export async function GET(
     return NextResponse.json({ error: 'orderId is required' }, { status: 400 });
   }
 
-  const order = await prisma.openOrder.findUnique({
-    where: { id: orderId },
-    select: {
-      organizationId: true,
-      deletedAt: true,
-      data: true,
-    },
-  });
+  const order = await getOpenOrderById(orderId);
 
   if (!order || order.deletedAt) {
     return NextResponse.json({ error: 'order not found' }, { status: 404 });
   }
 
-  const orderData = (order.data ?? {}) as Record<string, unknown>;
+  const orderData = order as Record<string, unknown>;
   if (!orderData.isShared && !orderData.is_shared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
 
-  const appStateRows = await prisma.appState.findMany({
-    where: {
-      organizationId: order.organizationId,
-      key: {
-        in: [KEY_PRODUCTS, KEY_PRODUCT_CATEGORIES, KEY_MENU_BRANDING],
-      },
-    },
-    select: {
-      key: true,
-      value: true,
-    },
-  });
+  const organizationId = typeof order.organizationId === 'string' ? order.organizationId : '';
+  if (!organizationId) {
+    return NextResponse.json({ error: 'organization not found' }, { status: 404 });
+  }
+
+  const appStateRows = (await listAppState(organizationId))
+    .filter((row) => [KEY_PRODUCTS, KEY_PRODUCT_CATEGORIES, KEY_MENU_BRANDING].includes(row.key));
 
   const byKey = new Map(appStateRows.map((row) => [row.key, row.value]));
   const categories = arrayValue<ProductCategory>(byKey.get(KEY_PRODUCT_CATEGORIES));

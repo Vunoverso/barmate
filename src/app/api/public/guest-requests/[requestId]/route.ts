@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getGuestRequestById } from '@/lib/operational-db';
 
 // GET /api/public/guest-requests/:requestId
 export async function GET(
@@ -12,21 +12,13 @@ export async function GET(
     return NextResponse.json({ error: 'requestId is required' }, { status: 400 });
   }
 
-  const row = await prisma.guestRequest.findUnique({
-    where: { id: requestId },
-    select: {
-      id: true,
-      associatedOrderId: true,
-      data: true,
-      updatedAt: true,
-    },
-  });
+  const row = await getGuestRequestById(requestId);
 
   if (!row) {
     return NextResponse.json({ error: 'request not found' }, { status: 404 });
   }
 
-  const data = (row.data ?? {}) as Record<string, unknown>;
+  const data = row as Record<string, unknown>;
 
   return NextResponse.json({
     id: row.id,
@@ -36,6 +28,6 @@ export async function GET(
     tableLabel: data.tableLabel ?? null,
     comandaNumber: data.comandaNumber ?? null,
     associatedOrderId: row.associatedOrderId ?? data.associatedOrderId ?? null,
-    updatedAt: row.updatedAt.toISOString(),
+    updatedAt: row.updatedAt,
   });
 }

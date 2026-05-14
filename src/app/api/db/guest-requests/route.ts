@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { getApiSessionContext, unauthorizedResponse } from '@/lib/api-session';
+import { deleteGuestRequest, listGuestRequests, upsertGuestRequest } from '@/lib/operational-db';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,31 +11,13 @@ const NO_STORE_HEADERS = {
 
 // GET /api/db/guest-requests — retorna pedidos de convidados
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.organizationId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const orgId = session.user.organizationId;
+  const session = await getApiSessionContext(req);
+  if (!session) return unauthorizedResponse();
+  const orgId = session.organizationId;
 
   try {
-    const rows = await prisma.guestRequest.findMany({
-      where: { organizationId: orgId },
-      orderBy: { requestedAt: 'asc' },
-    });
-
-    const result = rows.map((row) => {
-      const data = row.data as Record<string, unknown>;
-      return {
-        ...data,
-        id: row.id,
-        organizationId: row.organizationId,
-        associatedOrderId: row.associatedOrderId ?? data.associatedOrderId ?? null,
-        requestedAt: row.requestedAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      };
-    });
-
-    return NextResponse.json(result, { headers: NO_STORE_HEADERS });
+    const rows = await listGuestRequests(orgId);
+    return NextResponse.json(rows, { headers: NO_STORE_HEADERS });
   } catch (error) {
     console.error('[api/db/guest-requests] GET failed:', error);
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
@@ -45,11 +26,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/db/guest-requests — upsert de um pedido
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.organizationId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const orgId = session.user.organizationId;
+  const session = await getApiSessionContext(req);
+  if (!session) return unauthorizedResponse();
+  const orgId = session.organizationId;
 
   const body = await req.json() as Record<string, unknown>;
   const id = String(body.id ?? '');
@@ -59,20 +38,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await prisma.guestRequest.upsert({
-      where: { id },
-      update: {
-        data: body as never,
-        updatedAt: new Date(),
-        associatedOrderId: body.associatedOrderId ? String(body.associatedOrderId) : null,
-      },
-      create: {
-        id,
-        organizationId: orgId,
-        associatedOrderId: body.associatedOrderId ? String(body.associatedOrderId) : null,
-        data: body as never,
-      },
-    });
+    await upsertGuestRequest(orgId, body);
   } catch (error) {
     console.error('[api/db/guest-requests] POST failed:', error);
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
@@ -83,11 +49,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/db/guest-requests?id=xxx
 export async function DELETE(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.organizationId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const orgId = session.user.organizationId;
+  const session = await getApiSessionContext(req);
+  if (!session) return unauthorizedResponse();
+  const orgId = session.organizationId;
 
   const id = req.nextUrl.searchParams.get('id');
   if (!id) {
@@ -95,7 +59,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    await prisma.guestRequest.deleteMany({ where: { id, organizationId: orgId } });
+    await deleteGuestRequest(orgId, id);
   } catch (error) {
     console.error('[api/db/guest-requests] DELETE failed:', error);
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });

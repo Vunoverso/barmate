@@ -1,7 +1,6 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { getApiSessionContext, unauthorizedResponse } from '@/lib/api-session';
+import { deleteAppState, listAppState, upsertAppState } from '@/lib/operational-db';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,18 +10,13 @@ const NO_STORE_HEADERS = {
 };
 
 // GET /api/db/app-state — retorna todos os registros da org
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.organizationId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const orgId = session.user.organizationId;
+export async function GET(req: NextRequest) {
+  const session = await getApiSessionContext(req);
+  if (!session) return unauthorizedResponse();
+  const orgId = session.organizationId;
 
   try {
-    const rows = await prisma.appState.findMany({
-      where: { organizationId: orgId },
-      select: { key: true, value: true, updatedAt: true },
-    });
+    const rows = await listAppState(orgId);
 
     return NextResponse.json(rows, { headers: NO_STORE_HEADERS });
   } catch (error) {
@@ -33,11 +27,9 @@ export async function GET() {
 
 // POST /api/db/app-state — upsert de um registro
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.organizationId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const orgId = session.user.organizationId;
+  const session = await getApiSessionContext(req);
+  if (!session) return unauthorizedResponse();
+  const orgId = session.organizationId;
 
   const body = await req.json();
   const { key, value } = body as { key: string; value: unknown };
@@ -47,11 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await prisma.appState.upsert({
-      where: { organizationId_key: { organizationId: orgId, key } },
-      update: { value: value as never, updatedAt: new Date() },
-      create: { key, organizationId: orgId, value: value as never },
-    });
+    await upsertAppState(orgId, key, value);
   } catch (error) {
     console.error('[api/db/app-state] POST failed:', error);
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
@@ -62,11 +50,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/db/app-state?key=xxx — remove um registro
 export async function DELETE(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.organizationId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const orgId = session.user.organizationId;
+  const session = await getApiSessionContext(req);
+  if (!session) return unauthorizedResponse();
+  const orgId = session.organizationId;
 
   const key = req.nextUrl.searchParams.get('key');
   if (!key) {
@@ -74,9 +60,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    await prisma.appState.deleteMany({
-      where: { key, organizationId: orgId },
-    });
+    await deleteAppState(orgId, key);
   } catch (error) {
     console.error('[api/db/app-state] DELETE failed:', error);
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });

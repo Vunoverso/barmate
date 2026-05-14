@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getOpenOrderById } from '@/lib/operational-db';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,23 +14,13 @@ export async function GET(
     return NextResponse.json({ error: 'orderId is required' }, { status: 400 });
   }
 
-  const row = await prisma.openOrder.findUnique({
-    where: { id: orderId },
-    select: {
-      id: true,
-      data: true,
-      createdAt: true,
-      updatedAt: true,
-      deletedAt: true,
-    },
-  });
+  const row = await getOpenOrderById(orderId);
 
   if (!row || row.deletedAt) {
     return NextResponse.json({ error: 'order not found' }, { status: 404 });
   }
 
-  const data = (row.data ?? {}) as Record<string, unknown>;
-  // isShared pode estar em camelCase (isShared) ou snake_case (is_shared) dependendo de como foi salvo
+  const data = row as Record<string, unknown>;
   const isShared = data.isShared ?? data.is_shared ?? false;
   if (!isShared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
@@ -39,8 +29,8 @@ export async function GET(
   return NextResponse.json({
     ...data,
     id: row.id,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   }, {
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

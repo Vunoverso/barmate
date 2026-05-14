@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getOpenOrderById, updateOpenOrderDataById } from '@/lib/operational-db';
 import type { OrderChatMessage } from '@/types';
 
 const asTrimmed = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
@@ -20,20 +20,13 @@ export async function GET(
     return NextResponse.json({ error: 'orderId is required' }, { status: 400 });
   }
 
-  const row = await prisma.openOrder.findUnique({
-    where: { id: orderId },
-    select: {
-      id: true,
-      data: true,
-      deletedAt: true,
-    },
-  });
+  const row = await getOpenOrderById(orderId);
 
   if (!row || row.deletedAt) {
     return NextResponse.json({ error: 'order not found' }, { status: 404 });
   }
 
-  const data = (row.data ?? {}) as Record<string, unknown>;
+  const data = row as Record<string, unknown>;
   if (!data.isShared && !data.is_shared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
@@ -61,20 +54,13 @@ export async function POST(
     return NextResponse.json({ error: 'text is required' }, { status: 400 });
   }
 
-  const row = await prisma.openOrder.findUnique({
-    where: { id: orderId },
-    select: {
-      id: true,
-      data: true,
-      deletedAt: true,
-    },
-  });
+  const row = await getOpenOrderById(orderId);
 
   if (!row || row.deletedAt) {
     return NextResponse.json({ error: 'order not found' }, { status: 404 });
   }
 
-  const data = (row.data ?? {}) as Record<string, unknown>;
+  const data = row as Record<string, unknown>;
     if (!data.isShared && !data.is_shared) {
     return NextResponse.json({ error: 'order is not shared' }, { status: 403 });
   }
@@ -94,13 +80,7 @@ export async function POST(
     updatedAt: new Date().toISOString(),
   };
 
-  await prisma.openOrder.update({
-    where: { id: row.id },
-    data: {
-      data: updatedData as never,
-      updatedAt: new Date(),
-    },
-  });
+  await updateOpenOrderDataById(row.id, updatedData);
 
   return NextResponse.json({ ok: true, message: nextMessage });
 }
