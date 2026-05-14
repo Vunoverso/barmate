@@ -10,7 +10,7 @@ import {
 async function callApi(
   path: string,
   options: RequestInit = {},
-): Promise<{ ok: boolean; data?: unknown }> {
+): Promise<{ ok: boolean; data?: unknown; status?: number }> {
   try {
     const res = await fetch(`/api/db${path}`, {
       ...options,
@@ -18,10 +18,17 @@ async function callApi(
       credentials: 'include',
       headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'application/json', ...(options.headers ?? {}) },
     });
-    if (!res.ok) return { ok: false };
-    return { ok: true, data: await res.json() };
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true, status: res.status, data: await res.json() };
   } catch {
     return { ok: false };
+  }
+}
+
+class AuthRequiredForSyncError extends Error {
+  constructor(tableName: string) {
+    super(`Authentication required to sync ${tableName}`);
+    this.name = 'AuthRequiredForSyncError';
   }
 }
 
@@ -213,8 +220,8 @@ const currentOnlineState = () => {
   return navigator.onLine && getOfflineStatus().isOnline;
 };
 
-const REMOTE_REFRESH_VISIBLE_MS = 4_000;
-const REMOTE_REFRESH_HIDDEN_MS = 20_000;
+const REMOTE_REFRESH_VISIBLE_MS = 30_000;
+const REMOTE_REFRESH_HIDDEN_MS = 90_000;
 const RECENT_LOCAL_WRITE_TTL_MS = 15_000;
 
 const getRemoteRefreshDelay = () => {
@@ -300,6 +307,9 @@ const fetchServerRows = async (tableName: string) => {
     headers: { 'Cache-Control': 'no-cache' },
   });
   if (!result.ok) {
+    if (result.status === 401 || result.status === 403) {
+      throw new AuthRequiredForSyncError(tableName);
+    }
     console.error(`API fetch error for ${tableName}`);
     return null;
   }
@@ -416,6 +426,14 @@ export function onSnapshot(
         : await fetchRows(tableName, resolved.filters);
       (callback as (snapshot: CollectionSnapshot) => void)(buildCollectionSnapshot(applyFilters(rows, resolved.filters)));
     } catch (error) {
+      if (error instanceof AuthRequiredForSyncError) {
+        active = false;
+        if (interval != null && typeof window !== 'undefined') {
+          window.clearTimeout(interval);
+          interval = null;
+        }
+        return;
+      }
       onError?.(error);
     }
   };

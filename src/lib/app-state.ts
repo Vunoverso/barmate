@@ -21,13 +21,10 @@ type CachedAppStateRecord = {
 const appStateCache = new Map<string, CachedAppStateRecord>();
 let hydrationPromise: Promise<void> | null = null;
 let remoteRefreshPromise: Promise<void> | null = null;
-let remoteRefreshTimer: number | null = null;
 let hydrated = false;
-let pollingStarted = false;
+let refreshListenersStarted = false;
 
 const APP_STATE_EVENT = 'barmate-app-state-changed';
-const REMOTE_REFRESH_VISIBLE_MS = 4_000;
-const REMOTE_REFRESH_HIDDEN_MS = 20_000;
 
 const notifyStateChange = (key: string) => {
   if (typeof window === 'undefined') return;
@@ -35,23 +32,6 @@ const notifyStateChange = (key: string) => {
 };
 
 export const getAppStateEventName = () => APP_STATE_EVENT;
-
-const getRemoteRefreshDelay = () => {
-  if (typeof document === 'undefined') {
-    return REMOTE_REFRESH_VISIBLE_MS;
-  }
-
-  return document.visibilityState === 'hidden'
-    ? REMOTE_REFRESH_HIDDEN_MS
-    : REMOTE_REFRESH_VISIBLE_MS;
-};
-
-const clearRemoteRefreshTimer = () => {
-  if (remoteRefreshTimer != null && typeof window !== 'undefined') {
-    window.clearTimeout(remoteRefreshTimer);
-    remoteRefreshTimer = null;
-  }
-};
 
 /** Busca app_state da nossa própria API (PostgreSQL Vultr) */
 async function fetchRemoteAppState(): Promise<AppStateRow[] | null> {
@@ -144,29 +124,15 @@ const refreshRemoteAppState = async (
   }
 };
 
-const scheduleRemoteRefresh = () => {
-  if (!pollingStarted || typeof window === 'undefined') {
+const startRemoteRefreshListeners = () => {
+  if (refreshListenersStarted || typeof window === 'undefined') {
     return;
   }
 
-  clearRemoteRefreshTimer();
-  remoteRefreshTimer = window.setTimeout(async () => {
-    await refreshRemoteAppState({ emitChanges: true });
-    scheduleRemoteRefresh();
-  }, getRemoteRefreshDelay());
-};
-
-const startRemoteRefreshLoop = () => {
-  if (pollingStarted || typeof window === 'undefined') {
-    return;
-  }
-
-  pollingStarted = true;
+  refreshListenersStarted = true;
 
   const triggerRefresh = () => {
-    void refreshRemoteAppState({ emitChanges: true, force: true }).finally(() => {
-      scheduleRemoteRefresh();
-    });
+    void refreshRemoteAppState({ emitChanges: true, force: true });
   };
 
   window.addEventListener('focus', triggerRefresh);
@@ -176,14 +142,9 @@ const startRemoteRefreshLoop = () => {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         triggerRefresh();
-        return;
       }
-
-      scheduleRemoteRefresh();
     });
   }
-
-  scheduleRemoteRefresh();
 };
 
 export async function hydrateAppState() {
@@ -199,7 +160,7 @@ export async function hydrateAppState() {
 
     hydrated = true;
     setHydrationStatus(false);
-    startRemoteRefreshLoop();
+    startRemoteRefreshListeners();
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(APP_STATE_EVENT, { detail: { key: '__hydrated__' } }));

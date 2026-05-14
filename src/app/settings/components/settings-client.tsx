@@ -2,6 +2,7 @@
 "use client";
 
 import { clearFinancialData, getTransactionFees, saveTransactionFees, getCompanyDetails, saveCompanyDetails, getOpenOrders, getProducts, getProductCategories, getClients, getSales, getFinancialEntries, getCashRegisterStatus, getClosedSessions, getMenuBranding, saveMenuBranding } from '@/lib/data-access';
+import { collection, db, getDocs } from '@/lib/supabase-firestore';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -137,14 +138,27 @@ export default function SettingsClient() {
     toast({ title: "Taxas Atualizadas!", description: "As taxas de transação foram salvas com sucesso." });
   };
 
-  const handleExportAllData = () => {
+  const loadOpenOrdersForExport = async () => {
     try {
+      const snapshot = await getDocs(collection(db, 'open_orders'));
+      return snapshot.docs.map((orderDoc) => ({
+        id: orderDoc.id,
+        ...orderDoc.data(),
+      }));
+    } catch {
+      return getOpenOrders();
+    }
+  };
+
+  const handleExportAllData = async () => {
+    try {
+      const openOrders = await loadOpenOrdersForExport();
       const allData: Record<string, any> = {
         company: getCompanyDetails(),
         productCategories: getProductCategories(),
         products: getProducts(),
         sales: getSales(),
-        openOrders: getOpenOrders(),
+        openOrders,
         clients: getClients(),
         financialEntries: getFinancialEntries(),
         cashRegisterStatus: getCashRegisterStatus(),
@@ -166,9 +180,10 @@ export default function SettingsClient() {
     }
   };
 
-  const handleExportOrdersOnly = () => {
+  const handleExportOrdersOnly = async () => {
     try {
-      const blob = new Blob([JSON.stringify(getOpenOrders(), null, 2)], { type: 'application/json' });
+      const openOrders = await loadOpenOrdersForExport();
+      const blob = new Blob([JSON.stringify(openOrders, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

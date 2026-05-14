@@ -3,7 +3,7 @@
 
 import type { Product, OrderItem, Sale, ActiveOrder, ProductCategory, Client, GuestRequest, OrderChatMessage } from '@/types';
 import { formatCurrency, LUCIDE_ICON_MAP } from '@/lib/constants';
-import { getProducts, getProductCategories, addSale, getOpenOrders, saveOpenOrders, getClients, getArchivedOrders, saveArchivedOrders } from '@/lib/data-access';
+import { getProducts, getProductCategories, addSale, getClients, getArchivedOrders, saveArchivedOrders } from '@/lib/data-access';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -185,7 +185,6 @@ export default function OrdersClient() {
               return true;
           });
 
-        saveOpenOrders(cloudOrders);
         setOpenOrders([...cloudOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     });
     return () => unsubscribe();
